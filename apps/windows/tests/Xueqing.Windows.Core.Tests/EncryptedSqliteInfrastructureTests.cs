@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Runtime.Versioning;
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Data.Sqlite;
@@ -110,6 +111,7 @@ public sealed class EncryptedSqliteInfrastructureTests
     }
 
     [TestMethod]
+    [SupportedOSPlatform("windows")]
     public async Task Windows_dpapi_key_store_concurrent_first_creation_converges_on_one_key()
     {
         if (!OperatingSystem.IsWindows())
@@ -140,6 +142,7 @@ public sealed class EncryptedSqliteInfrastructureTests
     }
 
     [TestMethod]
+    [SupportedOSPlatform("windows")]
     public async Task Windows_dpapi_outbox_reopens_and_corrupt_or_missing_key_fails_closed()
     {
         if (!OperatingSystem.IsWindows())
