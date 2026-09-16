@@ -1,7 +1,9 @@
 using System.Globalization;
+using System.Runtime.Versioning;
 using System.Text.Json;
 using Microsoft.Data.Sqlite;
 using Xueqing.Windows.Core.Sync;
+using Xueqing.Windows.Infrastructure.LocalData;
 
 namespace Xueqing.Windows.Infrastructure.Sync;
 
@@ -10,27 +12,24 @@ public sealed class SqliteDurableOutboxStore : IOutboxStore
     private const long CurrentSchemaVersion = 1;
     private const int DefaultBusyTimeoutSeconds = 5;
 
-    private readonly string _connectionString;
+    private readonly EncryptedSqliteConnectionFactory _connectionFactory;
     private readonly SemaphoreSlim _initializationGate = new(1, 1);
     private volatile bool _initialized;
 
+    [SupportedOSPlatform("windows")]
     public SqliteDurableOutboxStore(string databasePath)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(databasePath);
+        var fullPath = PrepareDatabasePath(databasePath);
+        _connectionFactory = new EncryptedSqliteConnectionFactory(fullPath, DefaultBusyTimeoutSeconds);
+    }
 
-        var fullPath = Path.GetFullPath(databasePath);
-        var directory = Path.GetDirectoryName(fullPath);
-        if (!string.IsNullOrEmpty(directory))
-        {
-            Directory.CreateDirectory(directory);
-        }
-
-        _connectionString = new SqliteConnectionStringBuilder
-        {
-            DataSource = fullPath,
-            Mode = SqliteOpenMode.ReadWriteCreate,
-            Pooling = true,
-        }.ToString();
+    internal SqliteDurableOutboxStore(string databasePath, ReadOnlySpan<byte> testMasterKey)
+    {
+        var fullPath = PrepareDatabasePath(databasePath);
+        _connectionFactory = new EncryptedSqliteConnectionFactory(
+            fullPath,
+            testMasterKey,
+            DefaultBusyTimeoutSeconds);
     }
 
     public async Task InitializeAsync(CancellationToken cancellationToken = default)
@@ -356,14 +355,10 @@ public sealed class SqliteDurableOutboxStore : IOutboxStore
 
     private async Task<SqliteConnection> OpenConfiguredConnectionAsync(CancellationToken cancellationToken)
     {
-        var connection = new SqliteConnection(_connectionString)
-        {
-            DefaultTimeout = DefaultBusyTimeoutSeconds,
-        };
+        var connection = await _connectionFactory.OpenAsync(cancellationToken);
 
         try
         {
-            await connection.OpenAsync(cancellationToken);
             using var command = connection.CreateCommand();
             command.CommandText = """
                 PRAGMA foreign_keys = ON;
@@ -594,5 +589,19 @@ public sealed class SqliteDurableOutboxStore : IOutboxStore
         }
 
         ValidateRequiredJson(json, parameterName);
+    }
+
+    private static string PrepareDatabasePath(string databasePath)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(databasePath);
+
+        var fullPath = Path.GetFullPath(databasePath);
+        var directory = Path.GetDirectoryName(fullPath);
+        if (!string.IsNullOrEmpty(directory))
+        {
+            Directory.CreateDirectory(directory);
+        }
+
+        return fullPath;
     }
 }
