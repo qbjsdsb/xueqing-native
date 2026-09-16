@@ -28,7 +28,7 @@ jobs:
         with:
           dotnet-version: '10.0.401'
       - name: Test platform-neutral Windows core
-        run: dotnet test apps/windows/tests/Xueqing.Windows.Core.Tests/Xueqing.Windows.Core.Tests.csproj -c Release --nologo
+        run: dotnet test --project apps/windows/tests/Xueqing.Windows.Core.Tests/Xueqing.Windows.Core.Tests.csproj -c Release --nologo --minimum-expected-tests 2
 
   winui-build:
     name: winui-cloud-build
