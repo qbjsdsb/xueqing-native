@@ -31,16 +31,22 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          dotnet msbuild apps/windows/tests/Xueqing.Windows.Core.Tests/Xueqing.Windows.Core.Tests.csproj \
+          project=apps/windows/tests/Xueqing.Windows.Core.Tests/Xueqing.Windows.Core.Tests.csproj
+          output=apps/windows/tests/Xueqing.Windows.Core.Tests/bin/Release/net10.0
+          dotnet msbuild "$project" \
             -getProperty:IsTestApplication \
             -getProperty:OutputType \
             -getProperty:PlatformTarget \
             -getProperty:UseVSTest \
             -getProperty:EnableMSTestRunner \
             -getProperty:EnableMicrosoftTestingPlatform
-          dotnet build apps/windows/tests/Xueqing.Windows.Core.Tests/Xueqing.Windows.Core.Tests.csproj -c Release --nologo
+          dotnet build "$project" -c Release --nologo
           echo '--- test output files ---'
-          find apps/windows/tests/Xueqing.Windows.Core.Tests/bin/Release -maxdepth 3 -type f -printf '%p\n' | sort
+          find "$output" -maxdepth 2 -type f -printf '%p\n' | sort
+          echo '--- standalone MTP info ---'
+          "$output/Xueqing.Windows.Core.Tests" --info || true
+          echo '--- standalone MTP test list ---'
+          "$output/Xueqing.Windows.Core.Tests" --list-tests json || true
       - name: Test platform-neutral Windows core
         shell: bash
         run: |
