@@ -99,9 +99,11 @@ function Build-Package {
         throw "MSIX build failed for version $Version."
     }
 
-    $packages = Get-ChildItem $OutputDirectory -Recurse -File -Filter *.msix |
-        Where-Object { $_.FullName -notmatch '\\Dependencies\\' } |
-        Sort-Object Length -Descending
+    $packages = @(
+        Get-ChildItem $OutputDirectory -Recurse -File -Filter *.msix |
+            Where-Object { $_.FullName -notmatch '\\Dependencies\\' } |
+            Sort-Object Length -Descending
+    )
 
     if ($packages.Count -ne 1) {
         throw "Expected exactly one application MSIX for version $Version; found $($packages.Count)."
@@ -171,14 +173,16 @@ function Assert-NativeDllInPackage {
 
     try {
         Expand-Archive -Path $zipPath -DestinationPath $expandRoot -Force
-        $nativeDlls = Get-ChildItem $expandRoot -Recurse -File -Filter *.dll |
-            Where-Object { $_.Name -match 'sqlite3mc' }
+        $nativeDlls = @(
+            Get-ChildItem $expandRoot -Recurse -File -Filter *.dll |
+                Where-Object { $_.Name -match 'sqlite3mc' }
+        )
 
         if ($nativeDlls.Count -lt 1) {
             throw 'SQLite3MC native DLL was not found inside the generated MSIX.'
         }
 
-        return $nativeDlls | Select-Object -ExpandProperty FullName
+        return @($nativeDlls | Select-Object -ExpandProperty FullName)
     }
     finally {
         Remove-Item $zipPath -Force -ErrorAction SilentlyContinue
@@ -205,8 +209,10 @@ function Install-Package {
         throw "Installed package '$packageName' was not registered."
     }
 
-    $installedNativeDlls = Get-ChildItem $package.InstallLocation -Recurse -File -Filter *.dll |
-        Where-Object { $_.Name -match 'sqlite3mc' }
+    $installedNativeDlls = @(
+        Get-ChildItem $package.InstallLocation -Recurse -File -Filter *.dll |
+            Where-Object { $_.Name -match 'sqlite3mc' }
+    )
 
     if ($installedNativeDlls.Count -lt 1) {
         throw 'SQLite3MC native DLL was not found in the installed MSIX location.'
