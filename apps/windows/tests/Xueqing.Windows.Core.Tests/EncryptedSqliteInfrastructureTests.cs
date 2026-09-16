@@ -143,6 +143,51 @@ public sealed class EncryptedSqliteInfrastructureTests
 
     [TestMethod]
     [SupportedOSPlatform("windows")]
+    public async Task Windows_dpapi_outbox_supports_localstate_shaped_path_beyond_max_path()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        var rootDirectory = Path.Combine(
+            Path.GetTempPath(),
+            "xueqing-native-longpath-vfs-tests",
+            Guid.NewGuid().ToString("N"));
+        var databasePath = CreateLongWindowsDatabasePath(rootDirectory);
+        var operationId = Guid.NewGuid();
+
+        try
+        {
+            Assert.IsTrue(
+                databasePath.Length > 260,
+                $"Regression path must exceed MAX_PATH; actual length was {databasePath.Length}.");
+
+            var firstStore = new SqliteDurableOutboxStore(databasePath);
+            var first = await firstStore.EnqueueAsync(
+                CreateIntent(operationId, "{\"fictionalLongPath\":true}"));
+
+            Assert.AreEqual(OutboxEnqueueDisposition.Inserted, first.Disposition);
+            Assert.IsTrue(File.Exists(databasePath));
+            Assert.IsTrue(File.Exists(databasePath + ".key"));
+
+            var reopenedStore = new SqliteDurableOutboxStore(databasePath);
+            var restored = await reopenedStore.GetAsync(operationId);
+
+            Assert.IsNotNull(restored);
+            Assert.AreEqual(operationId, restored.Intent.OperationId);
+        }
+        finally
+        {
+            if (Directory.Exists(rootDirectory))
+            {
+                Directory.Delete(rootDirectory, recursive: true);
+            }
+        }
+    }
+
+    [TestMethod]
+    [SupportedOSPlatform("windows")]
     public async Task Windows_dpapi_outbox_reopens_and_corrupt_or_missing_key_fails_closed()
     {
         if (!OperatingSystem.IsWindows())
@@ -193,6 +238,20 @@ public sealed class EncryptedSqliteInfrastructureTests
             Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(directory);
         return Path.Combine(directory, "local.db");
+    }
+
+    private static string CreateLongWindowsDatabasePath(string rootDirectory)
+    {
+        const string fileName = "durable-intent.db";
+        var directory = Path.GetFullPath(rootDirectory);
+
+        while (Path.Combine(directory, fileName).Length <= 260)
+        {
+            directory = Path.Combine(directory, "path");
+        }
+
+        Directory.CreateDirectory(directory);
+        return Path.Combine(directory, fileName);
     }
 
     private static async Task AssertFileDoesNotContainAsync(
