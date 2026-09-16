@@ -35,10 +35,12 @@ The bootstrap UI is **not** a visual freeze. It intentionally avoids production 
 - Kotlin / Compose compiler plugin: `2.4.20`;
 - Compose BOM: `2026.08.00`;
 - Activity Compose: `1.13.0`;
-- compile / target SDK: `37` for the Spike;
+- compile / target SDK: stable Android 16 / API `36`;
 - minimum SDK: `26` for the Spike only.
 
 `minSdk = 26` is a build-floor candidate for this architecture Spike, **not** a frozen production support policy. Product support range must be accepted separately with real compatibility evidence.
+
+Android 17 / API 37 is deliberately **not** the bootstrap baseline while it remains a preview SDK. API 37 should be tested separately as forward-compatibility evidence without making a preview platform the stable build contract.
 
 The first bootstrap intentionally does **not** adopt preview AGP solely for screenshot testing. Screenshot/golden tooling is a separate evidence Spike because the official Compose screenshot-testing stack is still evolving.
 
