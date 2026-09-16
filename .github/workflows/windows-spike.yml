@@ -99,14 +99,28 @@ jobs:
         shell: pwsh
         run: |
           $output = "apps/windows/tests/Xueqing.Windows.Core.Tests/bin/Release/net10.0"
+          $diagnostics = "$env:GITHUB_WORKSPACE/TestResults/windows-diagnostics"
+          New-Item -ItemType Directory -Force -Path $diagnostics | Out-Null
           & "$output/Xueqing.Windows.Core.Tests.exe" `
             --minimum-expected-tests 17 `
             --no-banner `
             --progress off `
             --output Detailed `
             --report-trx `
-            --results-directory "$env:GITHUB_WORKSPACE/TestResults/windows-core-windows"
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            --results-directory "$env:GITHUB_WORKSPACE/TestResults/windows-core-windows" `
+            2>&1 | Tee-Object -FilePath "$diagnostics/windows-tests.log"
+          $testExitCode = $LASTEXITCODE
+          if ($testExitCode -ne 0) { exit $testExitCode }
+      - name: Upload failed Windows DPAPI test diagnostics
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: windows-dpapi-test-diagnostics
+          path: |
+            TestResults/windows-diagnostics/windows-tests.log
+            TestResults/windows-core-windows/**
+          if-no-files-found: error
+          retention-days: 1
       - name: Restore locked WinUI dependencies
         shell: pwsh
         run: |
