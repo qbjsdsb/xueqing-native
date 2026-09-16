@@ -64,13 +64,20 @@ jobs:
           app_build='apps/android/app/build.gradle.kts'
           root_build='apps/android/build.gradle.kts'
           workflow='.github/workflows/android-spike.yml'
+          stable_api=36
+          next_api=$((stable_api + 1))
 
-          grep -Eq 'compileSdk[[:space:]]*=[[:space:]]*36' "$app_build"
-          grep -Eq 'targetSdk[[:space:]]*=[[:space:]]*36' "$app_build"
-          grep -Fq "platforms;android-36" "$workflow"
+          grep -Eq "compileSdk[[:space:]]*=[[:space:]]*$stable_api" "$app_build"
+          grep -Eq "targetSdk[[:space:]]*=[[:space:]]*$stable_api" "$app_build"
+          grep -Fq "platforms;android-$stable_api" "$workflow"
 
-          if grep -Eq '(compileSdk|targetSdk)[[:space:]]*=[[:space:]]*37|platforms;android-37|compileSdkPreview|targetSdkPreview' "$app_build" "$workflow"; then
+          if grep -Eq "(compileSdk|targetSdk)[[:space:]]*=[[:space:]]*$next_api|compileSdkPreview|targetSdkPreview" "$app_build"; then
             echo 'Preview/API 37 SDK configuration is not allowed in the stable bootstrap.' >&2
+            exit 1
+          fi
+
+          if grep -Fq "platforms;android-$next_api" "$workflow"; then
+            echo 'The CI bootstrap must not install the API 37 platform.' >&2
             exit 1
           fi
 
