@@ -210,7 +210,17 @@ public sealed class EncryptedSqliteInfrastructureTests
             Assert.Fail($"Expected encrypted SQLite file '{path}' to exist.");
         }
 
-        var bytes = await File.ReadAllBytesAsync(path);
+        await using var stream = new FileStream(
+            path,
+            FileMode.Open,
+            FileAccess.Read,
+            FileShare.ReadWrite | FileShare.Delete,
+            bufferSize: 4096,
+            useAsync: true);
+        using var copy = new MemoryStream();
+        await stream.CopyToAsync(copy);
+        var bytes = copy.ToArray();
+
         Assert.IsFalse(
             ContainsSequence(bytes, Encoding.UTF8.GetBytes(marker)),
             $"Sensitive marker was visible in raw SQLite bytes at '{path}'.");
