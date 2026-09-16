@@ -15,6 +15,7 @@ internal static class WindowsPackagedAppIntegrationProbe
     private const string ReportFileName = "xueqing-app-integration.json";
     private const string PayloadMarker = "FICTIONAL-WINDOWS-REAL-APP-DURABLE-INTENT-MARKER";
     private const string FailureStageDataKey = "Xueqing.Windows.Integration.FailureStage";
+    private const int MaxFailureMessageLength = 512;
     private static readonly Guid StableOperationId = new("a67af44f-c129-4a79-82b9-b79efd7d4e50");
     private static readonly DateTimeOffset StableCreatedAtUtc = new(2026, 9, 16, 0, 0, 0, TimeSpan.Zero);
 
@@ -248,14 +249,37 @@ internal static class WindowsPackagedAppIntegrationProbe
         var stage = exception.Data[FailureStageDataKey] as string ?? "probe.run";
         var type = exception.GetType().FullName ?? exception.GetType().Name;
         var result = $"stage={stage}; type={type}; hresult=0x{exception.HResult:X8}";
+        var message = SanitizeFailureMessage(exception.Message);
+        if (message.Length > 0)
+        {
+            result += $"; message={message}";
+        }
 
         if (exception.InnerException is { } innerException)
         {
             var innerType = innerException.GetType().FullName ?? innerException.GetType().Name;
             result += $"; innerType={innerType}; innerHResult=0x{innerException.HResult:X8}";
+
+            var innerMessage = SanitizeFailureMessage(innerException.Message);
+            if (innerMessage.Length > 0)
+            {
+                result += $"; innerMessage={innerMessage}";
+            }
         }
 
         return result;
+    }
+
+    private static string SanitizeFailureMessage(string message)
+    {
+        var normalized = message
+            .Replace('\r', ' ')
+            .Replace('\n', ' ')
+            .Trim();
+
+        return normalized.Length <= MaxFailureMessageLength
+            ? normalized
+            : normalized[..MaxFailureMessageLength];
     }
 
     private static string TryGetPackageName()
