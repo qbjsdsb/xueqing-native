@@ -2,7 +2,7 @@
 
 Status: **Candidate — executable evidence required**
 
-This document defines the minimum evidence required before `NATIVE_UX_FOUNDATION.md` and `CORE_SCREEN_ARCHITECTURE.md` can move from Candidate to an accepted v1 UX/Visual Foundation.
+This document defines the minimum evidence required before `NATIVE_UX_FOUNDATION.md`, `CORE_SCREEN_ARCHITECTURE.md` and `INTERACTION_STATE_CONTRACT.md` can move from Candidate to an accepted v1 UX/Visual Foundation.
 
 The goal is not screenshot polish. The goal is to prove that the core design survives real native layout, input, accessibility and failure conditions without losing teacher work or violating product semantics.
 
@@ -73,7 +73,11 @@ A prototype is **failed** if any representative core journey requires one of the
 - covering the focused Android input with IME/system bars;
 - presenting stale read-model refresh as permission to destroy Durable Intent;
 - asking the teacher to resolve low-level `local vs cloud` storage conflicts;
-- turning normal information rows into card soup to rescue an unclear hierarchy.
+- turning normal information rows into card soup to rescue an unclear hierarchy;
+- showing a stronger write guarantee than the architecture has actually established;
+- converting an authoritative command timeout into a brand-new duplicate intent;
+- restoring one account/organization draft into another scope;
+- representing a permission/session loss as a harmless generic empty state.
 
 A prototype may still pass with changed visual composition between widths/scales if the semantic priority and actionability remain intact.
 
@@ -535,7 +539,84 @@ Loading is not rendered as false empty state.
 
 ---
 
-## 17. Evidence to capture in CI / review
+## 17. Interaction-state semantic gate
+
+The prototype must prove the semantics defined in `INTERACTION_STATE_CONTRACT.md`. A layout prototype that cannot express these states is not ready for v1 freeze.
+
+Required deterministic state fixtures:
+
+1. editing with latest text not yet durably flushed;
+2. protected local draft durably safe but not submitted;
+3. approved low-risk intent durably queued and waiting to sync;
+4. queued intent actively syncing;
+5. remotely committed success;
+6. queueable intent later authoritatively rejected;
+7. authoritative online command pending;
+8. authoritative command transport timeout with **unknown result**;
+9. same-operation result reconciliation without duplicate intent;
+10. expected-version/current-relation conflict;
+11. local persistence failure while visible editor content remains;
+12. projection refresh/rebuild while Durable Intent survives;
+13. permission reduced/revoked while a protected draft exists;
+14. session invalid / membership disabled;
+15. account or organization switch with strict scope isolation;
+16. attachment staged locally while remote upload fails;
+17. offline-access-allowed vs offline-access-no-longer-authorized once the Offline Access Lease protocol is accepted.
+
+### Pass requirements
+
+- generic `保存成功` is not used where only local durability or queueing is known;
+- `本机草稿` / `待同步` / authoritative committed state remain semantically distinct when the distinction matters;
+- result-unknown state never becomes a new duplicate submission action;
+- the user is never asked to resolve storage internals as `本地版本 vs 云端版本`;
+- safe local work survives projection refresh and ordinary lifecycle behavior;
+- protected work never crosses user/organization/environment scope;
+- permission/session loss does not remain hidden behind stale authorized UI;
+- formal online-only commands do not pretend to succeed while offline;
+- primary error copy says what is known, whether work is safe, and the next safe action without exposing raw HTTP/SQL/crypto details;
+- one underlying incident does not create stacked redundant banners/toasts.
+
+### Navigation/back requirements
+
+- ordinary Back may leave a locally protected draft when durability is proven;
+- explicit discard is the destructive action;
+- leaving an in-flight authoritative command must not imply cancellation if none exists;
+- returning to a result-unknown command restores reconciliation state;
+- organization/account switch cannot restore a previous-scope draft into the new scope.
+
+---
+
+## 18. Cloud evidence strategy
+
+Because this project uses CI as the development lab, prototype acceptance must not rely on one local developer screenshot.
+
+### Windows evidence layers
+
+Prefer multiple complementary layers:
+
+1. deterministic Core/ViewModel/layout-policy tests for semantic decisions and boundary calculations;
+2. WinUI build + UI Automation/Appium-style interaction tests where stable enough for keyboard/navigation/focus flows;
+3. representative rendered screenshots captured as CI artifacts for human visual review;
+4. accessibility/UI Automation inspection evidence for names, roles and focus paths;
+5. exact-head manual review notes for behavior that cloud automation cannot yet prove reliably.
+
+No single Windows UI automation framework is treated as the sole visual truth.
+
+### Android evidence layers
+
+Prefer:
+
+1. Compose unit/semantics tests;
+2. Compose screenshot tests across representative `uiMode` / font-scale / size configurations;
+3. device/emulator tests for IME, predictive Back, state restoration and process death;
+4. baseline-profile/macrobenchmark evidence when the architecture spike reaches the performance gate;
+5. CI screenshot/report artifacts attached to the exact tested head.
+
+Golden screenshots supplement semantic/layout assertions; they do not justify freezing a breakpoint by themselves.
+
+---
+
+## 19. Evidence to capture in CI / review
 
 Each native UX prototype PR should provide reproducible evidence, not only screenshots.
 
@@ -545,9 +626,11 @@ Recommended evidence:
 - build/test result;
 - deterministic fixture version;
 - viewport/text/theme matrix result;
+- interaction-state semantic matrix result;
 - automated layout/semantics checks where feasible;
 - screenshots or test artifacts for representative matrices;
 - keyboard/focus test evidence on Windows;
+- unknown-result/conflict/scope-switch evidence for representative writes;
 - macrobenchmark/baseline-profile evidence for Android startup/Today/Student/Quick Capture when the architecture spike reaches that gate;
 - explicit known limitations rather than hiding untested states.
 
@@ -555,7 +638,7 @@ Prototype acceptance applies only to the exact tested head.
 
 ---
 
-## 18. Conditions to freeze UX & Visual Foundation v1
+## 20. Conditions to freeze UX & Visual Foundation v1
 
 The Candidate may move to accepted v1 only when:
 
@@ -566,6 +649,7 @@ The Candidate may move to accepted v1 only when:
 5. Case remains a readable professional narrative;
 6. Quick Capture proves no-lost-input behavior under the supported lifecycle matrix;
 7. Organization Management proves density can degrade by priority without unreadable compression;
-8. no prototype requires card soup, giant KPI dashboards or AI-like decorative patterns to remain understandable;
-9. measured evidence justifies any frozen breakpoint/pane-width/reading-width values;
-10. documentation is updated with the tested values and the exact evidence before the word `Candidate` is removed.
+8. representative write flows pass `INTERACTION_STATE_CONTRACT.md`, including local-vs-remote guarantee wording, unknown-result reconciliation, authorization/scope changes and Durable Intent survival;
+9. no prototype requires card soup, giant KPI dashboards or AI-like decorative patterns to remain understandable;
+10. measured evidence justifies any frozen breakpoint/pane-width/reading-width values;
+11. documentation is updated with the tested values and the exact evidence before the word `Candidate` is removed.
