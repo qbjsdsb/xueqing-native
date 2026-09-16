@@ -44,14 +44,10 @@ jobs:
         shell: pwsh
         run: |
           dotnet --info
-      - name: Restore WinUI spike
+      - name: Restore locked WinUI dependencies
         shell: pwsh
         run: |
-          dotnet restore apps/windows/src/Xueqing.Windows/Xueqing.Windows.csproj --use-lock-file
-      - name: Emit generated lock file for bootstrap review
-        shell: pwsh
-        run: |
-          Get-Content apps/windows/src/Xueqing.Windows/packages.lock.json -Raw
+          dotnet restore apps/windows/src/Xueqing.Windows/Xueqing.Windows.csproj --locked-mode
       - name: Build WinUI spike
         shell: pwsh
         run: |
