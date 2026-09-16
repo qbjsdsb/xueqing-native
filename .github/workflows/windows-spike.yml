@@ -4,6 +4,8 @@ on:
   pull_request:
     paths:
       - 'apps/windows/**'
+      - 'contracts/sync/**'
+      - 'docs/architecture/WINDOWS_OUTBOX_SPIKE.md'
       - 'global.json'
       - 'Directory.Packages.props'
       - '.github/workflows/windows-spike.yml'
@@ -27,6 +29,11 @@ jobs:
         uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1
         with:
           dotnet-version: '10.0.401'
+      - name: Verify locked infrastructure dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          dotnet restore apps/windows/src/Xueqing.Windows.Infrastructure/Xueqing.Windows.Infrastructure.csproj --locked-mode
       - name: Build platform-neutral Windows tests
         shell: bash
         run: |
@@ -45,7 +52,7 @@ jobs:
           set -euo pipefail
           output=apps/windows/tests/Xueqing.Windows.Core.Tests/bin/Release/net10.0
           "$output/Xueqing.Windows.Core.Tests" \
-            --minimum-expected-tests 2 \
+            --minimum-expected-tests 10 \
             --no-banner \
             --progress off \
             --output Detailed \
@@ -66,6 +73,14 @@ jobs:
         shell: pwsh
         run: |
           dotnet --info
+      - name: Restore locked infrastructure dependencies
+        shell: pwsh
+        run: |
+          dotnet restore apps/windows/src/Xueqing.Windows.Infrastructure/Xueqing.Windows.Infrastructure.csproj --locked-mode
+      - name: Build Windows infrastructure spike
+        shell: pwsh
+        run: |
+          dotnet build apps/windows/src/Xueqing.Windows.Infrastructure/Xueqing.Windows.Infrastructure.csproj -c Release --no-restore --nologo
       - name: Restore locked WinUI dependencies
         shell: pwsh
         run: |
