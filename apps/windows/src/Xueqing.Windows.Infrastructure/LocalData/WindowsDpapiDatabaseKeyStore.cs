@@ -51,11 +51,12 @@ internal sealed class WindowsDpapiDatabaseKeyStore
         }
 
         var masterKey = RandomNumberGenerator.GetBytes(MasterKeyLengthBytes);
-        var wrappedKey = ProtectedData.Protect(masterKey, _entropy, DataProtectionScope.CurrentUser);
+        byte[]? wrappedKey = null;
         var temporaryPath = _wrappedKeyPath + "." + Guid.NewGuid().ToString("N") + ".tmp";
 
         try
         {
+            wrappedKey = ProtectedData.Protect(masterKey, _entropy, DataProtectionScope.CurrentUser);
             await WriteTemporaryKeyAsync(temporaryPath, wrappedKey, cancellationToken);
 
             try
@@ -76,7 +77,11 @@ internal sealed class WindowsDpapiDatabaseKeyStore
         }
         finally
         {
-            CryptographicOperations.ZeroMemory(wrappedKey);
+            if (wrappedKey is not null)
+            {
+                CryptographicOperations.ZeroMemory(wrappedKey);
+            }
+
             TryDelete(temporaryPath);
         }
     }
