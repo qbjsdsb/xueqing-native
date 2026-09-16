@@ -37,15 +37,25 @@ jobs:
       - name: Build platform-neutral Windows tests
         shell: bash
         run: |
-          set -euo pipefail
+          set -uo pipefail
           project=apps/windows/tests/Xueqing.Windows.Core.Tests/Xueqing.Windows.Core.Tests.csproj
+          mkdir -p "$GITHUB_WORKSPACE/TestResults/build-diagnostics"
           dotnet msbuild "$project" \
             -getProperty:IsTestApplication \
             -getProperty:OutputType \
             -getProperty:PlatformTarget \
             -getProperty:UseVSTest \
             -getProperty:EnableMSTestRunner
-          dotnet build "$project" -c Release --nologo
+          dotnet build "$project" -c Release --nologo 2>&1 | tee "$GITHUB_WORKSPACE/TestResults/build-diagnostics/ubuntu-build.log"
+          exit ${PIPESTATUS[0]}
+      - name: Upload failed build diagnostics
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: windows-core-build-diagnostics
+          path: TestResults/build-diagnostics/ubuntu-build.log
+          if-no-files-found: error
+          retention-days: 1
       - name: Run platform-neutral Windows core tests with MTP test app
         shell: bash
         run: |
