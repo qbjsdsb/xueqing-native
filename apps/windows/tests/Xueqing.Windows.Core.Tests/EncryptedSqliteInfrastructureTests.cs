@@ -1,16 +1,21 @@
+using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Data.Sqlite;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Xueqing.Windows.Core.Sync;
 using Xueqing.Windows.Infrastructure.LocalData;
+using Xueqing.Windows.Infrastructure.Sync;
 
 namespace Xueqing.Windows.Core.Tests;
 
 [TestClass]
 public sealed class EncryptedSqliteInfrastructureTests
 {
+    private static readonly DateTimeOffset BaseTime = new(2026, 9, 16, 9, 0, 0, TimeSpan.Zero);
+
     [TestMethod]
-    public async Task Fixed_key_factory_encrypts_payload_and_wrong_key_cannot_read_schema()
+    public async Task Fixed_key_factory_uses_sqlite3mc_encrypts_database_and_wal_and_rejects_wrong_key()
     {
         var databasePath = CreateDatabasePath();
         var masterKey = SHA256.HashData(Encoding.UTF8.GetBytes("fictional-xueqing-test-master-key-v1"));
@@ -21,6 +26,22 @@ public sealed class EncryptedSqliteInfrastructureTests
             var factory = new EncryptedSqliteConnectionFactory(databasePath, masterKey);
             await using (var connection = await factory.OpenAsync())
             {
+                await using (var runtime = connection.CreateCommand())
+                {
+                    runtime.CommandText = "SELECT sqlite3mc_version();";
+                    var runtimeVersion = Convert.ToString(
+                        await runtime.ExecuteScalarAsync(),
+                        CultureInfo.InvariantCulture);
+                    Assert.IsNotNull(runtimeVersion);
+                    StringAssert.Contains(runtimeVersion, "2.4.0");
+                }
+
+                await using (var wal = connection.CreateCommand())
+                {
+                    wal.CommandText = "PRAGMA journal_mode = WAL; PRAGMA synchronous = FULL;";
+                    await wal.ExecuteNonQueryAsync();
+                }
+
                 await using var command = connection.CreateCommand();
                 command.CommandText = """
                     CREATE TABLE secure_probe(value TEXT NOT NULL);
@@ -28,12 +49,13 @@ public sealed class EncryptedSqliteInfrastructureTests
                     """;
                 command.Parameters.AddWithValue("$value", marker);
                 await command.ExecuteNonQueryAsync();
+
+                await AssertFileDoesNotContainAsync(databasePath, marker);
+                await AssertFileDoesNotContainAsync(databasePath + "-wal", marker, allowMissing: true);
             }
 
-            var databaseBytes = await File.ReadAllBytesAsync(databasePath);
-            Assert.IsFalse(
-                ContainsSequence(databaseBytes, Encoding.UTF8.GetBytes(marker)),
-                "Sensitive marker was visible in the raw SQLite database bytes.");
+            await AssertFileDoesNotContainAsync(databasePath, marker);
+            await AssertFileDoesNotContainAsync(databasePath + "-wal", marker, allowMissing: true);
 
             var wrongKey = SHA256.HashData(Encoding.UTF8.GetBytes("fictional-wrong-master-key-v1"));
             try
@@ -59,7 +81,36 @@ public sealed class EncryptedSqliteInfrastructureTests
     }
 
     [TestMethod]
-    public async Task Windows_dpapi_factory_reopens_database_and_missing_key_fails_closed()
+    public async Task Durable_outbox_payload_is_encrypted_and_survives_reopen_with_same_key()
+    {
+        var databasePath = CreateDatabasePath();
+        var masterKey = SHA256.HashData(Encoding.UTF8.GetBytes("fictional-xueqing-outbox-encryption-key-v1"));
+        var operationId = Guid.NewGuid();
+        var marker = "FICTIONAL-OUTBOX-PAYLOAD-MUST-NOT-BE-PLAINTEXT";
+
+        try
+        {
+            var firstStore = new SqliteDurableOutboxStore(databasePath, masterKey);
+            await firstStore.EnqueueAsync(CreateIntent(operationId, $"{{\"marker\":\"{marker}\"}}"));
+
+            await AssertFileDoesNotContainAsync(databasePath, marker);
+            await AssertFileDoesNotContainAsync(databasePath + "-wal", marker, allowMissing: true);
+
+            var reopenedStore = new SqliteDurableOutboxStore(databasePath, masterKey);
+            var restored = await reopenedStore.GetAsync(operationId);
+
+            Assert.IsNotNull(restored);
+            Assert.AreEqual(operationId, restored.Intent.OperationId);
+            StringAssert.Contains(restored.Intent.PayloadJson, marker);
+        }
+        finally
+        {
+            CryptographicOperations.ZeroMemory(masterKey);
+        }
+    }
+
+    [TestMethod]
+    public async Task Windows_dpapi_key_store_concurrent_first_creation_converges_on_one_key()
     {
         if (!OperatingSystem.IsWindows())
         {
@@ -67,30 +118,69 @@ public sealed class EncryptedSqliteInfrastructureTests
         }
 
         var databasePath = CreateDatabasePath();
-        var factory = new EncryptedSqliteConnectionFactory(databasePath);
+        var keys = await Task.WhenAll(
+            Enumerable.Range(0, 16)
+                .Select(_ => new WindowsDpapiDatabaseKeyStore(databasePath).LoadOrCreateAsync()));
 
-        await using (var connection = await factory.OpenAsync())
+        try
         {
-            await using var command = connection.CreateCommand();
-            command.CommandText = "CREATE TABLE secure_probe(id INTEGER PRIMARY KEY);";
-            await command.ExecuteNonQueryAsync();
+            Assert.IsTrue(File.Exists(databasePath + ".key"));
+            foreach (var key in keys.Skip(1))
+            {
+                CollectionAssert.AreEqual(keys[0], key);
+            }
         }
-
-        Assert.IsTrue(File.Exists(databasePath + ".key"));
-
-        var reopenedFactory = new EncryptedSqliteConnectionFactory(databasePath);
-        await using (var reopened = await reopenedFactory.OpenAsync())
+        finally
         {
-            await using var read = reopened.CreateCommand();
-            read.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE name = 'secure_probe';";
-            Assert.AreEqual(1L, Convert.ToInt64(await read.ExecuteScalarAsync(), System.Globalization.CultureInfo.InvariantCulture));
+            foreach (var key in keys)
+            {
+                CryptographicOperations.ZeroMemory(key);
+            }
         }
-
-        File.Delete(databasePath + ".key");
-        var missingKeyFactory = new EncryptedSqliteConnectionFactory(databasePath);
-        await Assert.ThrowsExactlyAsync<LocalDatabaseKeyUnavailableException>(
-            () => missingKeyFactory.OpenAsync());
     }
+
+    [TestMethod]
+    public async Task Windows_dpapi_outbox_reopens_and_corrupt_or_missing_key_fails_closed()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        var databasePath = CreateDatabasePath();
+        var operationId = Guid.NewGuid();
+        var firstStore = new SqliteDurableOutboxStore(databasePath);
+        await firstStore.EnqueueAsync(CreateIntent(operationId, "{\"fictional\":true}"));
+
+        var keyPath = databasePath + ".key";
+        Assert.IsTrue(File.Exists(keyPath));
+
+        var reopenedStore = new SqliteDurableOutboxStore(databasePath);
+        var restored = await reopenedStore.GetAsync(operationId);
+        Assert.IsNotNull(restored);
+        Assert.AreEqual(operationId, restored.Intent.OperationId);
+
+        await File.WriteAllBytesAsync(keyPath, RandomNumberGenerator.GetBytes(48));
+        var corruptKeyStore = new SqliteDurableOutboxStore(databasePath);
+        await Assert.ThrowsExactlyAsync<CryptographicException>(
+            () => corruptKeyStore.CountAsync());
+
+        File.Delete(keyPath);
+        var missingKeyStore = new SqliteDurableOutboxStore(databasePath);
+        await Assert.ThrowsExactlyAsync<LocalDatabaseKeyUnavailableException>(
+            () => missingKeyStore.CountAsync());
+    }
+
+    private static OutboxCommandIntent CreateIntent(Guid operationId, string payloadJson)
+        => new(
+            operationId,
+            "append_evidence",
+            "case-fictional-security-001",
+            "org-fictional-001/student-fictional-001/subject-chinese",
+            7,
+            "assignment-version-3",
+            payloadJson,
+            BaseTime);
 
     private static string CreateDatabasePath()
     {
@@ -100,6 +190,27 @@ public sealed class EncryptedSqliteInfrastructureTests
             Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(directory);
         return Path.Combine(directory, "local.db");
+    }
+
+    private static async Task AssertFileDoesNotContainAsync(
+        string path,
+        string marker,
+        bool allowMissing = false)
+    {
+        if (!File.Exists(path))
+        {
+            if (allowMissing)
+            {
+                return;
+            }
+
+            Assert.Fail($"Expected encrypted SQLite file '{path}' to exist.");
+        }
+
+        var bytes = await File.ReadAllBytesAsync(path);
+        Assert.IsFalse(
+            ContainsSequence(bytes, Encoding.UTF8.GetBytes(marker)),
+            $"Sensitive marker was visible in raw SQLite bytes at '{path}'.");
     }
 
     private static bool ContainsSequence(ReadOnlySpan<byte> haystack, ReadOnlySpan<byte> needle)
