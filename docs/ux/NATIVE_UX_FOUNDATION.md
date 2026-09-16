@@ -13,8 +13,10 @@ Authoritative upstream semantics remain in:
 - `docs/architecture/COMMANDS.md`
 - `docs/architecture/DRAFT_ENGINE.md`
 - `docs/architecture/LOCAL_STATE_MODEL.md`
+- `docs/architecture/AUTHORIZATION.md`
 - `docs/ux/WINDOWS_UX.md`
 - `docs/ux/ANDROID_UX.md`
+- `docs/ux/INTERACTION_STATE_CONTRACT.md`
 
 If this document conflicts with a domain or security invariant, the invariant wins.
 
@@ -260,6 +262,8 @@ Therefore:
 - returning to a saved local draft should make the recovery state understandable;
 - Quick Capture success must not be shown before required durable local persistence actually completed.
 
+`INTERACTION_STATE_CONTRACT.md` defines the stronger distinction between local draft safety, queued intent, authoritative command completion, unknown results, conflict and authorization/scope changes. Pages must consume those semantics rather than inventing their own meanings for `保存` / `同步` / `完成`.
+
 ---
 
 ## 10. Normal success is quiet; exceptions speak
@@ -280,13 +284,15 @@ Reserve persistent or prominent feedback for:
 - conflict/version changes;
 - permission changes;
 - destructive or formal lifecycle actions;
-- locally saved but not yet formally committed work.
+- locally saved but not yet formally committed work;
+- authoritative command outcomes that are temporarily unknown.
 
 Examples:
 
 - `Save failed · Retry`
 - `Offline · 3 records waiting to sync`
 - `This Case changed elsewhere. Your local draft is still safe.`
+- `Unable to confirm the result yet · Check again`
 
 Do not fill normal screens with green `Synced` or repeated `Saved successfully` banners.
 
@@ -500,11 +506,17 @@ Distinct states must remain distinguishable:
 - pressed;
 - disabled;
 - loading;
-- saving;
+- saving locally;
+- local draft safe;
+- waiting to sync;
+- syncing;
+- authoritative command pending;
+- authoritative result unknown;
 - save failed;
-- offline/pending sync;
+- authoritative rejection;
 - conflict/version changed;
 - permission reduced;
+- session/scope invalid;
 - locally preserved draft.
 
 Do not make hover, selected and focus all look like the same accent fill.
@@ -512,6 +524,8 @@ Do not make hover, selected and focus all look like the same accent fill.
 Loading should preserve useful existing structure when possible rather than flashing the entire workspace blank.
 
 Failure must state the next safe action.
+
+The page-level design does not get to reinterpret these meanings. See `INTERACTION_STATE_CONTRACT.md`.
 
 ---
 
@@ -558,29 +572,40 @@ Reject by default:
 - chip walls for ordinary metadata;
 - repeated explanatory subtitles that restate the page title;
 - giant KPI dashboards;
-- risk/growth/health scores without a real domain rule;
-- command palettes added before command volume justifies them;
-- context-menu-only critical actions;
-- fixed-height rows that clip large text;
-- fixed pane widths treated as universal truth;
-- color as the only state encoding;
-- `local vs cloud — choose one` conflict dialogs that ask teachers to become database administrators.
+- technical storage language such as `local vs cloud`, raw HTTP codes or database terms as ordinary teacher-facing conflict UI;
+- generic `保存成功` when only local draft durability or queueing has been proved.
 
 ---
 
-## 22. Candidate items that still require native prototype evidence
+## 22. Candidate values remain evidence-bound
 
-Do **not** freeze the following from this document alone:
+The following remain Candidate until native prototypes prove them:
 
-- exact Windows compact/regular/wide thresholds;
-- exact Student list preferred/minimum width;
-- exact Case reading `max-width`;
-- exact pane transition timing;
-- exact Android phone/tablet pane thresholds beyond platform window-size/adaptive primitives;
-- exact organization-management column-collapse points;
-- exact Android Quick Capture bottom-action composition under every IME/window case;
-- final accent hex values;
-- final semantic state color pairs;
-- final font-weight overrides beyond platform-native defaults.
+- final Windows list/detail breakpoint(s);
+- final list pane preferred/minimum width;
+- Case reading `max-width`;
+- management column-collapse thresholds;
+- exact page/pane title mapping under high text scale;
+- exact semantic colors/brand accent treatment;
+- exact Android sheet vs full-screen choices outside the already-strong Quick Capture direction;
+- Offline Access Lease wording/duration/recovery UI;
+- unauthorized-draft retention/export/recovery UI;
+- attachment upload/recovery details.
 
-These are accepted only after the executable prototype gates in `PROTOTYPE_ACCEPTANCE_MATRIX.md` pass.
+A mockup cannot freeze these values.
+
+---
+
+## 23. Acceptance direction
+
+The Foundation may be accepted only after the native prototype matrix proves that teachers can understand and complete core work without:
+
+- losing input;
+- being lied to about save/submit state;
+- confusing local durability with authoritative completion;
+- leaking or crossing account/organization scopes;
+- depending on color alone;
+- fighting fixed layouts at large text/narrow windows;
+- being forced through decorative or AI-like UI patterns.
+
+The goal is a quiet professional native workspace whose reliability semantics are as disciplined as its visual hierarchy.
