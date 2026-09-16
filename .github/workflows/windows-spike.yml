@@ -52,7 +52,7 @@ jobs:
           set -euo pipefail
           output=apps/windows/tests/Xueqing.Windows.Core.Tests/bin/Release/net10.0
           "$output/Xueqing.Windows.Core.Tests" \
-            --minimum-expected-tests 17 \
+            --minimum-expected-tests 18 \
             --no-banner \
             --progress off \
             --output Detailed \
@@ -90,7 +90,7 @@ jobs:
         run: |
           $output = "apps/windows/tests/Xueqing.Windows.Core.Tests/bin/Release/net10.0"
           & "$output/Xueqing.Windows.Core.Tests.exe" `
-            --minimum-expected-tests 17 `
+            --minimum-expected-tests 18 `
             --no-banner `
             --progress off `
             --output Detailed `

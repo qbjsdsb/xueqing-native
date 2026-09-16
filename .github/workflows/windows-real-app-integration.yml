@@ -1,0 +1,72 @@
+name: windows-real-app-integration
+
+on:
+  pull_request:
+    paths:
+      - 'apps/windows/src/Xueqing.Windows/**'
+      - 'apps/windows/src/Xueqing.Windows.Infrastructure/**'
+      - 'apps/windows/src/Xueqing.Windows.Core/**'
+      - 'apps/windows/spikes/Xueqing.Windows.PackagingProbe/Assets/**'
+      - 'tools/packaging/run-windows-real-app-integration.ps1'
+      - 'docs/architecture/WINDOWS_REAL_APP_LOCALSTATE_MSIX.md'
+      - 'docs/project/PROJECT_STATE.yaml'
+      - 'Directory.Packages.props'
+      - '.github/workflows/windows-real-app-integration.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-real-app-integration-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  real-app-msix-localstate:
+    name: msix-localstate-upgrade
+    runs-on: windows-2025
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+
+      - name: Setup .NET 10.0.401
+        uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1
+        with:
+          dotnet-version: '10.0.401'
+
+      - name: Print toolchain
+        shell: pwsh
+        run: |
+          dotnet --info
+          dotnet msbuild -version
+
+      - name: Restore locked encrypted infrastructure dependencies
+        shell: pwsh
+        run: |
+          dotnet restore apps/windows/src/Xueqing.Windows.Infrastructure/Xueqing.Windows.Infrastructure.csproj --locked-mode
+
+      - name: Restore real app from committed lock graph
+        shell: pwsh
+        run: |
+          dotnet restore apps/windows/src/Xueqing.Windows/Xueqing.Windows.csproj --locked-mode
+
+      - name: Build real app from committed graph
+        shell: pwsh
+        run: |
+          dotnet build apps/windows/src/Xueqing.Windows/Xueqing.Windows.csproj -c Release --no-restore --nologo
+
+      - name: Build, sign, install, upgrade and validate real app
+        shell: pwsh
+        env:
+          XUEQING_WINDOWS_INTEGRATION_DIAGNOSTIC_OUTPUT: ${{ github.workspace }}\artifacts\windows-real-app-integration\diagnostics\xueqing-app-integration.json
+        run: |
+          ./tools/packaging/run-windows-real-app-integration.ps1 -RepositoryRoot "$env:GITHUB_WORKSPACE"
+
+      - name: Upload real-app integration diagnostics
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: windows-real-app-integration-diagnostics
+          path: artifacts/windows-real-app-integration/diagnostics
+          if-no-files-found: warn
+          retention-days: 7

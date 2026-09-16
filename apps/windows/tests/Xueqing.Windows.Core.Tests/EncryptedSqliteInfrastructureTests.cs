@@ -143,6 +143,45 @@ public sealed class EncryptedSqliteInfrastructureTests
 
     [TestMethod]
     [SupportedOSPlatform("windows")]
+    public async Task Windows_sqlite3mc_encrypted_vfs_documents_legacy_path_limit()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        var rootDirectory = Path.Combine(
+            Path.GetTempPath(),
+            "xueqing-native-longpath-vfs-tests",
+            Guid.NewGuid().ToString("N"));
+        var databasePath = CreateBeyondMaxPathDatabasePath(rootDirectory);
+
+        try
+        {
+            Assert.IsTrue(
+                databasePath.Length > 260,
+                $"Regression path must exceed MAX_PATH; actual length was {databasePath.Length}.");
+
+            var store = new SqliteDurableOutboxStore(databasePath);
+            var exception = await Assert.ThrowsExactlyAsync<SqliteException>(
+                () => store.CountAsync());
+
+            Assert.AreEqual(14, exception.SqliteErrorCode);
+            Assert.IsTrue(
+                File.Exists(databasePath + ".key"),
+                "DPAPI key creation should succeed before SQLite reports its VFS path-length limit.");
+        }
+        finally
+        {
+            if (Directory.Exists(rootDirectory))
+            {
+                Directory.Delete(rootDirectory, recursive: true);
+            }
+        }
+    }
+
+    [TestMethod]
+    [SupportedOSPlatform("windows")]
     public async Task Windows_dpapi_outbox_reopens_and_corrupt_or_missing_key_fails_closed()
     {
         if (!OperatingSystem.IsWindows())
@@ -193,6 +232,20 @@ public sealed class EncryptedSqliteInfrastructureTests
             Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(directory);
         return Path.Combine(directory, "local.db");
+    }
+
+    private static string CreateBeyondMaxPathDatabasePath(string rootDirectory)
+    {
+        const string fileName = "durable-intent.db";
+        var directory = Path.GetFullPath(rootDirectory);
+
+        while (Path.Combine(directory, fileName).Length <= 260)
+        {
+            directory = Path.Combine(directory, "path");
+        }
+
+        Directory.CreateDirectory(directory);
+        return Path.Combine(directory, fileName);
     }
 
     private static async Task AssertFileDoesNotContainAsync(
