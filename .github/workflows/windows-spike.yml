@@ -29,6 +29,11 @@ jobs:
         uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1
         with:
           dotnet-version: '10.0.401'
+      - name: Verify locked infrastructure dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          dotnet restore apps/windows/src/Xueqing.Windows.Infrastructure/Xueqing.Windows.Infrastructure.csproj --locked-mode
       - name: Build platform-neutral Windows tests
         shell: bash
         run: |
@@ -68,11 +73,10 @@ jobs:
         shell: pwsh
         run: |
           dotnet --info
-      - name: Restore infrastructure spike dependency graph
+      - name: Restore locked infrastructure dependencies
         shell: pwsh
         run: |
-          dotnet restore apps/windows/src/Xueqing.Windows.Infrastructure/Xueqing.Windows.Infrastructure.csproj --use-lock-file
-          Get-Content apps/windows/src/Xueqing.Windows.Infrastructure/packages.lock.json -Raw
+          dotnet restore apps/windows/src/Xueqing.Windows.Infrastructure/Xueqing.Windows.Infrastructure.csproj --locked-mode
       - name: Build Windows infrastructure spike
         shell: pwsh
         run: |
