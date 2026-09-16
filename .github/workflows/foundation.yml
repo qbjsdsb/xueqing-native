@@ -4,50 +4,77 @@ on:
   pull_request:
   push:
     branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read
+
+concurrency:
+  group: foundation-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   repository-foundation:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      # actions/checkout v4 pinned to the immutable commit behind refs/tags/v4 on 2026-09-16.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           fetch-depth: 0
+
       - name: Check whitespace
         shell: bash
         run: |
           set -euo pipefail
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             git diff --check "${{ github.event.pull_request.base.sha }}"...HEAD
+          elif git rev-parse HEAD^ >/dev/null 2>&1; then
+            git diff --check HEAD^ HEAD
           else
-            git diff --check HEAD^ HEAD || git diff --check
+            git diff --check
           fi
+
       - name: Check required foundation files
         shell: bash
         run: |
           set -euo pipefail
           required=(
             README.md AGENTS.md SECURITY.md CONTRIBUTING.md LICENSE
+            docs/project/PROJECT_STATE.yaml
+            docs/ai/BOOTSTRAP.md
             docs/product/PRODUCT.md
             docs/architecture/DOMAIN_MODEL.md
             docs/architecture/COMMANDS.md
             docs/architecture/AUTHORIZATION.md
             docs/architecture/SYNC_PROTOCOL.md
+            docs/architecture/LOCAL_STATE_MODEL.md
+            docs/architecture/DRAFT_ENGINE.md
+            docs/architecture/PROJECTION_CONTRACT.md
+            docs/architecture/PROVIDER_CONFORMANCE.md
+            docs/architecture/TIME_SEMANTICS.md
             docs/architecture/LOCAL_DATA_SECURITY.md
+            docs/architecture/THREAT_MODEL.md
+            docs/architecture/DATA_LIFECYCLE.md
+            docs/architecture/CLOUD_DEVELOPMENT.md
+            docs/architecture/MIGRATION_CONTRACT.md
+            docs/architecture/RELEASE_COMPATIBILITY.md
             docs/architecture/RELEASE_STRATEGY.md
+            docs/architecture/TERMINOLOGY.md
             docs/architecture/PHASE_0_EXECUTION.md
+            docs/architecture/PHASE_0_CLOSURE.md
             docs/architecture/SPIKE_PLAN.md
             docs/ux/WINDOWS_UX.md docs/ux/ANDROID_UX.md
             docs/migration/MIGRATION_FROM_LEGACY.md
             docs/references/OPEN_SOURCE_REFERENCES.md
             docs/adr/0001-windows-winui3.md
             docs/adr/0002-android-compose.md
+            docs/adr/0013-v1-projection-snapshot-sync.md
+            contracts/fixtures/README.md
           )
           for file in "${required[@]}"; do
             test -f "$file" || { echo "Missing $file"; exit 1; }
           done
+
       - name: Reject obvious secret/private-data file types
         shell: bash
         run: |

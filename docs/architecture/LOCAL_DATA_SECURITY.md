@@ -1,34 +1,35 @@
 # Local Data Security
 
-Local-first functionality introduces a local copy of sensitive educational data. This is a first-class security boundary.
+Local-first functionality introduces sensitive educational data onto devices and is a first-class security boundary.
 
-## Phase 0 hard questions
+## Production hard questions
 
-Before production data is permitted, freeze:
+Before real data, freeze:
 
-- which fields are allowed to be cached offline;
-- how long cached access may remain usable without reauthorization;
-- whole-database encryption vs selected-field encryption;
-- OS-backed key storage on Windows and Android;
-- account switch / logout / membership disable / organization archive cleanup;
-- attachment cache policy and TTL;
+- fields/projections allowed offline;
+- finite Offline Access Lease duration and reauthorization behavior;
+- lease resistance to wall-clock rollback and restored old backups;
+- whole-DB vs selected-field encryption and OS-backed key storage;
+- account/environment/organization switch cleanup;
+- attachment staging/cache TTL;
 - diagnostics redaction;
-- backup/export behavior.
+- system cloud-backup/device-migration exclusion;
+- export and privacy-deletion behavior.
+
+## Local state split
+
+Projection Cache is disposable and may be purged/rebuilt. Durable Intent contains drafts/outbox/pending attachment state/operation recovery and cannot use destructive migration fallbacks.
 
 ## Offline Access Lease
 
-Offline access must be finite. The lease binds cached access to a recent successful server authorization check and at minimum a user, organization, device/app installation and expiration.
+Cached sensitive data is usable only while a finite authorization lease can be trusted. The lease binds at minimum user, organization, environment/issuer, installation/device scope and expiry/validity evidence. When expired or trust is lost, encrypted unsynced intent may be preserved according to policy but the cached student workspace is locked until reauthorization.
 
-When expired, the client may preserve encrypted unsynced user input according to policy but must not continue exposing the full cached student workspace indefinitely.
-
-The exact duration is a Spike decision, not a product guess.
+A server-side permission reduction cannot remotely erase an offline device instantly; document this limitation and reduce exposure through finite leases, encryption, minimal cache scope and mandatory purge/lockout after validation.
 
 ## Encryption Spike
 
-Android should evaluate Room-compatible SQLCipher/current maintained options and Android Keystore-backed key material.
+Android evaluates maintained Room-compatible encryption + Android Keystore. Windows compares maintained SQLCipher/SQLite3MC-style options against a minimal SQLite + Windows cryptography/DPAPI design, including CI/MSIX/migration/recovery/performance evidence.
 
-Windows must compare maintained SQLCipher/SQLite3MC-style options against a minimal SQLite + DPAPI/Windows cryptography design. The decision must account for WinUI/MSIX packaging, migrations, performance, recovery and CI—not only whether encryption can be made to compile.
+## Backup
 
-## Purge
-
-A server-side permission reduction cannot remotely erase an offline device instantly. Therefore the product must document this limitation and minimize exposure through finite leases, encryption, minimal cache scope and mandatory purge/lockout after the next validation.
+Sensitive Projection Cache, Durable Intent and attachment staging must not silently participate in OS cloud backup/device migration unless a specific encrypted restore design is approved. A restored old backup must not immediately expose sensitive cache without authorization revalidation.

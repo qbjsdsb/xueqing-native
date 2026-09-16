@@ -1,32 +1,31 @@
 # Security Policy
 
-Xueqing handles potentially sensitive educational records. Security boundaries are product requirements, not optional hardening.
+Xueqing handles potentially sensitive educational records. Security boundaries are product requirements.
 
 ## Current status
 
-The repository is public and Phase 0 / development only. Do not use it with real student, guardian, teacher, institution, credential, or production attachment data until the explicit production security gates are passed.
+The public repository is development/Phase 0 only. Do not use it with real student, guardian, teacher, institution, credential or production attachment data until explicit production gates pass.
 
 ## Never commit
 
-- access / refresh tokens;
-- passwords or temporary credentials;
-- Supabase service-role or other privileged keys;
-- database passwords or backup credentials;
-- signing certificates/private keys;
-- production exports or database dumps;
-- real student, guardian, teacher or institution personal data;
-- private educational attachments.
+Tokens, passwords, temporary credentials, service-role/privileged keys, database/backup passwords, signing private keys/certificates, production exports/dumps, real personal/educational data, private attachments or credential-bearing logs.
 
-## Security model
+## Authorization
 
-The target model includes live-session validation, active organization membership, explicit capabilities, subject scopes, legal student-teacher assignments, profile/entity state, RLS and command-specific authorization. UI visibility is never authorization.
+UI visibility is never authorization. Server paths must validate live session, active membership, capabilities, teaching scopes/assignments, entity state and operation permission. High-risk commands are server-authoritative, atomic and idempotent.
 
-High-risk state transitions must run as server-authoritative transactional commands using idempotent `operation_id`, expected versions, locking/re-validation and auditable results.
+## Environment isolation
+
+Development, staging and production are separate trust domains with separate provider projects/issuers/secrets. Ordinary PRs must not receive production secrets. Production deployment uses protected environments/approval and never runs untrusted pull-request code with privileged credentials.
 
 ## Local data
 
-Local-first support creates a second security boundary. Offline access lease duration, local encryption, cached-field minimization, attachment retention and purge behavior are hard Phase 0/Spike decisions. An account disabled on the server must lose future server access immediately; cached data must be removed or rendered unavailable when the client next validates authorization, and offline access may not be indefinite.
+Offline access is finite. Projection Cache is minimized/disposable; Durable Intent receives strong migration/privacy protection. Encryption, backup exclusion, lease trust/clock rollback, purge/account-switch and attachment retention are production gates.
+
+## CI and supply chain
+
+Use least-privilege workflow permissions. Pin third-party Actions to immutable commit SHAs where practical. Do not use privileged `pull_request_target` patterns to execute untrusted code. Dependency/security scanning may be enabled as implementation code appears.
 
 ## Reporting
 
-Do not publish exploitable vulnerabilities in a public issue before a remediation path exists. Use GitHub private vulnerability reporting if enabled; otherwise contact the repository owner privately.
+Do not publish exploitable vulnerabilities in a public issue before a remediation path exists. Prefer GitHub private vulnerability reporting if enabled; otherwise contact the repository owner privately.

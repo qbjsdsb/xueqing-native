@@ -1,0 +1,45 @@
+schema_version: 1
+project: xueqing-native
+phase: phase-0
+milestone: architecture-baseline-v1
+status: closure-candidate
+
+frozen:
+  windows: winui3
+  android: kotlin-compose
+  backend: postgres-first
+  development_provider: supabase
+  client_api: versioned-domain-projections-and-commands
+  sync_v1: scoped-projection-snapshot-plus-durable-outbox
+  conflict_model: server-authoritative-expected-version
+  identity: application-owned-user-id-provider-decoupled
+  workspaces: personal-and-organization-separated
+  cloud_development: ci-as-development-lab
+  ai_continuity: github-is-engineering-source-of-truth
+
+open_gates:
+  - phase-0-document-consistency-audit
+  - main-branch-ruleset-and-required-checks
+  - winui-architecture-spike
+  - android-architecture-spike
+  - backend-api-schema-spike
+  - provider-adapter-conformance-spike
+  - local-data-encryption-spike
+  - offline-access-lease-duration-and-clock-rollback-spike
+  - production-provider-region-data-residency-gate
+  - signing-and-recovery-gate
+  - backup-storage-restore-gate
+
+later:
+  - generic-change-list-or-cursor-sync
+  - large-history-full-text-search
+  - realtime-freshness
+  - ai-product-features
+  - native-aot
+
+rejected_for_v1:
+  - generic-crdt
+  - last-write-wins-domain-conflict-resolution
+  - generic-event-sourcing
+  - heavyweight-openapi-client-codegen
+  - custom-updater-before-platform-update-paths-are-proven-insufficient

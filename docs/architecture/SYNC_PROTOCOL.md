@@ -2,13 +2,11 @@
 
 ## Goal
 
-Give teachers immediate, resilient UX without converting Xueqing into a generic multi-master database.
+Give teachers immediate resilient UX without turning Xueqing into a generic multi-master database. PostgreSQL is authoritative for formal business state.
 
-PostgreSQL is authoritative for formal business state. Local databases are authoritative only for local UI state, queued commands, protected drafts and cached server projections within a valid offline-access policy.
+## Push / Durable Outbox
 
-## Push / Outbox
-
-A queued command envelope should contain at least:
+A queued command envelope contains at least:
 
 ```text
 operation_id
@@ -22,31 +20,32 @@ queue_status
 last_error_class
 ```
 
-`created_at_local` is not a conflict resolver.
+`created_at_local` is never a conflict resolver.
 
-Retry rules:
+Retry transient failures with the same `operation_id`. On unknown result, resolve the existing operation receipt/result before creating any new user intent. Domain/authorization conflicts require explicit handling rather than blind retry.
 
-- retry transient network/server failures with the same `operation_id`;
-- on unknown result, query operation receipt/result first;
-- domain conflicts are not automatically retried as new intent;
-- authorization/entity-state denial is surfaced and may require local draft preservation or purge.
+## Pull / V1 Projection Snapshots
 
-## Pull
+V1 fetches bounded, versioned, authorization-scoped read projections. It does not require a generic global change cursor.
 
-Do not depend on wall-clock timestamp comparison alone. The backend spike must define a monotonic or opaque `change_cursor`/equivalent server-issued token.
+Examples: PersonalBootstrap, StudentDetail, paged CaseTimeline, OrganizationSupervision and ManagementSnapshot.
 
-Pull must also validate current authorization scope. A separate `access_scope_version`/equivalent is recommended so membership/assignment changes can trigger cache reconciliation/purge even when the affected business rows did not themselves mutate.
+Each refresh revalidates current authorization/scope. Scope reduction, account/environment change or incompatible projection generation may invalidate/purge disposable Projection Cache.
+
+A generic change-list/cursor protocol is a later optimization only if measured production-like Snapshot cost justifies its additional ordering/deletion/migration complexity.
+
+## Local state split
+
+Projection Cache is server-derived and disposable. Durable Intent holds unsafely-uncommitted user work and cannot be destructively rebuilt.
 
 ## Conflict model
 
-Lifecycle/governance conflicts use server versions/current snapshots. No generic Last Write Wins.
-
-Example: local close expected Case v17 while server is v18 → return version conflict with the current server projection; the user reviews/retries a new explicit intent.
+Lifecycle/governance conflicts use server versions/current snapshots. No generic Last Write Wins. A stale lifecycle command returns an explicit conflict/current projection for a new user decision.
 
 ## Realtime
 
-Realtime may later improve freshness but must never be required for correctness, authorization revocation or exactly-once semantics.
+Realtime may later improve freshness but is never required for correctness, authorization revocation or exactly-once semantics.
 
 ## Offline authorization
 
-Cached sensitive data is available only while an Offline Access Lease is valid. Lease semantics and duration are frozen only after security Spike. On next online validation, reduced scope must trigger local purge/lockout of no-longer-authorized cached records.
+Sensitive cached data is available only under the finite Offline Access Lease policy. Lease design must account for wall-clock rollback and restored old backups; a simple device-wall-clock comparison is insufficient.

@@ -2,29 +2,28 @@
 
 ## Development
 
-Public GitHub repository, fictional data only. CI may use standard hosted runners and produce temporary development artifacts.
+Public repository, fictional data only, cloud-reproducible CI. Zero-cost is a development preference, not a reason to reduce production security, recoverability or compliance.
 
 ## Windows
 
-Primary technology: WinUI 3 packaged as MSIX.
-
-Development/testing may use self-signed packages. Public production distribution must not assume that self-signed MSIX is acceptable for ordinary teachers.
-
-Before production freeze, compare:
-
-1. Microsoft Store distribution (Store signing + update channel);
-2. direct trusted-signature MSIX/App Installer distribution.
-
-Do not build a custom updater until platform-provided update paths are proven insufficient.
+WinUI 3 packaged as MSIX. Development may use self-signed packages. Before production compare Microsoft Store distribution (trusted signing/update channel) with direct trusted-signature MSIX/App Installer. Do not build a custom updater until platform paths are proven insufficient.
 
 ## Android
 
-Development/release candidate may use signed APKs under a controlled test key strategy. Production signing keys must never be stored in Git. Play distribution can be evaluated later; it is not required for early pilots.
+Development/release candidates may use controlled test signing. Production signing keys never enter Git and require a documented encrypted backup/recovery procedure. Final production distribution is a production gate rather than a permanent GitHub-APK assumption.
 
-## Version compatibility
+## Compatibility
 
-Client, local schema and backend contract versions must be explicit. Backend migrations must consider a compatibility window for clients that have not updated yet.
+Client, Projection/Command contract, local Durable Intent schema and backend versions are explicit. Maintain a practical N-1 compatibility window. Additive evolution is preferred; incompatible contracts are versioned.
+
+Before production define a minimal emergency client policy for recommended/minimum/security-blocked versions. It is not a generic feature-flag system.
+
+## Recovery
+
+Release validation includes upgrade and downgrade/recovery smoke. Projection Cache may be rebuilt; Durable Intent may not be sacrificed by rollback.
+
+Database backup alone is insufficient when Storage contains attachments. Production DR requires database backup + Storage object backup/manifest + a tested restore rehearsal.
 
 ## Production gate
 
-No production release with real data until provider/region, old-token behavior, local-data encryption, backup/restore, Storage recovery, signing, network reliability, privacy handling and real-device acceptance are all documented and passed.
+No real-data release until provider/region/data-residency decision, old-token behavior, local security, privacy/data lifecycle, backup+Storage restore, signing/recovery, network reliability, release compatibility and real-device/platform acceptance are documented and passed.
