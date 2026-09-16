@@ -12,7 +12,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: windows-msix-packaging-spike-${{ github.workflow }}-${{ github.ref }}
@@ -24,10 +24,8 @@ jobs:
     runs-on: windows-2025
 
     steps:
-      - name: Checkout PR head
+      - name: Checkout
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
-        with:
-          ref: ${{ github.head_ref || github.ref_name }}
 
       - name: Setup .NET 10.0.401
         uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1
@@ -40,27 +38,7 @@ jobs:
           dotnet --info
           dotnet msbuild -version
 
-      - name: Regenerate packaging probe lock on Windows runner
-        shell: pwsh
-        run: |
-          dotnet restore apps/windows/spikes/Xueqing.Windows.PackagingProbe/Xueqing.Windows.PackagingProbe.csproj --force-evaluate
-
-      - name: Freeze runner-generated packaging lock
-        shell: pwsh
-        run: |
-          $lock = "apps/windows/spikes/Xueqing.Windows.PackagingProbe/packages.lock.json"
-          git add -- $lock
-          git diff --cached --quiet
-          if ($LASTEXITCODE -eq 0) {
-            Write-Host "Packaging lock already matches the evaluated graph."
-            exit 0
-          }
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git commit -m "chore: freeze Windows packaging lock graph"
-          git push origin "HEAD:${{ github.head_ref || github.ref_name }}"
-
-      - name: Restore packaging probe from regenerated lock graph
+      - name: Restore packaging probe from committed lock graph
         shell: pwsh
         run: |
           dotnet restore apps/windows/spikes/Xueqing.Windows.PackagingProbe/Xueqing.Windows.PackagingProbe.csproj --locked-mode
