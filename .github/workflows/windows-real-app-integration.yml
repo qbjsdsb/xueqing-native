@@ -47,6 +47,9 @@ jobs:
         shell: pwsh
         run: |
           $expected = 'apps/windows/src/Xueqing.Windows/packages.lock.json'
+          $coreBootstrapArtifact = 'apps/windows/src/Xueqing.Windows.Core/packages.lock.json'
+          Remove-Item $coreBootstrapArtifact -Force -ErrorAction SilentlyContinue
+
           $changes = @(git status --porcelain)
           $unexpected = @($changes | Where-Object { $_ -notmatch [regex]::Escape($expected) })
           if ($unexpected.Count -gt 0) {
