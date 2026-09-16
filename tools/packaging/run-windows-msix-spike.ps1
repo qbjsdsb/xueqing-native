@@ -82,20 +82,25 @@ function Build-Package {
     }
     New-Item $OutputDirectory -ItemType Directory -Force | Out-Null
 
-    & $MSBuild $project `
-        /t:Rebuild `
-        /m `
-        /p:Configuration=Release `
-        /p:Platform=x64 `
-        /p:GenerateAppxPackageOnBuild=true `
-        /p:UapAppxPackageBuildMode=SideloadOnly `
-        /p:AppxBundle=Never `
-        /p:AppxPackageSigningEnabled=false `
-        /p:AppxPackageDir="$OutputDirectory\" `
-        /p:PublishReadyToRun=false `
-        /p:PublishTrimmed=false
+    $buildOutput = @(
+        & $MSBuild $project `
+            /t:Rebuild `
+            /m `
+            /p:Configuration=Release `
+            /p:Platform=x64 `
+            /p:GenerateAppxPackageOnBuild=true `
+            /p:UapAppxPackageBuildMode=SideloadOnly `
+            /p:AppxBundle=Never `
+            /p:AppxPackageSigningEnabled=false `
+            /p:AppxPackageDir="$OutputDirectory\" `
+            /p:PublishReadyToRun=false `
+            /p:PublishTrimmed=false `
+            2>&1
+    )
+    $buildExitCode = $LASTEXITCODE
+    $buildOutput | ForEach-Object { Write-Host $_ }
 
-    if ($LASTEXITCODE -ne 0) {
+    if ($buildExitCode -ne 0) {
         throw "MSIX build failed for version $Version."
     }
 
