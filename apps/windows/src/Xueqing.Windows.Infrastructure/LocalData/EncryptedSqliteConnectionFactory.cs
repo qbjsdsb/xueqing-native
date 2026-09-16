@@ -75,20 +75,15 @@ internal sealed class EncryptedSqliteConnectionFactory
             CryptographicOperations.ZeroMemory(masterKey);
         }
 
-        var connectionStringBuilder = new SqliteConnectionStringBuilder
+        var connectionString = new SqliteConnectionStringBuilder
         {
             DataSource = _databasePath,
             Mode = SqliteOpenMode.ReadWriteCreate,
             Pooling = false,
             Password = password,
-        };
+        }.ToString();
 
-        if (OperatingSystem.IsWindows())
-        {
-            connectionStringBuilder.Vfs = "win32-longpath";
-        }
-
-        var connection = new SqliteConnection(connectionStringBuilder.ToString())
+        var connection = new SqliteConnection(connectionString)
         {
             DefaultTimeout = _defaultTimeoutSeconds,
         };
