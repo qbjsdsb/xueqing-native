@@ -38,10 +38,19 @@ jobs:
           dotnet --info
           dotnet msbuild -version
 
-      - name: Restore packaging probe from committed lock graph
+      - name: Regenerate packaging probe lock graph on Windows
         shell: pwsh
         run: |
-          dotnet restore apps/windows/spikes/Xueqing.Windows.PackagingProbe/Xueqing.Windows.PackagingProbe.csproj --locked-mode
+          dotnet restore apps/windows/spikes/Xueqing.Windows.PackagingProbe/Xueqing.Windows.PackagingProbe.csproj --use-lock-file
+          Get-Content apps/windows/spikes/Xueqing.Windows.PackagingProbe/packages.lock.json -Raw
+
+      - name: Upload regenerated packaging lock
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: packaging-probe-lock-${{ github.sha }}
+          path: apps/windows/spikes/Xueqing.Windows.PackagingProbe/packages.lock.json
+          if-no-files-found: error
+          retention-days: 1
 
       - name: Build, sign, install, upgrade and uninstall MSIX probe
         shell: pwsh
