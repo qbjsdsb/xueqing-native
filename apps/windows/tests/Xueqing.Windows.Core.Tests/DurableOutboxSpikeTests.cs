@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Xueqing.Windows.Core.Sync;
 using Xueqing.Windows.Infrastructure.Sync;
@@ -8,6 +10,8 @@ namespace Xueqing.Windows.Core.Tests;
 public sealed class DurableOutboxSpikeTests
 {
     private static readonly DateTimeOffset BaseTime = new(2026, 9, 16, 9, 0, 0, TimeSpan.Zero);
+    private static readonly byte[] TestMasterKey = SHA256.HashData(
+        Encoding.UTF8.GetBytes("fictional-xueqing-outbox-master-key-v1"));
 
     [TestMethod]
     public async Task Same_operation_id_is_idempotent_but_collision_is_rejected()
@@ -33,10 +37,10 @@ public sealed class DurableOutboxSpikeTests
         var databasePath = CreateDatabasePath();
         var operationId = Guid.NewGuid();
 
-        var firstStore = new SqliteDurableOutboxStore(databasePath);
+        var firstStore = CreateStore(databasePath);
         await firstStore.EnqueueAsync(CreateIntent(operationId));
 
-        var reopenedStore = new SqliteDurableOutboxStore(databasePath);
+        var reopenedStore = CreateStore(databasePath);
         var restored = await reopenedStore.GetAsync(operationId);
 
         Assert.IsNotNull(restored);
@@ -50,7 +54,7 @@ public sealed class DurableOutboxSpikeTests
     {
         var databasePath = CreateDatabasePath();
         var operationId = Guid.NewGuid();
-        var firstStore = new SqliteDurableOutboxStore(databasePath);
+        var firstStore = CreateStore(databasePath);
         await firstStore.EnqueueAsync(CreateIntent(operationId));
 
         var firstClaim = await firstStore.TryClaimNextReadyAsync(BaseTime, TimeSpan.FromMinutes(1));
@@ -62,7 +66,7 @@ public sealed class DurableOutboxSpikeTests
         var unavailable = await firstStore.TryClaimNextReadyAsync(BaseTime.AddSeconds(30), TimeSpan.FromMinutes(1));
         Assert.IsNull(unavailable);
 
-        var reopenedStore = new SqliteDurableOutboxStore(databasePath);
+        var reopenedStore = CreateStore(databasePath);
         var recoveredClaim = await reopenedStore.TryClaimNextReadyAsync(BaseTime.AddMinutes(2), TimeSpan.FromMinutes(1));
         Assert.IsNotNull(recoveredClaim);
         Assert.AreEqual(operationId, recoveredClaim.Intent.OperationId);
@@ -170,7 +174,10 @@ public sealed class DurableOutboxSpikeTests
     }
 
     private static SqliteDurableOutboxStore CreateStore()
-        => new(CreateDatabasePath());
+        => CreateStore(CreateDatabasePath());
+
+    private static SqliteDurableOutboxStore CreateStore(string databasePath)
+        => new(databasePath, TestMasterKey);
 
     private static string CreateDatabasePath()
     {

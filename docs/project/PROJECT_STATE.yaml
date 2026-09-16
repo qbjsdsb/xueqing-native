@@ -7,6 +7,7 @@ architecture_baseline: v1-accepted
 
 frozen:
   windows: winui3
+  windows_durable_intent_encryption: sqlite3mc-2.4.0-plus-dpapi-currentuser
   android: kotlin-compose
   backend: postgres-first
   development_provider: supabase
@@ -20,10 +21,11 @@ frozen:
 
 open_gates:
   - winui-architecture-spike
+  - windows-local-state-integration-gate
   - android-architecture-spike
+  - android-local-data-encryption-spike
   - backend-api-schema-spike
   - provider-adapter-conformance-spike
-  - local-data-encryption-spike
   - offline-access-lease-duration-and-clock-rollback-spike
   - production-provider-region-data-residency-gate
   - signing-and-recovery-gate

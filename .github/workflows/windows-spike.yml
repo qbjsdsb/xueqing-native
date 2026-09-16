@@ -29,7 +29,7 @@ jobs:
         uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1
         with:
           dotnet-version: '10.0.401'
-      - name: Verify locked infrastructure dependencies
+      - name: Verify locked encrypted infrastructure dependencies
         shell: bash
         run: |
           set -euo pipefail
@@ -52,7 +52,7 @@ jobs:
           set -euo pipefail
           output=apps/windows/tests/Xueqing.Windows.Core.Tests/bin/Release/net10.0
           "$output/Xueqing.Windows.Core.Tests" \
-            --minimum-expected-tests 10 \
+            --minimum-expected-tests 17 \
             --no-banner \
             --progress off \
             --output Detailed \
@@ -73,7 +73,7 @@ jobs:
         shell: pwsh
         run: |
           dotnet --info
-      - name: Restore locked infrastructure dependencies
+      - name: Restore locked encrypted infrastructure dependencies
         shell: pwsh
         run: |
           dotnet restore apps/windows/src/Xueqing.Windows.Infrastructure/Xueqing.Windows.Infrastructure.csproj --locked-mode
@@ -81,6 +81,22 @@ jobs:
         shell: pwsh
         run: |
           dotnet build apps/windows/src/Xueqing.Windows.Infrastructure/Xueqing.Windows.Infrastructure.csproj -c Release --no-restore --nologo
+      - name: Build Windows core tests for DPAPI gate
+        shell: pwsh
+        run: |
+          dotnet build apps/windows/tests/Xueqing.Windows.Core.Tests/Xueqing.Windows.Core.Tests.csproj -c Release --nologo
+      - name: Run Windows core tests including DPAPI gate
+        shell: pwsh
+        run: |
+          $output = "apps/windows/tests/Xueqing.Windows.Core.Tests/bin/Release/net10.0"
+          & "$output/Xueqing.Windows.Core.Tests.exe" `
+            --minimum-expected-tests 17 `
+            --no-banner `
+            --progress off `
+            --output Detailed `
+            --report-trx `
+            --results-directory "$env:GITHUB_WORKSPACE/TestResults/windows-core-windows"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Restore locked WinUI dependencies
         shell: pwsh
         run: |
