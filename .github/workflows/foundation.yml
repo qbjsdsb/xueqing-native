@@ -17,8 +17,8 @@ jobs:
   repository-foundation:
     runs-on: ubuntu-latest
     steps:
-      # actions/checkout v4 pinned to the immutable commit behind refs/tags/v4 on 2026-09-16.
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      # actions/checkout v5 pinned to the immutable commit behind refs/tags/v5 on 2026-09-16.
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
         with:
           fetch-depth: 0
 
