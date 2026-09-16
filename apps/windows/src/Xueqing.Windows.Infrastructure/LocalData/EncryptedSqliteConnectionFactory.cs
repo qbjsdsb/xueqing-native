@@ -6,6 +6,8 @@ namespace Xueqing.Windows.Infrastructure.LocalData;
 
 internal sealed class EncryptedSqliteConnectionFactory
 {
+    private const int DefaultCommandTimeoutSeconds = 30;
+
     private static readonly Lazy<bool> RuntimeInitialization = new(
         static () =>
         {
@@ -15,27 +17,39 @@ internal sealed class EncryptedSqliteConnectionFactory
         LazyThreadSafetyMode.ExecutionAndPublication);
 
     private readonly string _databasePath;
+    private readonly int _defaultTimeoutSeconds;
     private readonly Func<CancellationToken, Task<byte[]>> _loadKeyAsync;
 
     [SupportedOSPlatform("windows")]
-    public EncryptedSqliteConnectionFactory(string databasePath)
+    public EncryptedSqliteConnectionFactory(
+        string databasePath,
+        int defaultTimeoutSeconds = DefaultCommandTimeoutSeconds)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(databasePath);
+        ValidateDefaultTimeout(defaultTimeoutSeconds);
+
         _databasePath = Path.GetFullPath(databasePath);
+        _defaultTimeoutSeconds = defaultTimeoutSeconds;
 
         var keyStore = new WindowsDpapiDatabaseKeyStore(_databasePath);
         _loadKeyAsync = keyStore.LoadOrCreateAsync;
     }
 
-    internal EncryptedSqliteConnectionFactory(string databasePath, ReadOnlySpan<byte> testMasterKey)
+    internal EncryptedSqliteConnectionFactory(
+        string databasePath,
+        ReadOnlySpan<byte> testMasterKey,
+        int defaultTimeoutSeconds = DefaultCommandTimeoutSeconds)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(databasePath);
+        ValidateDefaultTimeout(defaultTimeoutSeconds);
+
         if (testMasterKey.Length != 32)
         {
             throw new ArgumentException("SQLite3MC test master key must be exactly 32 bytes.", nameof(testMasterKey));
         }
 
         _databasePath = Path.GetFullPath(databasePath);
+        _defaultTimeoutSeconds = defaultTimeoutSeconds;
         var retainedTestKey = testMasterKey.ToArray();
         _loadKeyAsync = _ => Task.FromResult(retainedTestKey.ToArray());
     }
@@ -69,7 +83,11 @@ internal sealed class EncryptedSqliteConnectionFactory
             Password = password,
         }.ToString();
 
-        var connection = new SqliteConnection(connectionString);
+        var connection = new SqliteConnection(connectionString)
+        {
+            DefaultTimeout = _defaultTimeoutSeconds,
+        };
+
         try
         {
             await connection.OpenAsync(cancellationToken);
@@ -79,6 +97,16 @@ internal sealed class EncryptedSqliteConnectionFactory
         {
             await connection.DisposeAsync();
             throw;
+        }
+    }
+
+    private static void ValidateDefaultTimeout(int defaultTimeoutSeconds)
+    {
+        if (defaultTimeoutSeconds <= 0)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(defaultTimeoutSeconds),
+                "SQLite default timeout must be positive.");
         }
     }
 }
