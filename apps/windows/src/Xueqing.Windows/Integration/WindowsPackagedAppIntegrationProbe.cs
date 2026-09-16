@@ -11,6 +11,7 @@ namespace Xueqing.Windows.Integration;
 internal static class WindowsPackagedAppIntegrationProbe
 {
     private const string EnabledEnvironmentVariable = "XUEQING_WINDOWS_INTEGRATION_PROBE";
+    private const string DiagnosticOutputEnvironmentVariable = "XUEQING_WINDOWS_INTEGRATION_DIAGNOSTIC_OUTPUT";
     private const string ReportFileName = "xueqing-app-integration.json";
     private const string PayloadMarker = "FICTIONAL-WINDOWS-REAL-APP-DURABLE-INTENT-MARKER";
     private const string FailureStageDataKey = "Xueqing.Windows.Integration.FailureStage";
@@ -25,16 +26,29 @@ internal static class WindowsPackagedAppIntegrationProbe
 
     public static async Task RunAndWriteReportAsync(CancellationToken cancellationToken = default)
     {
-        var applicationData = ApplicationData.Current;
-        var reportPath = Path.Combine(applicationData.LocalFolder.Path, ReportFileName);
+        string? reportPath = null;
+        var failureStage = "application-data.current";
 
         try
         {
+            var applicationData = ApplicationData.Current;
+
+            failureStage = "report-path.resolve";
+            reportPath = Path.Combine(applicationData.LocalFolder.Path, ReportFileName);
+
+            failureStage = "probe.run";
             var report = await RunAsync(applicationData, cancellationToken);
+
+            failureStage = "report.write";
             await WriteReportAsync(reportPath, report, cancellationToken);
         }
         catch (Exception exception)
         {
+            if (exception.Data[FailureStageDataKey] is null)
+            {
+                exception.Data[FailureStageDataKey] = failureStage;
+            }
+
             var failure = new WindowsPackagedAppIntegrationReport(
                 Succeeded: false,
                 PackageName: TryGetPackageName(),
@@ -48,7 +62,8 @@ internal static class WindowsPackagedAppIntegrationProbe
                 DatabaseRelativePath: null,
                 FailureType: FormatFailure(exception));
 
-            await WriteReportAsync(reportPath, failure, cancellationToken);
+            await TryWriteReportAsync(reportPath, failure, cancellationToken);
+            await TryWriteDiagnosticMirrorAsync(failure, cancellationToken);
         }
     }
 
@@ -131,6 +146,63 @@ internal static class WindowsPackagedAppIntegrationProbe
         {
             exception.Data[FailureStageDataKey] = failureStage;
             throw;
+        }
+    }
+
+    private static async Task TryWriteReportAsync(
+        string? reportPath,
+        WindowsPackagedAppIntegrationReport report,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(reportPath))
+        {
+            return;
+        }
+
+        try
+        {
+            await WriteReportAsync(reportPath, report, cancellationToken);
+        }
+        catch (IOException)
+        {
+        }
+        catch (UnauthorizedAccessException)
+        {
+        }
+    }
+
+    private static async Task TryWriteDiagnosticMirrorAsync(
+        WindowsPackagedAppIntegrationReport report,
+        CancellationToken cancellationToken)
+    {
+        var diagnosticPath = Environment.GetEnvironmentVariable(DiagnosticOutputEnvironmentVariable);
+        if (string.IsNullOrWhiteSpace(diagnosticPath))
+        {
+            return;
+        }
+
+        try
+        {
+            var fullPath = Path.GetFullPath(diagnosticPath);
+            var directory = Path.GetDirectoryName(fullPath);
+            if (!string.IsNullOrWhiteSpace(directory))
+            {
+                Directory.CreateDirectory(directory);
+            }
+
+            await WriteReportAsync(fullPath, report, cancellationToken);
+        }
+        catch (IOException)
+        {
+        }
+        catch (UnauthorizedAccessException)
+        {
+        }
+        catch (ArgumentException)
+        {
+        }
+        catch (NotSupportedException)
+        {
         }
     }
 

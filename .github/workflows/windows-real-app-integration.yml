@@ -57,5 +57,16 @@ jobs:
 
       - name: Build, sign, install, upgrade and validate real app
         shell: pwsh
+        env:
+          XUEQING_WINDOWS_INTEGRATION_DIAGNOSTIC_OUTPUT: ${{ github.workspace }}\artifacts\windows-real-app-integration\diagnostics\xueqing-app-integration.json
         run: |
           ./tools/packaging/run-windows-real-app-integration.ps1 -RepositoryRoot "$env:GITHUB_WORKSPACE"
+
+      - name: Upload real-app integration diagnostics
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: windows-real-app-integration-diagnostics
+          path: artifacts/windows-real-app-integration/diagnostics
+          if-no-files-found: warn
+          retention-days: 7
