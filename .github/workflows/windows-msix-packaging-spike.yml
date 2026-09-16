@@ -1,0 +1,49 @@
+name: windows-msix-packaging-spike
+
+on:
+  pull_request:
+    paths:
+      - 'apps/windows/spikes/Xueqing.Windows.PackagingProbe/**'
+      - 'apps/windows/spikes/Xueqing.Windows.LocalDataSecurity/**'
+      - 'tools/packaging/run-windows-msix-spike.ps1'
+      - 'docs/architecture/WINDOWS_MSIX_PACKAGING_SPIKE.md'
+      - 'Directory.Packages.props'
+      - '.github/workflows/windows-msix-packaging-spike.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-msix-packaging-spike-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  package-install-upgrade:
+    name: msix-package-install-upgrade
+    runs-on: windows-2025
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+
+      - name: Setup .NET 10.0.401
+        uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1
+        with:
+          dotnet-version: '10.0.401'
+
+      - name: Print toolchain
+        shell: pwsh
+        run: |
+          dotnet --info
+          dotnet msbuild -version
+
+      - name: Restore packaging probe from committed lock graph
+        shell: pwsh
+        run: |
+          dotnet restore apps/windows/spikes/Xueqing.Windows.PackagingProbe/Xueqing.Windows.PackagingProbe.csproj --locked-mode
+
+      - name: Build, sign, install, upgrade and uninstall MSIX probe
+        shell: pwsh
+        run: |
+          ./tools/packaging/run-windows-msix-spike.ps1 -RepositoryRoot "$env:GITHUB_WORKSPACE"
