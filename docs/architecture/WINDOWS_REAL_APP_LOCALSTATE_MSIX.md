@@ -31,7 +31,9 @@ CI opts into a packaged-app integration probe through the `XUEQING_WINDOWS_INTEG
 - organization: `org-fictional-001`;
 - installation: a generated package-local installation id that must survive an in-place update.
 
-Raw identity values are hashed before becoming directory names. This validates the composition shape without pretending that authentication or production scope selection already exists.
+Environment, app-user and organization identifiers are each hashed and then folded into one fixed 128-bit scope fingerprint before becoming a directory name. The installation id remains a separate path dimension. This keeps raw identity values out of the filesystem while avoiding a deeply nested path that can exceed the encrypted SQLite3MC Windows VFS path budget under package `LocalState`.
+
+The production encrypted connection continues to use SQLite3MC's encryption-capable default Windows VFS. CI documents that a path beyond the legacy Windows limit reproduces SQLite error 14, while SQLite's separate `win32-longpath` VFS is not encryption-capable under the accepted SQLite3MC bundle. The app therefore keeps its scoped relative path compact instead of switching VFS or weakening encryption.
 
 ## Not frozen by this gate
 
