@@ -7,7 +7,7 @@ namespace Xueqing.Windows.Core.Tests;
 [TestClass]
 public sealed class ArchitectureSpikeTests
 {
-    [DataTestMethod]
+    [TestMethod]
     [DataRow(899.9, WindowLayoutMode.Compact)]
     [DataRow(900.0, WindowLayoutMode.Standard)]
     [DataRow(1279.9, WindowLayoutMode.Standard)]
