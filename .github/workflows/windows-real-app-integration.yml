@@ -1,0 +1,66 @@
+name: windows-real-app-integration
+
+on:
+  pull_request:
+    paths:
+      - 'apps/windows/src/Xueqing.Windows/**'
+      - 'apps/windows/src/Xueqing.Windows.Infrastructure/**'
+      - 'apps/windows/src/Xueqing.Windows.Core/**'
+      - 'tools/packaging/run-windows-real-app-integration.ps1'
+      - '.github/workflows/windows-real-app-integration.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: windows-real-app-integration-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  bootstrap-real-app-lock:
+    name: bootstrap-real-app-lock
+    runs-on: windows-2025
+
+    steps:
+      - name: Checkout PR branch
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: ${{ github.head_ref }}
+
+      - name: Setup .NET 10.0.401
+        uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1
+        with:
+          dotnet-version: '10.0.401'
+
+      - name: Regenerate real-app lock graph on Windows
+        shell: pwsh
+        run: |
+          dotnet restore apps/windows/src/Xueqing.Windows/Xueqing.Windows.csproj --use-lock-file
+          Get-Content apps/windows/src/Xueqing.Windows/packages.lock.json -Raw
+
+      - name: Build real app against generated graph
+        shell: pwsh
+        run: |
+          dotnet build apps/windows/src/Xueqing.Windows/Xueqing.Windows.csproj -c Release --no-restore --nologo
+
+      - name: Freeze runner-generated real-app lock when changed
+        shell: pwsh
+        run: |
+          $expected = 'apps/windows/src/Xueqing.Windows/packages.lock.json'
+          $changes = @(git status --porcelain)
+          $unexpected = @($changes | Where-Object { $_ -notmatch [regex]::Escape($expected) })
+          if ($unexpected.Count -gt 0) {
+            $unexpected | ForEach-Object { Write-Host $_ }
+            throw 'Lock bootstrap changed files outside the expected real-app lock.'
+          }
+
+          if ($changes.Count -eq 0) {
+            Write-Host 'Real-app lock graph already matches the Windows runner.'
+            exit 0
+          }
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -- $expected
+          git commit -m 'build(windows): freeze real-app package graph'
+          git push origin "HEAD:${{ github.head_ref }}"
