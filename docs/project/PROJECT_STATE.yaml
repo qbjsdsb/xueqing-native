@@ -1,8 +1,9 @@
 schema_version: 1
 project: xueqing-native
-phase: phase-0
-milestone: architecture-baseline-v1
-status: closure-candidate
+phase: phase-1
+milestone: winui-architecture-spike
+status: active
+architecture_baseline: v1-accepted
 
 frozen:
   windows: winui3
@@ -18,8 +19,6 @@ frozen:
   ai_continuity: github-is-engineering-source-of-truth
 
 open_gates:
-  - phase-0-document-consistency-audit
-  - main-branch-ruleset-and-required-checks
   - winui-architecture-spike
   - android-architecture-spike
   - backend-api-schema-spike

@@ -98,13 +98,15 @@ Teaching Evidence、Intervention、Assessment、Quick Capture 等教学事实必
 
 Local-first 引入新的本地数据安全风险，因此离线授权期限、本地缓存范围、加密方式、退出/停用清理和附件留存策略必须先通过安全 Spike 冻结。
 
-## 当前阶段：Phase 0
+## 当前阶段：Architecture Spikes
 
-Phase 0 只建立产品与架构基础，不实现正式学生业务功能。
+Phase 0 已完成并接受 **Architecture Baseline v1**。广泛架构研究已经停止；后续方向变化必须由新的实验/生产证据和 superseding ADR 驱动。
 
-目标包括产品边界与领域模型、命令与权限、同步协议、本地数据安全、Android/Windows UX、Release/CI、旧项目迁移资产矩阵和平台 Architecture Spike。
+当前第一优先级是 **WinUI 3 Architecture Spike**。Spike 只使用确定性的虚构数据，先验证 WinUI 3、SQLite、列表/时间线虚拟化、窗口缩放与单一断点来源、100/150/200% DPI、暗色/高对比度、键盘与中文 IME、Durable Outbox、云端 Windows CI、MSIX 打包和安装/卸载 smoke。
 
-Phase 0 之后才进入平台 Spike。Spike 必须先验证 WinUI 3、SQLite、DPI、暗色/高对比度、虚拟化列表、MSIX，以及 Android Room、WorkManager、process death、离线 Outbox 等关键风险，再开始正式业务实现。
+随后进入 Android Architecture Spike 与 Backend/API-schema + Provider Conformance Spike。Spike 通过后才开始正式学生业务 Vertical Slice。
+
+动态工程状态以 `docs/project/PROJECT_STATE.yaml` 为准。
 
 ## 仓库布局
 

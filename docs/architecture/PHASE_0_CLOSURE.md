@@ -1,5 +1,9 @@
 # Phase 0 Closure / Architecture Baseline v1
 
+**Status: Accepted**
+
+Phase 0 is closed. Architecture Baseline v1 is the accepted pre-implementation baseline. Broad architecture research stops here; remaining uncertainty must be resolved by executable Spikes or explicit production gates.
+
 This matrix is the research stop rule. Every material pre-implementation question is classified as FROZEN, SPIKE_REQUIRED, LATER or REJECTED.
 
 ## FROZEN
@@ -53,8 +57,17 @@ This matrix is the research stop rule. Every material pre-implementation questio
 
 ## Research stop rule
 
-Broad architecture research stops when this matrix has no `UNKNOWN` category and remaining uncertainty requires an executable Spike or production gate. Future direction changes require new evidence and a superseding ADR, not conversational drift.
+Broad architecture research remains stopped while this matrix has no `UNKNOWN` category. Future direction changes require new evidence and a superseding ADR, not conversational drift.
 
-## Phase 0 exit gates still open
+## Phase 0 exit evidence
 
-This document is a closure candidate, not automatic Phase 0 completion. Before tagging an Architecture Baseline, repository consistency/CI must be green and `main` must have an appropriate ruleset/required checks. The platform/backend/security Spikes then begin; their answers may supersede individual provisional implementation details without reopening broad framework research.
+Phase 0 exit conditions are satisfied:
+
+- Architecture Baseline v1 consistency/foundation CI passed on the exact merged `main` SHA;
+- the repository has an active `Protect main` ruleset targeting the default branch;
+- pull requests are required for `main` changes;
+- deletion and non-fast-forward/force-push are restricted;
+- `repository-foundation` is a required status check with strict up-to-date enforcement;
+- no bypass actor is configured.
+
+The project now proceeds through executable Architecture Spikes. Spike evidence may supersede provisional implementation details through ADRs without reopening broad framework research.
