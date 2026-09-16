@@ -2,6 +2,7 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
     id("com.android.application")
+    id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
@@ -40,7 +41,10 @@ kotlin {
 }
 
 dependencies {
-    val composeBom = platform("androidx.compose:compose-bom:2026.08.00")
+    // 2026.06.00 resolves the stable Compose UI/Foundation 1.11.4 line.
+    // Compose 1.12+ requires compileSdk 37, so it is intentionally excluded
+    // from this stable API 36 bootstrap.
+    val composeBom = platform("androidx.compose:compose-bom:2026.06.00")
 
     implementation(composeBom)
     androidTestImplementation(composeBom)
