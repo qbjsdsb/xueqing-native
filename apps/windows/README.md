@@ -1,18 +1,17 @@
-# Windows Architecture Spike
+# Windows client
 
-Target: C# + .NET 10 LTS + WinUI 3 + stable Windows App SDK + CommunityToolkit.Mvvm.
+Windows 是 Xueqing Native 的 **Organize + Think** 工作区。
 
-Phase 1 must validate the platform before formal business implementation. The spike uses fictional data only and must cover:
+当前阶段：**Phase 1 / WinUI 3 Architecture Spike**。
 
-- cold/warm startup;
-- `NavigationView` shell and list/detail workspace;
-- 1,000 students and at least 10,000 timeline items with virtualization;
-- search/filtering and keyboard navigation;
-- continuous window resize and a single centralized layout breakpoint source;
-- 100%, 150%, 200% DPI; dark/light/high-contrast modes;
-- SQLite local store, Outbox and sync cursor persistence;
-- local-database encryption options and key-storage feasibility;
-- MSIX build/install/upgrade;
-- diagnostic bundle generation with sensitive-data redaction.
+本阶段不实现正式学生业务，只验证：
 
-No formal student business UI should be built here until the spike gate passes.
+- .NET 10 + WinUI 3 云端构建；
+- 单一布局断点来源，重点覆盖旧版 1280px 边界问题；
+- 1000 名确定性虚构学生的列表与 List/Detail 壳；
+- Core 与 UI 分层，使关键逻辑可在非 Windows runner 上测试；
+- DPI、暗色/高对比度、中文 IME、键盘、SQLite、Durable Outbox、MSIX、安装/卸载 smoke 等后续 Spike Gate。
+
+第一层 bootstrap 暂时使用 unpackaged self-contained WinUI，只用于隔离验证 XAML/SDK/云端构建链。正式分发方向仍是 MSIX；只有基础编译通过后才引入打包和签名变量。
+
+所有数据必须是确定性虚构数据。不得把真实学生、教师、家长信息带入本目录或 CI artifact。

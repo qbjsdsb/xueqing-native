@@ -1,0 +1,76 @@
+name: windows-spike
+
+on:
+  pull_request:
+    paths:
+      - 'apps/windows/**'
+      - 'global.json'
+      - 'Directory.Packages.props'
+      - '.github/workflows/windows-spike.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-spike-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  core-tests:
+    name: windows-core-tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+      - name: Setup .NET 10.0.401
+        uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1
+        with:
+          dotnet-version: '10.0.401'
+      - name: Build platform-neutral Windows tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          project=apps/windows/tests/Xueqing.Windows.Core.Tests/Xueqing.Windows.Core.Tests.csproj
+          dotnet msbuild "$project" \
+            -getProperty:IsTestApplication \
+            -getProperty:OutputType \
+            -getProperty:PlatformTarget \
+            -getProperty:UseVSTest \
+            -getProperty:EnableMSTestRunner
+          dotnet build "$project" -c Release --nologo
+      - name: Run platform-neutral Windows core tests with MTP test app
+        shell: bash
+        run: |
+          set -euo pipefail
+          output=apps/windows/tests/Xueqing.Windows.Core.Tests/bin/Release/net10.0
+          "$output/Xueqing.Windows.Core.Tests" \
+            --minimum-expected-tests 2 \
+            --no-banner \
+            --progress off \
+            --output Detailed \
+            --report-trx \
+            --results-directory "$GITHUB_WORKSPACE/TestResults/windows-core"
+
+  winui-build:
+    name: winui-cloud-build
+    runs-on: windows-2025
+    steps:
+      - name: Checkout
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+      - name: Setup .NET 10.0.401
+        uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1
+        with:
+          dotnet-version: '10.0.401'
+      - name: Print toolchain
+        shell: pwsh
+        run: |
+          dotnet --info
+      - name: Restore locked WinUI dependencies
+        shell: pwsh
+        run: |
+          dotnet restore apps/windows/src/Xueqing.Windows/Xueqing.Windows.csproj --locked-mode
+      - name: Build WinUI spike
+        shell: pwsh
+        run: |
+          dotnet build apps/windows/src/Xueqing.Windows/Xueqing.Windows.csproj -c Release --no-restore --nologo -p:PublishReadyToRun=false -p:PublishTrimmed=false
