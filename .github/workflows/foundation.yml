@@ -1,0 +1,48 @@
+name: foundation
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  repository-foundation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check whitespace
+        run: git diff --check HEAD~1 HEAD || git diff --check
+      - name: Check required foundation files
+        shell: bash
+        run: |
+          set -euo pipefail
+          required=(
+            README.md AGENTS.md SECURITY.md CONTRIBUTING.md LICENSE
+            docs/product/PRODUCT.md
+            docs/architecture/DOMAIN_MODEL.md
+            docs/architecture/COMMANDS.md
+            docs/architecture/AUTHORIZATION.md
+            docs/architecture/SYNC_PROTOCOL.md
+            docs/architecture/LOCAL_DATA_SECURITY.md
+            docs/architecture/RELEASE_STRATEGY.md
+            docs/ux/WINDOWS_UX.md
+            docs/ux/ANDROID_UX.md
+            docs/migration/MIGRATION_FROM_LEGACY.md
+            docs/references/OPEN_SOURCE_REFERENCES.md
+          )
+          for file in "${required[@]}"; do
+            test -f "$file" || { echo "Missing $file"; exit 1; }
+          done
+      - name: Reject obvious secret/private-data file types
+        shell: bash
+        run: |
+          set -euo pipefail
+          bad="$(git ls-files | grep -E '(^|/)(\.env($|\.)|.*\.(pfx|p12|jks|keystore|pem|key|sqlite|sqlite3|db|dmp)$)' || true)"
+          if [ -n "$bad" ]; then
+            echo "Forbidden tracked files:"
+            echo "$bad"
+            exit 1
+          fi
