@@ -10,6 +10,10 @@ on:
 permissions:
   contents: read
 
+env:
+  ANDROID_HOME: /usr/local/lib/android/sdk
+  ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+
 concurrency:
   group: android-spike-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
@@ -34,11 +38,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test -n "${ANDROID_HOME:-}"
-          command -v sdkmanager
+          sdkmanager="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          test -x "$sdkmanager"
           echo "ANDROID_HOME=$ANDROID_HOME"
-          sdkmanager --version
-          sdkmanager 'platform-tools' 'platforms;android-37' 'build-tools;36.0.0'
+          "$sdkmanager" --version
+          "$sdkmanager" 'platform-tools' 'platforms;android-37' 'build-tools;36.0.0'
 
       - name: Setup Gradle 9.6.0
         uses: gradle/actions/setup-gradle@0723195856401067f7a2779048b490ace7a47d7c
@@ -51,7 +55,7 @@ jobs:
           set -euo pipefail
           java -version
           gradle --version
-          sdkmanager --version
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --version
 
       - name: Run Android unit tests
         shell: bash
