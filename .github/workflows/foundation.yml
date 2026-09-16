@@ -13,8 +13,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Check whitespace
-        run: git diff --check HEAD~1 HEAD || git diff --check
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            git diff --check "${{ github.event.pull_request.base.sha }}"...HEAD
+          else
+            git diff --check HEAD^ HEAD || git diff --check
+          fi
       - name: Check required foundation files
         shell: bash
         run: |
@@ -28,10 +37,13 @@ jobs:
             docs/architecture/SYNC_PROTOCOL.md
             docs/architecture/LOCAL_DATA_SECURITY.md
             docs/architecture/RELEASE_STRATEGY.md
-            docs/ux/WINDOWS_UX.md
-            docs/ux/ANDROID_UX.md
+            docs/architecture/PHASE_0_EXECUTION.md
+            docs/architecture/SPIKE_PLAN.md
+            docs/ux/WINDOWS_UX.md docs/ux/ANDROID_UX.md
             docs/migration/MIGRATION_FROM_LEGACY.md
             docs/references/OPEN_SOURCE_REFERENCES.md
+            docs/adr/0001-windows-winui3.md
+            docs/adr/0002-android-compose.md
           )
           for file in "${required[@]}"; do
             test -f "$file" || { echo "Missing $file"; exit 1; }
