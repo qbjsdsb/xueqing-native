@@ -100,7 +100,7 @@ public sealed class WindowsLocalDataSecuritySpikeTests
         {
             await connection.OpenAsync();
             var version = await Sqlite3McProbe.GetVersionAsync(connection);
-            StringAssert.StartsWith(version, "2.4.");
+            Assert.AreEqual("SQLite3 Multiple Ciphers 2.4.0", version);
 
             await ExecuteAsync(connection, "PRAGMA journal_mode = WAL;");
             await ExecuteAsync(connection, "CREATE TABLE secure_probe(id INTEGER PRIMARY KEY, secret TEXT NOT NULL);");
