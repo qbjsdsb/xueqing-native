@@ -36,7 +36,7 @@ The accepted bootstrap matrix is intentionally conservative rather than latest-a
 - JDK: `17`;
 - Kotlin Gradle plugin: `2.3.21`;
 - Compose compiler plugin: `2.3.21` (kept equal to Kotlin);
-- Compose BOM: `2026.06.00` (stable Compose UI/Foundation `1.11.4` line);
+- Compose BOM: `2026.06.00` (stable Compose UI/Foundation `1.11.3` line);
 - Activity Compose: `1.13.0`;
 - compile / target SDK: stable Android 16 / API `36`;
 - SDK Build Tools: `35.0.0`;
@@ -48,6 +48,7 @@ Why this matrix:
 - AGP `8.13.2` explicitly supports Kotlin 2.3 and API 36/36.1, while Kotlin `2.3.21` lists AGP 8.13 inside its fully supported range.
 - AGP 9 built-in Kotlin was evaluated rather than assumed. It is not required for this bootstrap, and the previous `AGP 9.4.0 + Kotlin 2.4.20` candidate sat outside Kotlin's fully supported AGP range. Moving back to AGP 8.13.2 lets the project use the normal explicit `org.jetbrains.kotlin.android` plugin with a documented compatibility matrix instead of relying on an edge combination.
 - API 37 is not installed or used by the CI baseline.
+- CI initializes the exact Gradle `8.13` toolchain from a clean checkout before compiling the same project graph used outside CI; no CI-only dependency substitutions or disabled metadata checks are used.
 
 A future AGP 9 migration should be a separate dependency/toolchain change with its own exact-head CI evidence; it must not be smuggled into a feature PR.
 
