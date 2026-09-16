@@ -1,0 +1,58 @@
+name: windows-spike
+
+on:
+  pull_request:
+    paths:
+      - 'apps/windows/**'
+      - 'global.json'
+      - 'Directory.Packages.props'
+      - '.github/workflows/windows-spike.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-spike-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  core-tests:
+    name: windows-core-tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Setup .NET 10.0.401
+        uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1
+        with:
+          dotnet-version: '10.0.401'
+      - name: Test platform-neutral Windows core
+        run: dotnet test apps/windows/tests/Xueqing.Windows.Core.Tests/Xueqing.Windows.Core.Tests.csproj -c Release --nologo
+
+  winui-build:
+    name: winui-cloud-build
+    runs-on: windows-2025
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Setup .NET 10.0.401
+        uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1
+        with:
+          dotnet-version: '10.0.401'
+      - name: Print toolchain
+        shell: pwsh
+        run: |
+          dotnet --info
+      - name: Restore WinUI spike
+        shell: pwsh
+        run: |
+          dotnet restore apps/windows/src/Xueqing.Windows/Xueqing.Windows.csproj --use-lock-file
+      - name: Emit generated lock file for bootstrap review
+        shell: pwsh
+        run: |
+          Get-Content apps/windows/src/Xueqing.Windows/packages.lock.json -Raw
+      - name: Build WinUI spike
+        shell: pwsh
+        run: |
+          dotnet build apps/windows/src/Xueqing.Windows/Xueqing.Windows.csproj -c Release --no-restore --nologo -p:PublishReadyToRun=false -p:PublishTrimmed=false
