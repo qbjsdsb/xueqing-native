@@ -37,25 +37,15 @@ jobs:
       - name: Build platform-neutral Windows tests
         shell: bash
         run: |
-          set -uo pipefail
+          set -euo pipefail
           project=apps/windows/tests/Xueqing.Windows.Core.Tests/Xueqing.Windows.Core.Tests.csproj
-          mkdir -p "$GITHUB_WORKSPACE/TestResults/build-diagnostics"
           dotnet msbuild "$project" \
             -getProperty:IsTestApplication \
             -getProperty:OutputType \
             -getProperty:PlatformTarget \
             -getProperty:UseVSTest \
             -getProperty:EnableMSTestRunner
-          dotnet build "$project" -c Release --nologo 2>&1 | tee "$GITHUB_WORKSPACE/TestResults/build-diagnostics/ubuntu-build.log"
-          exit ${PIPESTATUS[0]}
-      - name: Upload failed build diagnostics
-        if: failure()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: windows-core-build-diagnostics
-          path: TestResults/build-diagnostics/ubuntu-build.log
-          if-no-files-found: error
-          retention-days: 1
+          dotnet build "$project" -c Release --nologo
       - name: Run platform-neutral Windows core tests with MTP test app
         shell: bash
         run: |
@@ -99,28 +89,14 @@ jobs:
         shell: pwsh
         run: |
           $output = "apps/windows/tests/Xueqing.Windows.Core.Tests/bin/Release/net10.0"
-          $diagnostics = "$env:GITHUB_WORKSPACE/TestResults/windows-diagnostics"
-          New-Item -ItemType Directory -Force -Path $diagnostics | Out-Null
           & "$output/Xueqing.Windows.Core.Tests.exe" `
             --minimum-expected-tests 17 `
             --no-banner `
             --progress off `
             --output Detailed `
             --report-trx `
-            --results-directory "$env:GITHUB_WORKSPACE/TestResults/windows-core-windows" `
-            2>&1 | Tee-Object -FilePath "$diagnostics/windows-tests.log"
-          $testExitCode = $LASTEXITCODE
-          if ($testExitCode -ne 0) { exit $testExitCode }
-      - name: Upload failed Windows DPAPI test diagnostics
-        if: failure()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: windows-dpapi-test-diagnostics
-          path: |
-            TestResults/windows-diagnostics/windows-tests.log
-            TestResults/windows-core-windows/**
-          if-no-files-found: error
-          retention-days: 1
+            --results-directory "$env:GITHUB_WORKSPACE/TestResults/windows-core-windows"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Restore locked WinUI dependencies
         shell: pwsh
         run: |
