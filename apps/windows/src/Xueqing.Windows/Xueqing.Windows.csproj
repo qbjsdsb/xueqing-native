@@ -28,6 +28,8 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.Windows.SDK.BuildTools" />
     <PackageReference Include="Microsoft.WindowsAppSDK" />
+    <!-- The packaged host owns inclusion of the SQLite3MC native runtime asset. Encryption APIs remain in Infrastructure. -->
+    <PackageReference Include="SQLite3MC.PCLRaw.bundle" />
     <PackageReference Include="CommunityToolkit.Mvvm" />
   </ItemGroup>
   <ItemGroup>
