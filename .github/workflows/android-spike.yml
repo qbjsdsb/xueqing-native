@@ -42,7 +42,7 @@ jobs:
           test -x "$sdkmanager"
           echo "ANDROID_HOME=$ANDROID_HOME"
           "$sdkmanager" --version
-          "$sdkmanager" 'platform-tools' 'platforms;android-37' 'build-tools;36.0.0'
+          "$sdkmanager" 'platform-tools' 'platforms;android-36' 'build-tools;36.0.0'
 
       - name: Setup Gradle 9.6.0
         uses: gradle/actions/setup-gradle@0723195856401067f7a2779048b490ace7a47d7c
