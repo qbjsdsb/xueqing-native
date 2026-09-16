@@ -1,69 +1,31 @@
 # Architecture Spike Plan
 
-The spike is a risk-reduction product, not a prototype to grow into production accidentally. Use fictional deterministic data only.
+The Spike is a risk-reduction product, not a prototype that silently becomes production. Use only fictional deterministic data and cloud-reproducible workflows.
 
 ## Fixture scale
 
-Target at least:
-
-- 10 organizations;
-- 100 teachers;
-- 1,000 students;
-- 10,000 Learning Cases;
-- 50,000 timeline facts/events.
+Target at least 10 organizations, 100 teachers, 1,000 students, 10,000 Learning Cases and 50,000 timeline facts/events.
 
 ## Windows gate
 
-Validate:
+Validate .NET 10 + stable WinUI 3 toolchain, startup/navigation, list-detail/virtualization, 1,000-student search/filter, large timeline without eager XAML explosion, centralized breakpoints, repeated resize/480px-height stress, 100/150/200% DPI, light/dark/high-contrast, keyboard-only journey, Chinese IME composition, SQLite/local-write coordination, Projection Cache generation replacement, crash-safe Durable Outbox, encryption/key-storage candidates, MSIX install/upgrade/uninstall and redacted diagnostics export.
 
-- .NET 10 + WinUI 3 stable project/toolchain;
-- startup and navigation stability;
-- list/detail workspace with virtualization;
-- 1,000-student search/filter;
-- 10,000+ timeline dataset without eager XAML element explosion;
-- centralized Compact/Regular/Wide layout source;
-- repeated resize, 480px-height stress and selected breakpoint boundaries;
-- 100/150/200% DPI, light/dark/high-contrast, keyboard-only journey;
-- SQLite persistence, crash-safe Outbox and cursor recovery;
-- local encryption options and secure key storage;
-- MSIX install/upgrade/uninstall;
-- redacted diagnostics export.
+WinUI GUI automation on GitHub-hosted Windows is a Spike itself; do not make an unproven fragile GUI runner the only blocking correctness gate.
 
 ## Android gate
 
-Validate:
+Validate Compose/Room/WorkManager, Today/Student/Quick Capture, Room-backed UI source of truth, offline intent → process death → restart → retry, projection replacement, photo/draft lifecycle, account/environment cleanup, offline-lease lockout, Chinese IME/predictive Back, large text/TalkBack/dark mode and Macrobenchmark/Baseline Profile. Use GitHub-hosted Linux emulator for routine gates; cloud physical-device testing may be added for release candidates.
 
-- Compose/Room/WorkManager project/toolchain;
-- Today/Student/Quick Capture interaction;
-- Room-backed UI source of truth;
-- offline queue → process death → restart → successful retry;
-- photo/draft lifecycle using fictional images;
-- account switch cleanup and offline-lease lockout behavior;
-- text scaling/TalkBack/dark mode;
-- Macrobenchmark/Baseline Profile for startup and core journeys.
+## Cross-client gate
 
-## Cross-client sync gate
+Simulate append-compatible facts, stale lifecycle commands, timeout after server commit, membership/assignment reduction while offline, old token after disable/reset and duplicate retry with the same `operation_id`.
 
-Simulate Windows and Android editing the same Case:
+Expected: no duplicate formal side effects, no LWW corruption, explicit conflicts and scope/cache reconciliation after authorization validation.
 
-- append-only compatible facts;
-- stale lifecycle command using old expected version;
-- timeout after server commit;
-- membership/assignment scope reduction while another device is offline;
-- old token after disable/reset;
-- duplicate retry using same operation_id.
+## Backend/provider gate
 
-Expected result: no duplicate formal side effects, no Last Write Wins corruption, explicit conflicts, and cache purge/lockout after scope validation.
+Prove organization isolation, assignment/scope denial, manager-supervision responsibility separation, old-token/live-session security, transaction rollback/idempotency, versioned Projection contracts, candidate `core/private/api` schema boundaries, private Storage access, RLS performance/explain baselines and backup+Storage restore plan.
 
-## Backend gate
+## Cloud-only acceptance
 
-Prove with PostgreSQL tests:
-
-- organization isolation;
-- teacher scope without assignment denied;
-- manager supervision does not fabricate teaching responsibility;
-- old-token/live-session security in candidate provider implementation;
-- transactional command rollback/idempotency;
-- Storage/private-object access and restore plan.
-
-Only after these gates should production vertical-slice implementation begin.
+Every Spike must publish reproducible GitHub CI evidence for its exact SHA. A local-only success is not sufficient evidence. Manual/visual exceptions must be explicitly named rather than silently assumed.

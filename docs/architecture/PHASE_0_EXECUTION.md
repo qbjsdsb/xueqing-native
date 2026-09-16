@@ -1,57 +1,50 @@
 # Phase 0 Execution Plan
 
-Phase 0 freezes the minimum product/architecture contract before formal native implementation. It is intentionally documentation-, test-design- and Spike-heavy.
+Phase 0 freezes the minimum product/architecture contract and converts remaining uncertainty into executable Spikes or production gates.
 
 ## Exit deliverables
 
-Phase 0 is complete only when these are accepted:
+Phase 0 closure requires:
 
 1. product scope/non-goals;
-2. v2 domain model and state machines;
-3. command/invariant contract;
-4. authorization/responsibility model;
-5. Local-first sync protocol and error taxonomy;
-6. local-data/offline-access security decision plan;
-7. Windows and Android UX principles;
-8. provider-neutral backend boundary;
-9. legacy migration asset matrix;
-10. release/signing/update direction;
-11. open-source reference/license policy;
-12. Architecture Spike acceptance matrix.
+2. domain/state-machine and command/invariant contracts;
+3. authorization/responsibility model;
+4. Projection + Durable Outbox V1 sync contract;
+5. Projection Cache vs Durable Intent local-state contract;
+6. local-data/offline-access security Spike plan;
+7. Windows/Android UX and IME/accessibility gates;
+8. provider-neutral backend/Adapter boundary;
+9. Cloud-first development and exact-SHA CI evidence contract;
+10. AI bootstrap/handoff contract;
+11. threat model, data lifecycle and environment isolation;
+12. legacy canonical migration contract;
+13. release compatibility/signing/backup-restore strategy;
+14. open-source/license policy;
+15. Architecture Spike acceptance matrix;
+16. Phase 0 Closure Matrix with every item FROZEN, SPIKE_REQUIRED, LATER or REJECTED;
+17. protected `main`/ruleset with required foundation checks before implementation begins.
 
 ## Work order
 
 ### 0A — Legacy extraction
-
-Review legacy README, architecture, data model, commands/invariants, auth/permissions, ADRs, security tests and recent product/UX fixes. Mark each rule `carry`, `re-audit`, `supersede` or `do-not-migrate`.
+Classify mature legacy rules `carry`, `re-audit`, `supersede` or `do-not-migrate`.
 
 ### 0B — Domain/contracts
-
-Freeze names, state machines, responsibility semantics, command envelopes, expected-version rules and stable error families before client implementations diverge.
+Freeze names, state machines, responsibility, commands, versions, projections and stable error families.
 
 ### 0C — Local-first/security
+Freeze Snapshot/Outbox boundaries, Durable Intent, finite offline lease requirements, cache/purge/backup behavior and diagnostics redaction.
 
-Define which operations are offline queueable, pull cursor/scope-version semantics, finite offline lease, local encryption candidates, purge/account-switch behavior and diagnostics redaction.
+### 0D — Cloud/AI continuity
+Ensure a fresh agent can recover from GitHub and every formal gate can run in cloud CI without relying on one local machine.
 
-### 0D — Platform Spike specs
-
-Build no production feature. Use deterministic fictional fixtures to validate WinUI 3 and Android architectural risks.
-
-### 0E — Backend Spike
-
-Prove PostgreSQL RLS/transaction/idempotency concepts with fictional data. Production provider/region remains gated.
+### 0E — Platform/backend Spike specs
+Build no broad production feature. Use deterministic fictional fixtures to validate WinUI, Android, provider and PostgreSQL risks.
 
 ## Hard gates
 
-Phase 0 does **not** authorize:
-
-- real student/teacher/guardian data;
-- production provider lock-in;
-- production credential/signing secrets in Git;
-- broad feature implementation;
-- copying legacy Flutter source;
-- implementing a generic CRDT/realtime dependency.
+Phase 0 does not authorize real student/teacher/guardian data, production provider lock-in, production secrets in Git, broad feature implementation, copying Flutter source, generic CRDT/realtime dependence or destructive migration of Durable Intent.
 
 ## Decision discipline
 
-Accepted decisions live in ADRs. An implementation that conflicts with an accepted ADR must stop and propose a superseding ADR rather than silently diverge.
+Accepted decisions live in ADRs. A conflicting implementation must stop and propose a superseding ADR. Broad research stops under the rule in `PHASE_0_CLOSURE.md`; remaining uncertainty is answered by Spikes/evidence.

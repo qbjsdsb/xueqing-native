@@ -1,54 +1,44 @@
 # AGENTS.md — Xueqing Native Engineering Constitution
 
-This file is the primary execution guide for coding agents and human contributors working in this repository.
+This is the primary execution guide for human and AI contributors.
 
 ## 1. Product identity
 
-Xueqing Native is a teacher and tutoring-organization judgment/action workspace. Its core loop is:
+Xueqing Native is a teacher and tutoring-organization judgment/action workspace.
 
 ```text
 Student → Subject Profile → Learning Case → Evidence → Intervention → Assessment → Next Action → Stable/Closed
 ```
 
-It is not an ERP, CRM, full scheduling product, billing system, generic todo app, spreadsheet clone, or AI chatbot.
+It is not an ERP, CRM, billing system, generic todo app, spreadsheet clone or AI chatbot.
 
-## 2. Current phase
+## 2. Current project state
 
-The project is in **Phase 0: foundation and risk discovery**.
-
-Until Phase 0 and platform spikes are accepted:
-
-- do not implement broad production business features;
-- do not migrate real data;
-- do not create provider-coupled production schema assumptions;
-- do not add dependencies without a demonstrated need;
-- do not copy Flutter UI/source from the legacy project.
+Do not hard-code the current phase in this constitution. Read `docs/project/PROJECT_STATE.yaml` first. Dynamic facts such as main HEAD, open PRs and CI status must be queried from GitHub at handoff time rather than copied into durable state files.
 
 ## 3. Platform decisions
 
-Windows: C# + .NET 10 LTS + WinUI 3 + stable Windows App SDK + CommunityToolkit.Mvvm.
-
-Android: Kotlin + Jetpack Compose + Material 3 + ViewModel + Coroutines/Flow + Room + WorkManager.
-
-Backend: PostgreSQL-first. Supabase is the default development/reference provider; production provider remains a gate until real compatibility/network/security evidence exists.
-
-Android and Windows share **contracts and semantics, not UI code**.
+- Windows: C# + .NET 10 LTS + WinUI 3 + stable Windows App SDK + CommunityToolkit.Mvvm.
+- Android: Kotlin + Jetpack Compose + Material 3 + ViewModel + Coroutines/Flow + Room + WorkManager.
+- Backend: PostgreSQL-first. Supabase is the development/reference provider; production provider/region remains a production gate.
+- Android and Windows share contracts and semantics, not UI code.
 
 ## 4. Sources of truth
 
-In priority order for implementation:
+For implementation decisions, use this order:
 
 1. accepted ADRs under `docs/adr/`;
-2. domain/command/auth/sync contracts under `docs/architecture/` and `contracts/`;
-3. Git migrations and database tests once backend implementation begins;
-4. application code;
-5. screenshots/mockups.
+2. durable project state in `docs/project/PROJECT_STATE.yaml`;
+3. architecture/contracts;
+4. Git migrations and database tests once backend implementation begins;
+5. application code;
+6. screenshots/mockups.
 
-Never silently contradict an accepted ADR. Change it explicitly with a new/superseding ADR.
+Dynamic execution truth is GitHub itself: current branch/HEAD, active Draft PR and exact-HEAD CI evidence. Chat memory or an older handoff summary never overrides GitHub.
 
 ## 5. Domain invariants inherited from legacy Xueqing
 
-Preserve unless a new ADR explicitly changes them:
+Preserve unless a superseding ADR changes them:
 
 - one canonical Student per real student within an organization;
 - enrollment/assignment/responsibility changes preserve history;
@@ -56,137 +46,97 @@ Preserve unless a new ADR explicitly changes them:
 - reopen is a command/event, not a seventh state;
 - assessment passed does not automatically mean stable or closed;
 - active-profile formal open Cases require a legal responsible owner and exactly one pending primary Action;
-- finalized teaching facts/history are append-only in meaning; corrections are explicit, not silent rewrites;
+- finalized teaching facts/history are append-only in meaning; corrections are explicit;
 - high-risk commands are atomic and idempotent;
 - organization supervision does not imply teaching responsibility.
 
-## 6. Actor, supervisor, responsibility
+## 6. Actor, supervisor and responsibility
 
-Always distinguish:
-
-- **Actor** — the member who executed the command;
-- **Supervisor** — a member with organization-level supervision capability;
-- **Responsible Teacher** — a member with a legal active teaching relationship to the student+subject.
-
-An owner/admin can supervise without being the responsible teacher. Management role must never fabricate a teaching assignment or silently take Case/Action ownership.
+Always distinguish Actor, Supervisor and Responsible Teacher. Owner/admin authority may supervise but must never fabricate a teaching assignment or silently take Case/Action ownership.
 
 ## 7. Teaching Fact Gate
 
-Teaching Evidence, Intervention, Assessment, Quick Capture/new teaching Case and teacher Lesson behavior require, as applicable:
-
-```text
-live valid session
-+ active organization membership
-+ teacher capability
-+ matching active teaching subject scope
-+ active target Student Subject Profile
-+ legal active Student Teacher Assignment
-+ operation-specific permission
-```
-
-UI state is not authorization. The server must re-evaluate authority.
+Teaching facts require server-side re-evaluation of the applicable live session, active membership, teacher capability, teaching scope, active Student Subject Profile, legal active Student Teacher Assignment and operation permission. UI state is never authorization.
 
 ## 8. High-risk command contract
 
-Lifecycle/governance commands must not be assembled from multiple client CRUD calls.
-
-Use the semantic contract:
+Lifecycle/governance commands must not be assembled from multiple client CRUD calls. Use:
 
 ```text
 operation_id
-+ expected aggregate versions/current-relation snapshot
++ expected versions/current-relation snapshot
 + server authorization
-+ deterministic locks/re-read
++ deterministic lock/re-read
 + final invariant validation
 + operation-bound event/audit
 + atomic commit
 + reusable committed result/receipt
 ```
 
-On timeout/unknown result, retry/query using the same `operation_id`; do not create a new intent and do not guess completion from partial state.
+On timeout/unknown result, keep the same `operation_id` and resolve/retry that intent.
 
 ## 9. Local-first boundaries
 
-The target model is **Local-first Command Sync**, not general CRDT.
+The target is Local-first Command Sync, not a generic multi-master database. PostgreSQL is authoritative for formal business state.
 
-Local databases are client UX/cache/outbox stores. PostgreSQL remains authoritative for formal business state.
+V1 pull uses scoped Projection Snapshots. V1 push uses a Durable Outbox. A generic change-list/cursor protocol is a later optimization only if measured scale requires it.
 
-Initially offline-friendly:
+Initially offline-friendly: protected drafts, Quick Capture/observations designed for queued submission and explicitly approved low-risk append operations.
 
-- drafts;
-- Quick Capture/observations designed for queued submission;
-- explicitly approved low-risk append operations.
+Initially online-only: formal lifecycle transitions, membership/credential changes, teacher handoff/reassignment, student merge and other governance operations requiring fresh authority.
 
-Initially online-only:
+Never resolve domain conflicts with client timestamps or Last Write Wins.
 
-- Case lifecycle transitions such as formal confirm/stabilize/close/reopen unless later proven safe;
-- membership/credential changes;
-- teacher handoff/reassignment governance;
-- student merge;
-- other commands whose correctness depends on fresh authority/current relationships.
+## 10. Local state and privacy
 
-Never use client timestamps or Last Write Wins to resolve domain conflicts.
+Projection Cache is disposable and rebuildable. Durable Intent (drafts, outbox, pending attachment staging and operation metadata) must survive cache rebuilds and must not use destructive migration fallbacks.
 
-## 10. Offline authorization and local privacy
+Offline access is finite. Local encryption, system-backup exclusion, purge/account-switch rules, attachment retention and lease anti-clock-rollback behavior are Spike gates before production data.
 
-Offline access cannot be indefinite. A future Offline Access Lease must bind cached access to a recent successful authorization validation. Exact duration is a security Spike decision.
+## 11. Provider isolation and environments
 
-Local data scope must be minimized. Local database encryption, sensitive-field encryption, attachment retention, key storage, logout/account-switch cleanup, disabled-account behavior and purge semantics must be validated before production data is allowed.
+View/ViewModel/domain code must not call provider SDKs directly. Use Remote/Provider Adapters.
 
-## 11. Provider isolation
-
-View/ViewModel/Domain code must not call Supabase SDK directly.
-
-Expected direction:
-
-```text
-UI → ViewModel → application/domain service → Repository → Local store
-                                              ↕
-                                           Sync engine
-                                              ↕
-                                      Remote/Provider Adapter
-```
-
-Provider auth identifiers are external identities. Business facts reference application-owned stable IDs.
+Development, staging and production are separate trust domains. Ordinary PRs must never receive production secrets. A development client must not be able to connect to production by a casual URL edit.
 
 ## 12. UI principles
 
-Android = Capture. Optimize for one-handed, fast classroom entry and obvious next actions.
+Android = Capture: one-handed, fast classroom entry, obvious next actions.
 
-Windows = Organize + Think. Optimize for keyboard/mouse, list-detail workspaces, high information clarity, search/filtering, accessibility and stable desktop breakpoints.
+Windows = Organize + Think: keyboard/mouse productivity, list-detail workspaces, search/filtering, accessibility and one centralized desktop breakpoint source.
 
-Never force one platform's navigation/layout model onto the other.
+Chinese IME composition, large text, dark/high-contrast modes, keyboard focus and navigation are acceptance concerns, not polish extras.
 
 ## 13. Testing authority
 
-Use the lowest layer that can prove the invariant:
+Use the lowest layer that proves the invariant:
 
 - RLS/authorization → PostgreSQL tests;
 - command atomicity/idempotency → database/integration tests;
 - sync retry/conflict → sync engine tests;
-- UI projection → ViewModel/UI tests;
-- critical real behavior → small end-to-end/device smoke suite.
+- projection/state → repository/ViewModel tests;
+- critical platform behavior → small E2E/device smoke suites.
 
 Do not use UI tests as proof of database security.
 
-## 14. Data and secrets
+A green run applies only to the exact commit SHA that produced it. Any subsequent commit requires fresh evidence for affected gates.
 
-This is a public repository. Only fictional or irreversibly anonymized data is allowed.
+## 14. Cloud reproducibility
 
-Never commit tokens, passwords, service-role keys, DB passwords, signing private keys/certificates, real personal data, production attachments/exports or credential-bearing logs.
+Formal code must be buildable/testable from Git plus controlled secrets on standard cloud runners. Do not require a developer's local Visual Studio, Android Studio, Docker or signing machine as the only validation path.
 
-## 15. Open-source references
+Use small PRs, short-lived branches and GitHub CI evidence. Avoid deep stacked PR chains.
 
-Borrow ideas deliberately. Before introducing code/patterns from an external project:
+## 15. AI continuity
 
-1. record the project and relevant file/pattern;
-2. explain why it applies to Xueqing;
-3. explain what is intentionally not copied;
-4. verify license compatibility before copying non-trivial code;
-5. prefer small re-implementations over importing a project's architectural complexity.
+Follow `docs/ai/BOOTSTRAP.md` on every fresh handoff. Important work must never exist only in an agent scratch filesystem or chat. Push valuable work to a branch and use a Draft PR as the dynamic handoff record.
 
-## 16. Scope discipline
+Memory is an accelerator, not an engineering source of truth.
 
-Prefer one auditable outcome per PR. Do not bundle unrelated refactors, architecture changes, UI polish and database migrations.
+## 16. Data and secrets
 
-Avoid architecture for architecture's sake. Introduce interfaces/layers because they enforce a real boundary, support testing/provider replacement, or protect domain rules—not because a diagram looks cleaner.
+This repository is public. Only fictional or irreversibly anonymized data is allowed. Never commit tokens, passwords, service-role keys, DB passwords, signing private keys/certificates, real personal data, production attachments/exports or credential-bearing logs.
+
+## 17. Scope discipline
+
+Prefer one auditable outcome per PR. Do not bundle unrelated architecture, UI, database and release changes. Introduce abstractions only when they enforce a real boundary, improve testability/provider replacement or protect domain rules.
