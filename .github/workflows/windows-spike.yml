@@ -29,11 +29,18 @@ jobs:
         uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1
         with:
           dotnet-version: '10.0.401'
-      - name: Verify locked infrastructure dependencies
+      - name: Bootstrap encrypted infrastructure dependency lock
         shell: bash
         run: |
           set -euo pipefail
-          dotnet restore apps/windows/src/Xueqing.Windows.Infrastructure/Xueqing.Windows.Infrastructure.csproj --locked-mode
+          dotnet restore apps/windows/src/Xueqing.Windows.Infrastructure/Xueqing.Windows.Infrastructure.csproj --use-lock-file
+      - name: Export encrypted infrastructure lock graph
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: windows-encrypted-infrastructure-lock
+          path: apps/windows/src/Xueqing.Windows.Infrastructure/packages.lock.json
+          if-no-files-found: error
+          retention-days: 1
       - name: Build platform-neutral Windows tests
         shell: bash
         run: |
@@ -52,7 +59,7 @@ jobs:
           set -euo pipefail
           output=apps/windows/tests/Xueqing.Windows.Core.Tests/bin/Release/net10.0
           "$output/Xueqing.Windows.Core.Tests" \
-            --minimum-expected-tests 10 \
+            --minimum-expected-tests 12 \
             --no-banner \
             --progress off \
             --output Detailed \
@@ -73,14 +80,30 @@ jobs:
         shell: pwsh
         run: |
           dotnet --info
-      - name: Restore locked infrastructure dependencies
+      - name: Bootstrap encrypted infrastructure dependencies
         shell: pwsh
         run: |
-          dotnet restore apps/windows/src/Xueqing.Windows.Infrastructure/Xueqing.Windows.Infrastructure.csproj --locked-mode
+          dotnet restore apps/windows/src/Xueqing.Windows.Infrastructure/Xueqing.Windows.Infrastructure.csproj --use-lock-file
       - name: Build Windows infrastructure spike
         shell: pwsh
         run: |
           dotnet build apps/windows/src/Xueqing.Windows.Infrastructure/Xueqing.Windows.Infrastructure.csproj -c Release --no-restore --nologo
+      - name: Build Windows core tests for DPAPI gate
+        shell: pwsh
+        run: |
+          dotnet build apps/windows/tests/Xueqing.Windows.Core.Tests/Xueqing.Windows.Core.Tests.csproj -c Release --nologo
+      - name: Run Windows core tests including DPAPI gate
+        shell: pwsh
+        run: |
+          $output = "apps/windows/tests/Xueqing.Windows.Core.Tests/bin/Release/net10.0"
+          & "$output/Xueqing.Windows.Core.Tests.exe" `
+            --minimum-expected-tests 12 `
+            --no-banner `
+            --progress off `
+            --output Detailed `
+            --report-trx `
+            --results-directory "$env:GITHUB_WORKSPACE/TestResults/windows-core-windows"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Restore locked WinUI dependencies
         shell: pwsh
         run: |
