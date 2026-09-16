@@ -6,7 +6,6 @@ namespace Xueqing.Windows;
 public partial class App : Application
 {
     private Window? _window;
-    private Task? _integrationProbeTask;
 
     public App()
     {
@@ -20,7 +19,7 @@ public partial class App : Application
 
         if (WindowsPackagedAppIntegrationProbe.IsEnabled())
         {
-            _integrationProbeTask = WindowsPackagedAppIntegrationProbe.RunAndWriteReportAsync();
+            _ = WindowsPackagedAppIntegrationProbe.RunAndWriteReportAsync();
         }
     }
 }
