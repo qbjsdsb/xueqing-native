@@ -29,18 +29,11 @@ jobs:
         uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1
         with:
           dotnet-version: '10.0.401'
-      - name: Bootstrap encrypted infrastructure dependency lock
+      - name: Verify locked encrypted infrastructure dependencies
         shell: bash
         run: |
           set -euo pipefail
-          dotnet restore apps/windows/src/Xueqing.Windows.Infrastructure/Xueqing.Windows.Infrastructure.csproj --use-lock-file
-      - name: Export encrypted infrastructure lock graph
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: windows-encrypted-infrastructure-lock
-          path: apps/windows/src/Xueqing.Windows.Infrastructure/packages.lock.json
-          if-no-files-found: error
-          retention-days: 1
+          dotnet restore apps/windows/src/Xueqing.Windows.Infrastructure/Xueqing.Windows.Infrastructure.csproj --locked-mode
       - name: Build platform-neutral Windows tests
         shell: bash
         run: |
@@ -80,10 +73,10 @@ jobs:
         shell: pwsh
         run: |
           dotnet --info
-      - name: Bootstrap encrypted infrastructure dependencies
+      - name: Restore locked encrypted infrastructure dependencies
         shell: pwsh
         run: |
-          dotnet restore apps/windows/src/Xueqing.Windows.Infrastructure/Xueqing.Windows.Infrastructure.csproj --use-lock-file
+          dotnet restore apps/windows/src/Xueqing.Windows.Infrastructure/Xueqing.Windows.Infrastructure.csproj --locked-mode
       - name: Build Windows infrastructure spike
         shell: pwsh
         run: |
