@@ -6,11 +6,14 @@
     <RootNamespace>Xueqing.Windows</RootNamespace>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <Platforms>x64</Platforms>
+    <PlatformTarget>x64</PlatformTarget>
     <UseWinUI>true</UseWinUI>
     <WinUISDKReferences>false</WinUISDKReferences>
-    <WindowsPackageType>None</WindowsPackageType>
+    <EnableMsixTooling>true</EnableMsixTooling>
+    <PublishProfile>Properties\PublishProfiles\win10-x64.pubxml</PublishProfile>
     <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
-    <EnableMsixTooling>false</EnableMsixTooling>
+    <AppxPackageSigningEnabled>false</AppxPackageSigningEnabled>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
@@ -18,6 +21,9 @@
   </PropertyGroup>
   <ItemGroup>
     <Manifest Include="$(ApplicationManifest)" />
+    <Content Include="..\..\spikes\Xueqing.Windows.PackagingProbe\Assets\*.png">
+      <Link>Assets\%(Filename)%(Extension)</Link>
+    </Content>
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.Windows.SDK.BuildTools" />
@@ -26,5 +32,6 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Xueqing.Windows.Core\Xueqing.Windows.Core.csproj" />
+    <ProjectReference Include="..\Xueqing.Windows.Infrastructure\Xueqing.Windows.Infrastructure.csproj" />
   </ItemGroup>
 </Project>
