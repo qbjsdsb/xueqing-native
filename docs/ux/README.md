@@ -29,7 +29,14 @@ The current detailed candidate is intentionally split by responsibility:
    - Organization Management;
    - context preservation and failure/conflict presentation.
 
-3. `PROTOTYPE_ACCEPTANCE_MATRIX.md`
+3. `INTERACTION_STATE_CONTRACT.md`
+   - four operation classes: protected local draft, queueable low-risk intent, authoritative online command, projection refresh/rebuild;
+   - user-visible distinctions between editing, locally safe, waiting to sync, committed, unknown-result, conflict, rejection and permission/scope changes;
+   - Back/navigation, account/organization switch and attachment-state rules;
+   - semantic fixtures that every native write prototype must prove;
+   - boundaries that stay open until Offline Lease / attachment / authorization-recovery protocols are accepted.
+
+4. `PROTOTYPE_ACCEPTANCE_MATRIX.md`
    - executable WinUI/Compose evidence required before v1 acceptance;
    - Windows width/DPI/text/theme/keyboard/focus matrix;
    - Android phone/adaptive/IME/predictive-back/process-death/accessibility matrix;
@@ -40,9 +47,9 @@ The current detailed candidate is intentionally split by responsibility:
 
 The detailed native foundation is **Candidate — Prototype Required**.
 
-Do not freeze final breakpoint values, pane widths, Case reading width, management column-collapse thresholds, accent values or other prototype-sensitive constants from documentation alone.
+Do not freeze final breakpoint values, pane widths, Case reading width, management column-collapse thresholds, accent values, Offline Access Lease UX, unauthorized-draft recovery behavior or other prototype/protocol-sensitive constants from documentation alone.
 
-Acceptance requires exact-head executable prototype evidence as defined in `PROTOTYPE_ACCEPTANCE_MATRIX.md`.
+Acceptance requires exact-head executable prototype evidence as defined in `PROTOTYPE_ACCEPTANCE_MATRIX.md` and semantic-state evidence from `INTERACTION_STATE_CONTRACT.md`.
 
 ## Authority order
 
@@ -53,5 +60,6 @@ UX documents never override domain/security invariants. If there is a conflict, 
 - `../architecture/COMMANDS.md`
 - `../architecture/DRAFT_ENGINE.md`
 - `../architecture/LOCAL_STATE_MODEL.md`
+- `../architecture/AUTHORIZATION.md`
 
 GitHub remains the durable engineering source of truth; chat-only design conclusions should not be treated as accepted project state until they are reflected here and reviewed.
