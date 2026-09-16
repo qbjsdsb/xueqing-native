@@ -54,9 +54,7 @@ internal static class WindowsLocalStatePaths
             localFolder.Path,
             "scoped-local-data",
             "v1",
-            HashSegment(scope.EnvironmentId),
-            HashSegment(scope.AppUserId),
-            HashSegment(scope.OrganizationId),
+            HashScope(scope),
             scope.InstallationId.ToString("N"));
 
         Directory.CreateDirectory(scopeDirectory);
@@ -72,6 +70,15 @@ internal static class WindowsLocalStatePaths
         {
             throw new ArgumentException("Installation id must be non-empty.", nameof(scope));
         }
+    }
+
+    private static string HashScope(WindowsLocalDataScope scope)
+    {
+        var environmentHash = HashSegment(scope.EnvironmentId);
+        var appUserHash = HashSegment(scope.AppUserId);
+        var organizationHash = HashSegment(scope.OrganizationId);
+
+        return HashSegment(string.Concat(environmentHash, appUserHash, organizationHash));
     }
 
     private static string HashSegment(string value)
