@@ -1,0 +1,51 @@
+name: windows-security-spike
+
+on:
+  pull_request:
+    paths:
+      - 'apps/windows/spikes/Xueqing.Windows.LocalDataSecurity/**'
+      - 'apps/windows/tests/Xueqing.Windows.LocalDataSecurity.Tests/**'
+      - 'docs/architecture/WINDOWS_LOCAL_DATA_SECURITY_SPIKE.md'
+      - 'Directory.Packages.props'
+      - '.github/workflows/windows-security-spike.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-security-spike-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  security-spike:
+    name: windows-local-data-security
+    runs-on: windows-2025
+    steps:
+      - name: Checkout
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+      - name: Setup .NET 10.0.401
+        uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1
+        with:
+          dotnet-version: '10.0.401'
+      - name: Print toolchain
+        shell: pwsh
+        run: dotnet --info
+      - name: Restore security spike and generate lock graphs
+        shell: pwsh
+        run: |
+          dotnet restore apps/windows/tests/Xueqing.Windows.LocalDataSecurity.Tests/Xueqing.Windows.LocalDataSecurity.Tests.csproj --use-lock-file
+          Write-Host '--- spike lock ---'
+          Get-Content apps/windows/spikes/Xueqing.Windows.LocalDataSecurity/packages.lock.json -Raw
+          Write-Host '--- test lock ---'
+          Get-Content apps/windows/tests/Xueqing.Windows.LocalDataSecurity.Tests/packages.lock.json -Raw
+      - name: Build security spike tests
+        shell: pwsh
+        run: |
+          dotnet build apps/windows/tests/Xueqing.Windows.LocalDataSecurity.Tests/Xueqing.Windows.LocalDataSecurity.Tests.csproj -c Release --no-restore --nologo
+      - name: Run security spike tests with MTP test app
+        shell: pwsh
+        run: |
+          $exe = 'apps/windows/tests/Xueqing.Windows.LocalDataSecurity.Tests/bin/Release/net10.0/Xueqing.Windows.LocalDataSecurity.Tests.exe'
+          & $exe --minimum-expected-tests 5 --no-banner --progress off --output Detailed --report-trx --results-directory "$env:GITHUB_WORKSPACE/TestResults/windows-security"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
