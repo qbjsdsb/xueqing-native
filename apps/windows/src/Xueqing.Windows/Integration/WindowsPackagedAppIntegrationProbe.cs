@@ -13,6 +13,7 @@ internal static class WindowsPackagedAppIntegrationProbe
     private const string EnabledEnvironmentVariable = "XUEQING_WINDOWS_INTEGRATION_PROBE";
     private const string ReportFileName = "xueqing-app-integration.json";
     private const string PayloadMarker = "FICTIONAL-WINDOWS-REAL-APP-DURABLE-INTENT-MARKER";
+    private const string FailureStageDataKey = "Xueqing.Windows.Integration.FailureStage";
     private static readonly Guid StableOperationId = new("a67af44f-c129-4a79-82b9-b79efd7d4e50");
     private static readonly DateTimeOffset StableCreatedAtUtc = new(2026, 9, 16, 0, 0, 0, TimeSpan.Zero);
 
@@ -45,7 +46,7 @@ internal static class WindowsPackagedAppIntegrationProbe
                 EnqueueDisposition: null,
                 InstallationId: null,
                 DatabaseRelativePath: null,
-                FailureType: exception.GetType().FullName ?? exception.GetType().Name);
+                FailureType: FormatFailure(exception));
 
             await WriteReportAsync(reportPath, failure, cancellationToken);
         }
@@ -55,56 +56,82 @@ internal static class WindowsPackagedAppIntegrationProbe
         ApplicationData applicationData,
         CancellationToken cancellationToken)
     {
-        var scope = WindowsLocalDataScope.CreateFictionalIntegrationScope(applicationData);
-        var databasePath = WindowsLocalStatePaths.GetDurableIntentDatabasePath(
-            applicationData.LocalFolder,
-            scope);
+        var failureStage = "scope.create";
 
-        var store = new SqliteDurableOutboxStore(databasePath);
-        var intent = new OutboxCommandIntent(
-            StableOperationId,
-            "integration_probe_append_evidence",
-            "case-fictional-integration-001",
-            "org-fictional-001/student-fictional-001/subject-chinese",
-            1,
-            "assignment-fictional-integration-001",
-            JsonSerializer.Serialize(new { marker = PayloadMarker }),
-            StableCreatedAtUtc);
-
-        var enqueue = await store.EnqueueAsync(intent, cancellationToken);
-        var restored = await store.GetAsync(StableOperationId, cancellationToken)
-            ?? throw new InvalidOperationException("Integration Outbox operation was not readable after enqueue.");
-        var count = await store.CountAsync(cancellationToken);
-
-        if (count != 1)
+        try
         {
-            throw new InvalidOperationException("Integration Outbox must contain exactly one stable operation.");
-        }
+            var scope = WindowsLocalDataScope.CreateFictionalIntegrationScope(applicationData);
 
-        if (restored.Intent != intent)
+            failureStage = "database-path.resolve";
+            var databasePath = WindowsLocalStatePaths.GetDurableIntentDatabasePath(
+                applicationData.LocalFolder,
+                scope);
+
+            failureStage = "store.create";
+            var store = new SqliteDurableOutboxStore(databasePath);
+
+            failureStage = "intent.compose";
+            var intent = new OutboxCommandIntent(
+                StableOperationId,
+                "integration_probe_append_evidence",
+                "case-fictional-integration-001",
+                "org-fictional-001/student-fictional-001/subject-chinese",
+                1,
+                "assignment-fictional-integration-001",
+                JsonSerializer.Serialize(new { marker = PayloadMarker }),
+                StableCreatedAtUtc);
+
+            failureStage = "outbox.enqueue";
+            var enqueue = await store.EnqueueAsync(intent, cancellationToken);
+
+            failureStage = "outbox.read";
+            var restored = await store.GetAsync(StableOperationId, cancellationToken)
+                ?? throw new InvalidOperationException("Integration Outbox operation was not readable after enqueue.");
+
+            failureStage = "outbox.count";
+            var count = await store.CountAsync(cancellationToken);
+
+            failureStage = "outbox.count.validate";
+            if (count != 1)
+            {
+                throw new InvalidOperationException("Integration Outbox must contain exactly one stable operation.");
+            }
+
+            failureStage = "outbox.intent.validate";
+            if (restored.Intent != intent)
+            {
+                throw new InvalidOperationException("Integration Outbox durable intent changed after persistence.");
+            }
+
+            failureStage = "outbox.queue-state.validate";
+            if (restored.QueueStatus != OutboxQueueStatus.Pending || restored.AttemptCount != 0)
+            {
+                throw new InvalidOperationException("Integration Outbox operation did not remain pending and unattempted.");
+            }
+
+            failureStage = "package.read";
+            var package = Package.Current;
+
+            failureStage = "report.compose";
+            return new WindowsPackagedAppIntegrationReport(
+                Succeeded: true,
+                PackageName: package.Id.Name,
+                PackageFamilyName: package.Id.FamilyName,
+                PackageVersion: FormatVersion(package.Id.Version),
+                StableOperationId: StableOperationId.ToString("D"),
+                OutboxCount: count,
+                QueueStatus: restored.QueueStatus.ToString(),
+                EnqueueDisposition: enqueue.Disposition.ToString(),
+                InstallationId: scope.InstallationId.ToString("D"),
+                DatabaseRelativePath: Path.GetRelativePath(applicationData.LocalFolder.Path, databasePath)
+                    .Replace('\\', '/'),
+                FailureType: null);
+        }
+        catch (Exception exception)
         {
-            throw new InvalidOperationException("Integration Outbox durable intent changed after persistence.");
+            exception.Data[FailureStageDataKey] = failureStage;
+            throw;
         }
-
-        if (restored.QueueStatus != OutboxQueueStatus.Pending || restored.AttemptCount != 0)
-        {
-            throw new InvalidOperationException("Integration Outbox operation did not remain pending and unattempted.");
-        }
-
-        var package = Package.Current;
-        return new WindowsPackagedAppIntegrationReport(
-            Succeeded: true,
-            PackageName: package.Id.Name,
-            PackageFamilyName: package.Id.FamilyName,
-            PackageVersion: FormatVersion(package.Id.Version),
-            StableOperationId: StableOperationId.ToString("D"),
-            OutboxCount: count,
-            QueueStatus: restored.QueueStatus.ToString(),
-            EnqueueDisposition: enqueue.Disposition.ToString(),
-            InstallationId: scope.InstallationId.ToString("D"),
-            DatabaseRelativePath: Path.GetRelativePath(applicationData.LocalFolder.Path, databasePath)
-                .Replace('\\', '/'),
-            FailureType: null);
     }
 
     private static async Task WriteReportAsync(
@@ -142,6 +169,21 @@ internal static class WindowsPackagedAppIntegrationProbe
             {
             }
         }
+    }
+
+    private static string FormatFailure(Exception exception)
+    {
+        var stage = exception.Data[FailureStageDataKey] as string ?? "probe.run";
+        var type = exception.GetType().FullName ?? exception.GetType().Name;
+        var result = $"stage={stage}; type={type}; hresult=0x{exception.HResult:X8}";
+
+        if (exception.InnerException is { } innerException)
+        {
+            var innerType = innerException.GetType().FullName ?? innerException.GetType().Name;
+            result += $"; innerType={innerType}; innerHResult=0x{innerException.HResult:X8}";
+        }
+
+        return result;
     }
 
     private static string TryGetPackageName()
