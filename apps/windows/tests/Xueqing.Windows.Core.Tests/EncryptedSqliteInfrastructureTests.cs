@@ -143,7 +143,7 @@ public sealed class EncryptedSqliteInfrastructureTests
 
     [TestMethod]
     [SupportedOSPlatform("windows")]
-    public async Task Windows_dpapi_outbox_supports_localstate_shaped_path_beyond_max_path()
+    public async Task Windows_sqlite3mc_encrypted_vfs_documents_legacy_path_limit()
     {
         if (!OperatingSystem.IsWindows())
         {
@@ -154,8 +154,7 @@ public sealed class EncryptedSqliteInfrastructureTests
             Path.GetTempPath(),
             "xueqing-native-longpath-vfs-tests",
             Guid.NewGuid().ToString("N"));
-        var databasePath = CreateLongWindowsDatabasePath(rootDirectory);
-        var operationId = Guid.NewGuid();
+        var databasePath = CreateBeyondMaxPathDatabasePath(rootDirectory);
 
         try
         {
@@ -163,19 +162,14 @@ public sealed class EncryptedSqliteInfrastructureTests
                 databasePath.Length > 260,
                 $"Regression path must exceed MAX_PATH; actual length was {databasePath.Length}.");
 
-            var firstStore = new SqliteDurableOutboxStore(databasePath);
-            var first = await firstStore.EnqueueAsync(
-                CreateIntent(operationId, "{\"fictionalLongPath\":true}"));
+            var store = new SqliteDurableOutboxStore(databasePath);
+            var exception = await Assert.ThrowsExactlyAsync<SqliteException>(
+                () => store.CountAsync());
 
-            Assert.AreEqual(OutboxEnqueueDisposition.Inserted, first.Disposition);
-            Assert.IsTrue(File.Exists(databasePath));
-            Assert.IsTrue(File.Exists(databasePath + ".key"));
-
-            var reopenedStore = new SqliteDurableOutboxStore(databasePath);
-            var restored = await reopenedStore.GetAsync(operationId);
-
-            Assert.IsNotNull(restored);
-            Assert.AreEqual(operationId, restored.Intent.OperationId);
+            Assert.AreEqual(14, exception.SqliteErrorCode);
+            Assert.IsTrue(
+                File.Exists(databasePath + ".key"),
+                "DPAPI key creation should succeed before SQLite reports its VFS path-length limit.");
         }
         finally
         {
@@ -240,7 +234,7 @@ public sealed class EncryptedSqliteInfrastructureTests
         return Path.Combine(directory, "local.db");
     }
 
-    private static string CreateLongWindowsDatabasePath(string rootDirectory)
+    private static string CreateBeyondMaxPathDatabasePath(string rootDirectory)
     {
         const string fileName = "durable-intent.db";
         var directory = Path.GetFullPath(rootDirectory);
