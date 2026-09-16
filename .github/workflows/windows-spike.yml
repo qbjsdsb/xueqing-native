@@ -27,50 +27,30 @@ jobs:
         uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1
         with:
           dotnet-version: '10.0.401'
-      - name: Inspect evaluated MSTest project
+      - name: Build platform-neutral Windows tests
         shell: bash
         run: |
           set -euo pipefail
           project=apps/windows/tests/Xueqing.Windows.Core.Tests/Xueqing.Windows.Core.Tests.csproj
-          output=apps/windows/tests/Xueqing.Windows.Core.Tests/bin/Release/net10.0
           dotnet msbuild "$project" \
             -getProperty:IsTestApplication \
             -getProperty:OutputType \
             -getProperty:PlatformTarget \
             -getProperty:UseVSTest \
-            -getProperty:EnableMSTestRunner \
-            -getProperty:EnableMicrosoftTestingPlatform
+            -getProperty:EnableMSTestRunner
           dotnet build "$project" -c Release --nologo
-          echo '--- test output files ---'
-          find "$output" -maxdepth 2 -type f -printf '%p\n' | sort
-          echo '--- standalone MTP info ---'
-          "$output/Xueqing.Windows.Core.Tests" --info || true
-          echo '--- standalone MTP test list ---'
-          "$output/Xueqing.Windows.Core.Tests" --list-tests json || true
-      - name: Test platform-neutral Windows core
+      - name: Run platform-neutral Windows core tests with MTP test app
         shell: bash
         run: |
-          set +e
-          rm -rf TestResults/mtp-diagnostics
-          dotnet test \
-            --project apps/windows/tests/Xueqing.Windows.Core.Tests/Xueqing.Windows.Core.Tests.csproj \
-            -c Release \
-            --no-build \
-            --nologo \
+          set -euo pipefail
+          output=apps/windows/tests/Xueqing.Windows.Core.Tests/bin/Release/net10.0
+          "$output/Xueqing.Windows.Core.Tests" \
             --minimum-expected-tests 2 \
-            --diagnostic \
-            --diagnostic-verbosity Trace \
-            --diagnostic-output-directory TestResults/mtp-diagnostics
-          code=$?
-          if [ "$code" -ne 0 ]; then
-            echo '--- MTP diagnostic files ---'
-            find TestResults/mtp-diagnostics -type f -maxdepth 2 -print || true
-            while IFS= read -r file; do
-              echo "--- $file ---"
-              tail -n 300 "$file" || true
-            done < <(find TestResults/mtp-diagnostics -type f -maxdepth 2 | sort)
-          fi
-          exit "$code"
+            --no-banner \
+            --progress off \
+            --output Detailed \
+            --report-trx \
+            --results-directory "$GITHUB_WORKSPACE/TestResults/windows-core"
 
   winui-build:
     name: winui-cloud-build
