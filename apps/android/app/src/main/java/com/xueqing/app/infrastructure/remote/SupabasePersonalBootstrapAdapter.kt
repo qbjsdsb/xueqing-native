@@ -161,6 +161,7 @@ class SupabasePersonalBootstrapAdapter(
 
     private fun JsonObject.requiredBoolean(name: String): Boolean {
         val value = this[name] as? JsonPrimitive ?: error("Missing JSON boolean field: $name")
+        require(!value.isString) { "JSON field is not a boolean: $name" }
         return value.content.toBooleanStrict()
     }
 
