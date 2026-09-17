@@ -4,13 +4,20 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
-    <Grid x:Name="WorkspaceGrid" Padding="28,20,28,24" ColumnSpacing="24">
+    <Grid
+        x:Name="WorkspaceGrid"
+        Padding="28,20,28,24"
+        ColumnSpacing="24"
+        AutomationProperties.AutomationId="StudentsSurface">
         <Grid.ColumnDefinitions>
             <ColumnDefinition x:Name="ListColumn" Width="*" />
             <ColumnDefinition x:Name="DetailColumn" Width="0" />
         </Grid.ColumnDefinitions>
 
-        <Grid x:Name="ListPane" RowSpacing="12">
+        <Grid
+            x:Name="ListPane"
+            RowSpacing="12"
+            AutomationProperties.AutomationId="StudentListPane">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
@@ -18,7 +25,11 @@
             </Grid.RowDefinitions>
 
             <StackPanel Spacing="4">
-                <TextBlock FontSize="28" FontWeight="SemiBold" Text="学生" />
+                <TextBlock
+                    AutomationProperties.AutomationId="StudentHeading"
+                    FontSize="28"
+                    FontWeight="SemiBold"
+                    Text="学生" />
                 <TextBlock Opacity="0.68" Text="快速找到学生，并保持列表位置与选择上下文" />
             </StackPanel>
 
@@ -37,8 +48,8 @@
                 IsItemClickEnabled="True"
                 ItemClick="StudentList_ItemClick"
                 ItemsSource="{Binding Students}"
+                KeyDown="StudentList_KeyDown"
                 SelectedItem="{Binding SelectedStudent, Mode=TwoWay}"
-                SelectionChanged="StudentList_SelectionChanged"
                 SelectionMode="Single">
                 <ListView.ItemTemplate>
                     <DataTemplate>
@@ -61,7 +72,11 @@
             </ListView>
         </Grid>
 
-        <Grid x:Name="DetailPane" Grid.Column="1" Visibility="Collapsed">
+        <Grid
+            x:Name="DetailPane"
+            Grid.Column="1"
+            AutomationProperties.AutomationId="StudentDetailPane"
+            Visibility="Collapsed">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
@@ -79,7 +94,12 @@
             <ScrollViewer Grid.Row="1">
                 <StackPanel MaxWidth="760" HorizontalAlignment="Left" Spacing="18">
                     <StackPanel Spacing="4">
-                        <TextBlock FontSize="28" FontWeight="SemiBold" Text="{Binding SelectedStudent.DisplayName}" TextWrapping="Wrap" />
+                        <TextBlock
+                            AutomationProperties.AutomationId="StudentDetailHeading"
+                            FontSize="28"
+                            FontWeight="SemiBold"
+                            Text="{Binding SelectedStudent.DisplayName}"
+                            TextWrapping="Wrap" />
                         <TextBlock Opacity="0.68" Text="{Binding SelectedStudent.StudentCode}" />
                     </StackPanel>
 

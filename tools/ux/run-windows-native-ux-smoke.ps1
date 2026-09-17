@@ -8,12 +8,30 @@ Set-StrictMode -Version Latest
 
 Add-Type -AssemblyName UIAutomationClient
 Add-Type -AssemblyName UIAutomationTypes
+Add-Type -AssemblyName System.Windows.Forms
 
 Add-Type @'
 using System;
 using System.Runtime.InteropServices;
+
 public static class XueqingWindowNativeMethods
 {
+    public const uint SPI_GETHIGHCONTRAST = 0x0042;
+    public const uint SPI_SETHIGHCONTRAST = 0x0043;
+    public const uint HCF_HIGHCONTRASTON = 0x00000001;
+    public const uint SPIF_UPDATEINIFILE = 0x0001;
+    public const uint SPIF_SENDCHANGE = 0x0002;
+    public const uint WM_SETTINGCHANGE = 0x001A;
+    public const uint SMTO_ABORTIFHUNG = 0x0002;
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct HIGHCONTRAST
+    {
+        public uint cbSize;
+        public uint dwFlags;
+        public IntPtr lpszDefaultScheme;
+    }
+
     [DllImport("user32.dll", SetLastError = true)]
     public static extern bool SetWindowPos(
         IntPtr hWnd,
@@ -26,6 +44,95 @@ public static class XueqingWindowNativeMethods
 
     [DllImport("user32.dll")]
     public static extern uint GetDpiForWindow(IntPtr hWnd);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    public static extern bool SystemParametersInfoW(
+        uint uiAction,
+        uint uiParam,
+        ref HIGHCONTRAST pvParam,
+        uint fWinIni);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    public static extern IntPtr SendMessageTimeoutW(
+        IntPtr hWnd,
+        uint Msg,
+        IntPtr wParam,
+        IntPtr lParam,
+        uint fuFlags,
+        uint uTimeout,
+        out IntPtr lpdwResult);
+
+    public static Tuple<uint, string> GetHighContrastState()
+    {
+        var state = new HIGHCONTRAST();
+        state.cbSize = (uint)Marshal.SizeOf<HIGHCONTRAST>();
+        if (!SystemParametersInfoW(SPI_GETHIGHCONTRAST, state.cbSize, ref state, 0))
+        {
+            throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
+        }
+
+        var scheme = state.lpszDefaultScheme == IntPtr.Zero
+            ? String.Empty
+            : Marshal.PtrToStringUni(state.lpszDefaultScheme) ?? String.Empty;
+        return Tuple.Create(state.dwFlags, scheme);
+    }
+
+    public static void SetHighContrastState(uint flags, string scheme)
+    {
+        IntPtr schemePointer = IntPtr.Zero;
+        try
+        {
+            if (!String.IsNullOrWhiteSpace(scheme))
+            {
+                schemePointer = Marshal.StringToHGlobalUni(scheme);
+            }
+
+            var state = new HIGHCONTRAST();
+            state.cbSize = (uint)Marshal.SizeOf<HIGHCONTRAST>();
+            state.dwFlags = flags;
+            state.lpszDefaultScheme = schemePointer;
+            if (!SystemParametersInfoW(
+                SPI_SETHIGHCONTRAST,
+                state.cbSize,
+                ref state,
+                SPIF_UPDATEINIFILE | SPIF_SENDCHANGE))
+            {
+                throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
+            }
+        }
+        finally
+        {
+            if (schemePointer != IntPtr.Zero)
+            {
+                Marshal.FreeHGlobal(schemePointer);
+            }
+        }
+    }
+
+    public static void BroadcastSettingChange(string area)
+    {
+        IntPtr areaPointer = IntPtr.Zero;
+        try
+        {
+            areaPointer = Marshal.StringToHGlobalUni(area ?? String.Empty);
+            IntPtr result;
+            SendMessageTimeoutW(
+                new IntPtr(0xffff),
+                WM_SETTINGCHANGE,
+                IntPtr.Zero,
+                areaPointer,
+                SMTO_ABORTIFHUNG,
+                5000,
+                out result);
+        }
+        finally
+        {
+            if (areaPointer != IntPtr.Zero)
+            {
+                Marshal.FreeHGlobal(areaPointer);
+            }
+        }
+    }
 }
 '@
 
@@ -45,12 +152,8 @@ function Wait-Until {
             }
         }
         catch [System.Windows.Automation.ElementNotAvailableException] {
-            # WinUI can briefly replace virtualized elements while a filtered
-            # ItemsSource is changing. Re-acquire them on the next iteration.
         }
         catch [System.InvalidOperationException] {
-            # Some providers surface transient COM/UIA invalid-operation errors
-            # during reparenting. A later query against the live tree is valid.
         }
         Start-Sleep -Milliseconds 200
     } while ([DateTimeOffset]::UtcNow -lt $deadline)
@@ -68,6 +171,24 @@ function Find-ByAutomationId {
         [System.Windows.Automation.AutomationElement]::AutomationIdProperty,
         $AutomationId)
     return $Root.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $condition)
+}
+
+function Find-VisibleByAutomationId {
+    param(
+        [Parameter(Mandatory = $true)][System.Windows.Automation.AutomationElement]$Root,
+        [Parameter(Mandatory = $true)][string]$AutomationId
+    )
+
+    $element = Find-ByAutomationId -Root $Root -AutomationId $AutomationId
+    if ($null -eq $element) {
+        return $null
+    }
+
+    $rectangle = $element.Current.BoundingRectangle
+    if ($element.Current.IsOffscreen -or $rectangle.Width -le 0 -or $rectangle.Height -le 0) {
+        return $null
+    }
+    return $element
 }
 
 function Find-ListItems {
@@ -117,128 +238,408 @@ function Is-DescendantOf {
     return $false
 }
 
-$process = Wait-Until -FailureMessage "Process '$ProcessName' did not expose a native main window." -Condition {
+function Get-RegistryValueSnapshot {
+    param(
+        [Parameter(Mandatory = $true)][string]$Path,
+        [Parameter(Mandatory = $true)][string]$Name
+    )
+
+    $pathExists = Test-Path $Path
+    if (-not $pathExists) {
+        return [pscustomobject]@{ PathExisted = $false; ValueExisted = $false; Value = $null }
+    }
+
+    $item = Get-ItemProperty -Path $Path -ErrorAction Stop
+    $property = $item.PSObject.Properties[$Name]
+    return [pscustomobject]@{
+        PathExisted = $true
+        ValueExisted = $null -ne $property
+        Value = if ($null -ne $property) { $property.Value } else { $null }
+    }
+}
+
+function Restore-RegistryValue {
+    param(
+        [Parameter(Mandatory = $true)][string]$Path,
+        [Parameter(Mandatory = $true)][string]$Name,
+        [Parameter(Mandatory = $true)]$Snapshot
+    )
+
+    if ($Snapshot.ValueExisted) {
+        if (-not (Test-Path $Path)) {
+            New-Item -Path $Path -Force | Out-Null
+        }
+        New-ItemProperty -Path $Path -Name $Name -Value ([int]$Snapshot.Value) -PropertyType DWord -Force | Out-Null
+    }
+    elseif (Test-Path $Path) {
+        Remove-ItemProperty -Path $Path -Name $Name -ErrorAction SilentlyContinue
+        if (-not $Snapshot.PathExisted) {
+            $remaining = Get-ItemProperty -Path $Path -ErrorAction SilentlyContinue
+            if ($null -ne $remaining) {
+                # Do not delete a shared Windows settings key merely because this
+                # single value did not exist before the isolated test.
+            }
+        }
+    }
+}
+
+function Set-RegistryDword {
+    param(
+        [Parameter(Mandatory = $true)][string]$Path,
+        [Parameter(Mandatory = $true)][string]$Name,
+        [Parameter(Mandatory = $true)][int]$Value,
+        [Parameter(Mandatory = $true)][string]$BroadcastArea
+    )
+
+    if (-not (Test-Path $Path)) {
+        New-Item -Path $Path -Force | Out-Null
+    }
+    New-ItemProperty -Path $Path -Name $Name -Value $Value -PropertyType DWord -Force | Out-Null
+    [XueqingWindowNativeMethods]::BroadcastSettingChange($BroadcastArea)
+}
+
+$script:process = $null
+$script:root = $null
+$script:windowHandle = [IntPtr]::Zero
+$script:dpi = 0
+$script:executablePath = $null
+
+function Attach-To-App {
+    $script:process = Wait-Until -FailureMessage "Process '$ProcessName' did not expose a native main window." -Condition {
+        Get-Process -Name $ProcessName -ErrorAction SilentlyContinue |
+            Where-Object { $_.MainWindowHandle -ne [IntPtr]::Zero } |
+            Select-Object -First 1
+    }
+    $script:windowHandle = $script:process.MainWindowHandle
+    $script:root = [System.Windows.Automation.AutomationElement]::FromHandle($script:windowHandle)
+    if ($null -eq $script:root) {
+        throw 'UI Automation could not obtain the WinUI root element.'
+    }
+    $script:dpi = [XueqingWindowNativeMethods]::GetDpiForWindow($script:windowHandle)
+    if ($script:dpi -eq 0) {
+        throw 'GetDpiForWindow returned 0; DIP validation would be ambiguous.'
+    }
+    if ([string]::IsNullOrWhiteSpace($script:executablePath)) {
+        $script:executablePath = $script:process.Path
+    }
+}
+
+function Restart-App {
     Get-Process -Name $ProcessName -ErrorAction SilentlyContinue |
-        Where-Object { $_.MainWindowHandle -ne [IntPtr]::Zero } |
-        Select-Object -First 1
-}
-Write-Host "[ux-smoke] Native process exposed a main window."
-
-$windowHandle = $process.MainWindowHandle
-$root = [System.Windows.Automation.AutomationElement]::FromHandle($windowHandle)
-if ($null -eq $root) {
-    throw 'UI Automation could not obtain the WinUI root element.'
+        Stop-Process -Force -ErrorAction SilentlyContinue
+    Start-Sleep -Milliseconds 350
+    Start-Process -FilePath $script:executablePath | Out-Null
+    Attach-To-App
 }
 
-# SetWindowPos consumes physical pixels, while the UX acceptance matrix is in
-# device-independent pixels. Convert the required 800 x 640 DIP pressure case
-# using the actual DPI of the native window instead of assuming 100% scaling.
-$dpi = [XueqingWindowNativeMethods]::GetDpiForWindow($windowHandle)
-if ($dpi -eq 0) {
-    throw 'GetDpiForWindow returned 0; the 800 DIP validation would be ambiguous.'
-}
-$targetWidthDips = 800
-$targetHeightDips = 640
-$targetWidthPixels = [int][Math]::Round($targetWidthDips * $dpi / 96.0)
-$targetHeightPixels = [int][Math]::Round($targetHeightDips * $dpi / 96.0)
-$SWP_NOMOVE = 0x0002
-if (-not [XueqingWindowNativeMethods]::SetWindowPos(
-    $windowHandle,
-    [IntPtr]::Zero,
-    0,
-    0,
-    $targetWidthPixels,
-    $targetHeightPixels,
-    $SWP_NOMOVE)) {
-    throw "SetWindowPos failed with Win32 error $([Runtime.InteropServices.Marshal]::GetLastWin32Error())."
-}
-Write-Host "[ux-smoke] Pressure window: ${targetWidthDips}x${targetHeightDips} DIP at ${dpi} DPI (${targetWidthPixels}x${targetHeightPixels} px)."
-Start-Sleep -Milliseconds 500
+function Set-WindowDips {
+    param(
+        [Parameter(Mandatory = $true)][int]$Width,
+        [Parameter(Mandatory = $true)][int]$Height
+    )
 
-$today = Find-ByAutomationId -Root $root -AutomationId 'TodayNavigation'
-if ($null -eq $today) {
-    throw 'Today navigation item is not exposed to UI Automation.'
-}
-
-$studentsNav = Find-ByAutomationId -Root $root -AutomationId 'StudentsNavigation'
-if ($null -eq $studentsNav) {
-    throw 'Students navigation item is not exposed to UI Automation.'
-}
-Invoke-Element -Element $studentsNav
-Write-Host '[ux-smoke] Navigated to Students.'
-
-$searchBox = Wait-Until -FailureMessage 'Student search box did not appear after navigating to Students.' -Condition {
-    Find-ByAutomationId -Root $root -AutomationId 'StudentSearchBox'
-}
-
-$valuePattern = $null
-if (-not $searchBox.TryGetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern, [ref]$valuePattern)) {
-    throw 'Student search box does not expose ValuePattern.'
-}
-([System.Windows.Automation.ValuePattern]$valuePattern).SetValue('S000777')
-
-Wait-Until -FailureMessage 'Student search box did not retain the requested unique student code.' -Condition {
-    $liveSearch = Find-ByAutomationId -Root $root -AutomationId 'StudentSearchBox'
-    if ($null -eq $liveSearch) {
-        return $false
+    $targetWidthPixels = [int][Math]::Round($Width * $script:dpi / 96.0)
+    $targetHeightPixels = [int][Math]::Round($Height * $script:dpi / 96.0)
+    $SWP_NOMOVE = 0x0002
+    if (-not [XueqingWindowNativeMethods]::SetWindowPos(
+        $script:windowHandle,
+        [IntPtr]::Zero,
+        0,
+        0,
+        $targetWidthPixels,
+        $targetHeightPixels,
+        $SWP_NOMOVE)) {
+        throw "SetWindowPos failed with Win32 error $([Runtime.InteropServices.Marshal]::GetLastWin32Error())."
     }
-    $liveValue = $null
-    if (-not $liveSearch.TryGetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern, [ref]$liveValue)) {
-        return $false
-    }
-    return ([System.Windows.Automation.ValuePattern]$liveValue).Current.Value -eq 'S000777'
-} | Out-Null
-Write-Host '[ux-smoke] Unique student-code search accepted.'
+    Write-Host "[ux-matrix] Window ${Width}x${Height} DIP at $($script:dpi) DPI (${targetWidthPixels}x${targetHeightPixels} px)."
+    Start-Sleep -Milliseconds 450
+}
 
-# The query S000777 is unique in the deterministic 1,000-student fixture. Do
-# not depend on TextBlock UIA Name values: WinUI virtualizes row descendants and
-# those names are not a stable contract. Instead require the native ListView to
-# converge to exactly one live ListItem after the unique query, then select it.
-$studentItem = Wait-Until -FailureMessage 'Unique S000777 search did not converge to exactly one native ListItem.' -Condition {
-    $liveList = Find-ByAutomationId -Root $root -AutomationId 'StudentList'
-    if ($null -eq $liveList) {
+function Navigate-ToSurface {
+    param(
+        [Parameter(Mandatory = $true)][string]$NavigationId,
+        [Parameter(Mandatory = $true)][string]$SurfaceId
+    )
+
+    $navigation = Wait-Until -FailureMessage "Navigation '$NavigationId' is unavailable." -Condition {
+        Find-VisibleByAutomationId -Root $script:root -AutomationId $NavigationId
+    }
+    Invoke-Element -Element $navigation
+    return Wait-Until -FailureMessage "Surface '$SurfaceId' did not become visible." -Condition {
+        Find-VisibleByAutomationId -Root $script:root -AutomationId $SurfaceId
+    }
+}
+
+function Set-SearchValue {
+    param([Parameter(Mandatory = $true)][string]$Value)
+
+    $searchBox = Wait-Until -FailureMessage 'Student search box is unavailable.' -Condition {
+        Find-VisibleByAutomationId -Root $script:root -AutomationId 'StudentSearchBox'
+    }
+    $valuePattern = $null
+    if (-not $searchBox.TryGetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern, [ref]$valuePattern)) {
+        throw 'Student search box does not expose ValuePattern.'
+    }
+    ([System.Windows.Automation.ValuePattern]$valuePattern).SetValue($Value)
+}
+
+function Get-UniqueFilteredStudentItem {
+    return Wait-Until -FailureMessage 'Unique S000777 search did not converge to exactly one native ListItem.' -Condition {
+        $liveList = Find-VisibleByAutomationId -Root $script:root -AutomationId 'StudentList'
+        if ($null -eq $liveList) {
+            return $null
+        }
+        $items = @(Find-ListItems -List $liveList)
+        if ($items.Count -ne 1) {
+            return $null
+        }
+        return $items[0]
+    }
+}
+
+function Assert-CompactStudentKeyboardJourney {
+    Set-WindowDips -Width 800 -Height 640
+    Navigate-ToSurface -NavigationId 'StudentsNavigation' -SurfaceId 'StudentsSurface' | Out-Null
+
+    Set-SearchValue -Value 'S000777'
+    $studentItem = Get-UniqueFilteredStudentItem
+    Invoke-Element -Element $studentItem
+    $studentItem.SetFocus()
+
+    # Selection alone must not navigate in compact/standard mode. Teachers need
+    # to move rapidly through a large list with the arrow keys before deciding
+    # to open the selected Student.
+    Start-Sleep -Milliseconds 250
+    if ($null -ne (Find-VisibleByAutomationId -Root $script:root -AutomationId 'BackToStudentList')) {
+        throw 'Selecting a Student navigated to detail before explicit activation.'
+    }
+
+    [System.Windows.Forms.SendKeys]::SendWait('{ENTER}')
+    $backButton = Wait-Until -FailureMessage 'Enter did not open compact Student Detail.' -Condition {
+        Find-VisibleByAutomationId -Root $script:root -AutomationId 'BackToStudentList'
+    }
+    Invoke-Element -Element $backButton
+
+    $searchBoxAfterReturn = Wait-Until -FailureMessage 'Student list was not restored after returning from detail.' -Condition {
+        Find-VisibleByAutomationId -Root $script:root -AutomationId 'StudentSearchBox'
+    }
+    $valueAfterReturn = $null
+    if (-not $searchBoxAfterReturn.TryGetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern, [ref]$valueAfterReturn)) {
+        throw 'Restored search box does not expose ValuePattern.'
+    }
+    if (([System.Windows.Automation.ValuePattern]$valueAfterReturn).Current.Value -ne 'S000777') {
+        throw 'Returning from Student Detail lost the search context.'
+    }
+
+    Wait-Until -FailureMessage 'Focus did not return to the Student list after detail close.' -Condition {
+        $liveList = Find-VisibleByAutomationId -Root $script:root -AutomationId 'StudentList'
+        $focused = [System.Windows.Automation.AutomationElement]::FocusedElement
+        return $null -ne $liveList -and $null -ne $focused -and (Is-DescendantOf -Element $focused -Ancestor $liveList)
+    } | Out-Null
+
+    Set-SearchValue -Value ''
+    $list = Wait-Until -FailureMessage 'Student list did not repopulate after clearing search.' -Condition {
+        Find-VisibleByAutomationId -Root $script:root -AutomationId 'StudentList'
+    }
+    $firstVisible = Wait-Until -FailureMessage 'Student list has no native ListItem after clearing search.' -Condition {
+        $items = @(Find-ListItems -List $list)
+        if ($items.Count -gt 0) { return $items[0] }
         return $null
     }
-    $items = @(Find-ListItems -List $liveList)
-    if ($items.Count -ne 1) {
-        return $null
-    }
-    return $items[0]
-}
-Write-Host '[ux-smoke] Filtered StudentList exposes exactly one native ListItem.'
-Invoke-Element -Element $studentItem
-
-$backButton = Wait-Until -FailureMessage 'Compact Student Detail did not expose the return action after selecting the filtered student.' -Condition {
-    Find-ByAutomationId -Root $root -AutomationId 'BackToStudentList'
-}
-Write-Host '[ux-smoke] Compact Student Detail opened.'
-Invoke-Element -Element $backButton
-
-$searchBoxAfterReturn = Wait-Until -FailureMessage 'Student list was not restored after returning from detail.' -Condition {
-    Find-ByAutomationId -Root $root -AutomationId 'StudentSearchBox'
-}
-$valueAfterReturn = $null
-if (-not $searchBoxAfterReturn.TryGetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern, [ref]$valueAfterReturn)) {
-    throw 'Restored search box does not expose ValuePattern.'
-}
-if (([System.Windows.Automation.ValuePattern]$valueAfterReturn).Current.Value -ne 'S000777') {
-    throw 'Returning from Student Detail lost the search context.'
-}
-Write-Host '[ux-smoke] Search context survived detail return.'
-
-# Focus changes are asynchronous across the WinUI/UIA boundary. Re-acquire both
-# the focused element and the live list until the programmatic focus restoration
-# becomes observable instead of sampling once and creating a timing-only failure.
-Wait-Until -FailureMessage 'Focus did not return to the Student list after detail close.' -Condition {
-    $liveList = Find-ByAutomationId -Root $root -AutomationId 'StudentList'
-    if ($null -eq $liveList) {
-        return $false
+    Invoke-Element -Element $firstVisible
+    $firstVisible.SetFocus()
+    [System.Windows.Forms.SendKeys]::SendWait('{DOWN}{DOWN}{DOWN}')
+    Start-Sleep -Milliseconds 300
+    if ($null -ne (Find-VisibleByAutomationId -Root $script:root -AutomationId 'BackToStudentList')) {
+        throw 'Arrow-key Student browsing incorrectly navigated to detail.'
     }
     $focused = [System.Windows.Automation.AutomationElement]::FocusedElement
-    if ($null -eq $focused) {
-        return $false
+    $liveList = Find-VisibleByAutomationId -Root $script:root -AutomationId 'StudentList'
+    if ($null -eq $focused -or $null -eq $liveList -or -not (Is-DescendantOf -Element $focused -Ancestor $liveList)) {
+        throw 'Arrow-key Student browsing lost list focus.'
     }
-    return Is-DescendantOf -Element $focused -Ancestor $liveList
-} | Out-Null
 
-Write-Host 'Windows native UX smoke passed: 800 DIP compact navigation, unique search, detail, context and focus restoration.'
+    Write-Host '[ux-matrix] Compact keyboard journey passed: select/arrow browse stays in list; Enter opens detail; return preserves search and focus.'
+}
+
+function Assert-WidthMatrix {
+    foreach ($width in @(800, 960, 1024, 1280, 1600)) {
+        Set-WindowDips -Width $width -Height 640
+
+        Navigate-ToSurface -NavigationId 'TodayNavigation' -SurfaceId 'TodaySurface' | Out-Null
+        if ($null -eq (Find-VisibleByAutomationId -Root $script:root -AutomationId 'TodayActionList')) {
+            throw "Today Action list is unusable at ${width} DIP."
+        }
+
+        Navigate-ToSurface -NavigationId 'StudentsNavigation' -SurfaceId 'StudentsSurface' | Out-Null
+        if ($null -eq (Find-VisibleByAutomationId -Root $script:root -AutomationId 'StudentListPane')) {
+            throw "Student list pane is unusable at ${width} DIP."
+        }
+        $detailVisible = $null -ne (Find-VisibleByAutomationId -Root $script:root -AutomationId 'StudentDetailPane')
+        if ($width -ge 1280 -and -not $detailVisible) {
+            throw "Expanded Student detail pane is missing at ${width} DIP."
+        }
+        if ($width -lt 1280 -and $detailVisible) {
+            throw "Student list/detail was forced side-by-side at ${width} DIP."
+        }
+
+        Navigate-ToSurface -NavigationId 'LearningNavigation' -SurfaceId 'LearningSurface' | Out-Null
+        if ($null -eq (Find-VisibleByAutomationId -Root $script:root -AutomationId 'LearningTimeline')) {
+            throw "Learning Case timeline is unusable at ${width} DIP."
+        }
+
+        Navigate-ToSurface -NavigationId 'OrganizationManagementNavigation' -SurfaceId 'OrganizationManagementSurface' | Out-Null
+        $wideVisible = $null -ne (Find-VisibleByAutomationId -Root $script:root -AutomationId 'OrganizationWideList')
+        $compactVisible = $null -ne (Find-VisibleByAutomationId -Root $script:root -AutomationId 'OrganizationCompactList')
+        if ($width -ge 1280) {
+            if (-not $wideVisible -or $compactVisible) {
+                throw "Organization Management did not use the wide row model at ${width} DIP."
+            }
+        }
+        elseif (-not $compactVisible -or $wideVisible) {
+            throw "Organization Management did not degrade to compact rows at ${width} DIP."
+        }
+    }
+
+    Set-WindowDips -Width 800 -Height 480
+    Navigate-ToSurface -NavigationId 'TodayNavigation' -SurfaceId 'TodaySurface' | Out-Null
+    if ($null -eq (Find-VisibleByAutomationId -Root $script:root -AutomationId 'TodayActionList')) {
+        throw 'Today Action list is unavailable at the 800x480 DIP short-window pressure case.'
+    }
+    Navigate-ToSurface -NavigationId 'StudentsNavigation' -SurfaceId 'StudentsSurface' | Out-Null
+    if ($null -eq (Find-VisibleByAutomationId -Root $script:root -AutomationId 'StudentSearchBox') -or
+        $null -eq (Find-VisibleByAutomationId -Root $script:root -AutomationId 'StudentList')) {
+        throw 'Student search/list is unavailable at the 800x480 DIP short-window pressure case.'
+    }
+
+    Write-Host '[ux-matrix] Width matrix passed: 800/960/1024/1280/1600 DIP plus 800x480 short-window pressure.'
+}
+
+function Assert-RepresentativeSurfaces {
+    Set-WindowDips -Width 1280 -Height 640
+    Navigate-ToSurface -NavigationId 'TodayNavigation' -SurfaceId 'TodaySurface' | Out-Null
+    Navigate-ToSurface -NavigationId 'StudentsNavigation' -SurfaceId 'StudentsSurface' | Out-Null
+    Navigate-ToSurface -NavigationId 'LearningNavigation' -SurfaceId 'LearningSurface' | Out-Null
+    Navigate-ToSurface -NavigationId 'OrganizationManagementNavigation' -SurfaceId 'OrganizationManagementSurface' | Out-Null
+}
+
+function Assert-NoHardCodedPrototypeColors {
+    $repositoryRoot = (Resolve-Path (Join-Path $PSScriptRoot '../..')).Path
+    $paths = @(
+        (Join-Path $repositoryRoot 'apps/windows/src/Xueqing.Windows/MainWindow.xaml'),
+        (Join-Path $repositoryRoot 'apps/windows/src/Xueqing.Windows/Views')
+    )
+    $files = @()
+    foreach ($path in $paths) {
+        if (Test-Path $path -PathType Leaf) {
+            $files += Get-Item $path
+        }
+        elseif (Test-Path $path -PathType Container) {
+            $files += Get-ChildItem $path -Recurse -File -Filter *.xaml
+        }
+    }
+
+    $matches = $files | Select-String -Pattern '(Foreground|Background|BorderBrush)\s*=\s*"#[0-9A-Fa-f]{3,8}"'
+    if ($matches) {
+        $details = ($matches | ForEach-Object { "$($_.Path):$($_.LineNumber) $($_.Line.Trim())" }) -join [Environment]::NewLine
+        throw "Prototype XAML hard-codes semantic colors that can defeat High Contrast:`n$details"
+    }
+    Write-Host '[ux-matrix] High Contrast static preflight passed: no hard-coded hex semantic brushes in prototype XAML.'
+}
+
+function Assert-TextScaleMatrix {
+    param(
+        [Parameter(Mandatory = $true)][string]$RegistryPath,
+        [Parameter(Mandatory = $true)]$OriginalSnapshot
+    )
+
+    $heights = @{}
+    foreach ($percent in @(100, 150, 200, 225)) {
+        Set-RegistryDword -Path $RegistryPath -Name 'TextScaleFactor' -Value $percent -BroadcastArea 'Accessibility'
+        Restart-App
+        Set-WindowDips -Width 800 -Height 640
+        Navigate-ToSurface -NavigationId 'StudentsNavigation' -SurfaceId 'StudentsSurface' | Out-Null
+        $heading = Wait-Until -FailureMessage "Student heading is unavailable at ${percent}% text scale." -Condition {
+            Find-VisibleByAutomationId -Root $script:root -AutomationId 'StudentHeading'
+        }
+        $height = $heading.Current.BoundingRectangle.Height
+        if ($height -le 0) {
+            throw "Student heading has no measurable height at ${percent}% text scale."
+        }
+        $heights[$percent] = $height
+        if ($null -eq (Find-VisibleByAutomationId -Root $script:root -AutomationId 'StudentSearchBox') -or
+            $null -eq (Find-VisibleByAutomationId -Root $script:root -AutomationId 'StudentList')) {
+            throw "Core Student task became unreachable at ${percent}% text scale."
+        }
+        Write-Host "[ux-matrix] Text scale ${percent}% -> Student heading UIA height $height px at $($script:dpi) DPI."
+    }
+
+    if ($heights[150] -lt $heights[100] -or $heights[200] -lt $heights[150] -or $heights[225] -lt $heights[200]) {
+        throw "Text-scale measurements were not monotonic: $($heights | Out-String)"
+    }
+    if ($heights[225] -lt ($heights[100] * 1.10)) {
+        throw "225% system text scale did not measurably enlarge native WinUI text (100%=$($heights[100]), 225%=$($heights[225]))."
+    }
+
+    Assert-CompactStudentKeyboardJourney
+    Write-Host '[ux-matrix] Text scale matrix passed at 100/150/200/225%; 225% retained core compact Student task completion.'
+}
+
+Attach-To-App
+Write-Host '[ux-matrix] Native process exposed a main window.'
+
+$accessibilityPath = 'HKCU:\Software\Microsoft\Accessibility'
+$personalizePath = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize'
+$textScaleSnapshot = Get-RegistryValueSnapshot -Path $accessibilityPath -Name 'TextScaleFactor'
+$appsThemeSnapshot = Get-RegistryValueSnapshot -Path $personalizePath -Name 'AppsUseLightTheme'
+$systemThemeSnapshot = Get-RegistryValueSnapshot -Path $personalizePath -Name 'SystemUsesLightTheme'
+$highContrastSnapshot = [XueqingWindowNativeMethods]::GetHighContrastState()
+
+try {
+    Assert-NoHardCodedPrototypeColors
+    Assert-WidthMatrix
+    Assert-CompactStudentKeyboardJourney
+
+    foreach ($theme in @(
+        @{ Name = 'Light'; Value = 1 },
+        @{ Name = 'Dark'; Value = 0 }
+    )) {
+        Set-RegistryDword -Path $personalizePath -Name 'AppsUseLightTheme' -Value $theme.Value -BroadcastArea 'ImmersiveColorSet'
+        Set-RegistryDword -Path $personalizePath -Name 'SystemUsesLightTheme' -Value $theme.Value -BroadcastArea 'ImmersiveColorSet'
+        Restart-App
+        Assert-RepresentativeSurfaces
+        Write-Host "[ux-matrix] $($theme.Name) theme representative native surfaces passed."
+    }
+
+    $highContrastFlags = [uint32]($highContrastSnapshot.Item1 -bor [XueqingWindowNativeMethods]::HCF_HIGHCONTRASTON)
+    $highContrastScheme = if ([string]::IsNullOrWhiteSpace($highContrastSnapshot.Item2)) { 'High Contrast Black' } else { $highContrastSnapshot.Item2 }
+    [XueqingWindowNativeMethods]::SetHighContrastState($highContrastFlags, $highContrastScheme)
+    Restart-App
+    $liveHighContrast = [XueqingWindowNativeMethods]::GetHighContrastState()
+    if (($liveHighContrast.Item1 -band [XueqingWindowNativeMethods]::HCF_HIGHCONTRASTON) -eq 0) {
+        throw 'Windows did not report High Contrast enabled after SPI_SETHIGHCONTRAST.'
+    }
+    Assert-CompactStudentKeyboardJourney
+    Assert-RepresentativeSurfaces
+    Write-Host '[ux-matrix] Windows High Contrast representative journey passed with real system High Contrast enabled.'
+
+    [XueqingWindowNativeMethods]::SetHighContrastState([uint32]$highContrastSnapshot.Item1, [string]$highContrastSnapshot.Item2)
+    Restart-App
+
+    Assert-TextScaleMatrix -RegistryPath $accessibilityPath -OriginalSnapshot $textScaleSnapshot
+
+    Write-Host 'Windows native UX matrix passed: widths, short window, keyboard activation/focus, Light/Dark, High Contrast and 100/150/200/225% text scale.'
+}
+finally {
+    try {
+        Restore-RegistryValue -Path $accessibilityPath -Name 'TextScaleFactor' -Snapshot $textScaleSnapshot
+        Restore-RegistryValue -Path $personalizePath -Name 'AppsUseLightTheme' -Snapshot $appsThemeSnapshot
+        Restore-RegistryValue -Path $personalizePath -Name 'SystemUsesLightTheme' -Snapshot $systemThemeSnapshot
+        [XueqingWindowNativeMethods]::BroadcastSettingChange('Accessibility')
+        [XueqingWindowNativeMethods]::BroadcastSettingChange('ImmersiveColorSet')
+        [XueqingWindowNativeMethods]::SetHighContrastState([uint32]$highContrastSnapshot.Item1, [string]$highContrastSnapshot.Item2)
+    }
+    catch {
+        Write-Warning "Failed to fully restore isolated runner accessibility/theme state: $($_.Exception.Message)"
+    }
+}
