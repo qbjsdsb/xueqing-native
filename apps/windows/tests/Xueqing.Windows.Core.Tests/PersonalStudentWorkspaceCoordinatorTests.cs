@@ -88,15 +88,52 @@ public sealed class PersonalStudentWorkspaceCoordinatorTests
         Assert.AreEqual(0, workspace.Students.Count);
     }
 
+    [TestMethod]
+    public async Task Refresh_invalidates_an_in_flight_recent_read_started_from_old_bootstrap()
+    {
+        var context = Context("40000000-0000-0000-0000-000000000001", "50000000-0000-0000-0000-000000000001", "chinese");
+        var bootstrap = Snapshot(context);
+        var nextBootstrap = new TaskCompletionSource<PersonalBootstrapReadResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var bootstrapReader = new SequencedBootstrapReader(
+            Task.FromResult(PersonalBootstrapReadResult.Success(bootstrap)),
+            nextBootstrap.Task);
+        var delayedObservations = new DelayedObservationsReader();
+        var workspace = CreateWorkspace(bootstrapReader, delayedObservations);
+        await workspace.RefreshAsync();
+
+        var oldRead = workspace.LoadRecentAsync(context);
+        Assert.AreEqual(StudentRecentObservationsViewStatus.Loading, workspace.RecentObservations.Status);
+
+        var refresh = workspace.RefreshAsync();
+        Assert.AreEqual(PersonalStudentWorkspaceStatus.Loading, workspace.Current.Status);
+        Assert.AreEqual(StudentRecentObservationsViewStatus.Idle, workspace.RecentObservations.Status);
+
+        delayedObservations.Complete(SuccessfulObservationResult(context));
+        var oldResult = await oldRead;
+
+        Assert.AreEqual(StudentRecentObservationsViewStatus.Idle, oldResult.Status);
+        Assert.AreEqual(StudentRecentObservationsViewStatus.Idle, workspace.RecentObservations.Status);
+
+        nextBootstrap.SetResult(PersonalBootstrapReadResult.Success(bootstrap));
+        await refresh;
+        Assert.AreEqual(PersonalStudentWorkspaceStatus.Ready, workspace.Current.Status);
+        Assert.AreEqual(StudentRecentObservationsViewStatus.Idle, workspace.RecentObservations.Status);
+    }
+
     private static PersonalStudentWorkspaceCoordinator CreateWorkspace(
         IPersonalBootstrapReader bootstrapReader,
         out RecordingObservationsReader observationsReader)
     {
         observationsReader = new RecordingObservationsReader();
-        return new PersonalStudentWorkspaceCoordinator(
+        return CreateWorkspace(bootstrapReader, observationsReader);
+    }
+
+    private static PersonalStudentWorkspaceCoordinator CreateWorkspace(
+        IPersonalBootstrapReader bootstrapReader,
+        IStudentRecentObservationsReader observationsReader) =>
+        new(
             bootstrapReader,
             new StudentRecentObservationsCoordinator(observationsReader));
-    }
 
     private static PersonalTeachingContext Context(string subjectProfileId, string assignmentId, string subjectKey) =>
         new(
@@ -114,6 +151,28 @@ public sealed class PersonalStudentWorkspaceCoordinatorTests
             "虚构老师",
             new[] { new PersonalOrganization(OrganizationId, "虚构机构", true) },
             contexts);
+
+    private static StudentRecentObservationsReadResult SuccessfulObservationResult(PersonalTeachingContext context) =>
+        StudentRecentObservationsReadResult.Success(
+            new StudentRecentObservationsSnapshot(
+                DateTimeOffset.Parse("2026-09-17T12:01:00Z"),
+                ActorId,
+                context.OrganizationId,
+                context.StudentId,
+                context.StudentDisplayName,
+                context.SubjectProfileId,
+                context.SubjectKey,
+                context.AssignmentId,
+                new[]
+                {
+                    new StudentRecentObservation(
+                        Guid.Parse("81000000-0000-0000-0000-000000000001"),
+                        ActorId,
+                        "虚构课堂观察",
+                        null,
+                        DateTimeOffset.Parse("2026-09-17T12:00:30Z")),
+                },
+                false));
 
     private sealed class ImmediateBootstrapReader(PersonalBootstrapReadResult result) : IPersonalBootstrapReader
     {
@@ -145,26 +204,27 @@ public sealed class PersonalStudentWorkspaceCoordinatorTests
             CallCount++;
             LastScope = scope;
             LastActorId = expectedActorAppUserId;
-            return Task.FromResult(StudentRecentObservationsReadResult.Success(
-                new StudentRecentObservationsSnapshot(
-                    DateTimeOffset.Parse("2026-09-17T12:01:00Z"),
-                    expectedActorAppUserId,
-                    scope.OrganizationId,
-                    scope.StudentId,
-                    "虚构学生0001",
-                    scope.SubjectProfileId,
-                    "chinese",
-                    Guid.Parse("50000000-0000-0000-0000-000000000001"),
-                    new[]
-                    {
-                        new StudentRecentObservation(
-                            Guid.Parse("81000000-0000-0000-0000-000000000001"),
-                            expectedActorAppUserId,
-                            "虚构课堂观察",
-                            null,
-                            DateTimeOffset.Parse("2026-09-17T12:00:30Z")),
-                    },
-                    false)));
+            var context = new PersonalTeachingContext(
+                scope.OrganizationId,
+                scope.StudentId,
+                "虚构学生0001",
+                scope.SubjectProfileId,
+                "chinese",
+                Guid.Parse("50000000-0000-0000-0000-000000000001"));
+            return Task.FromResult(SuccessfulObservationResult(context));
         }
+    }
+
+    private sealed class DelayedObservationsReader : IStudentRecentObservationsReader
+    {
+        private readonly TaskCompletionSource<StudentRecentObservationsReadResult> _completion =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public Task<StudentRecentObservationsReadResult> ReadAsync(
+            StudentObservationScope scope,
+            Guid expectedActorAppUserId,
+            CancellationToken cancellationToken = default) => _completion.Task;
+
+        public void Complete(StudentRecentObservationsReadResult result) => _completion.SetResult(result);
     }
 }
