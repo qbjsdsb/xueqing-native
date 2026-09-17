@@ -70,43 +70,13 @@ function Find-ByAutomationId {
     return $Root.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $condition)
 }
 
-function Find-FirstListItem {
+function Find-ListItems {
     param([Parameter(Mandatory = $true)][System.Windows.Automation.AutomationElement]$List)
 
     $condition = New-Object System.Windows.Automation.PropertyCondition(
         [System.Windows.Automation.AutomationElement]::ControlTypeProperty,
         [System.Windows.Automation.ControlType]::ListItem)
-    return $List.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $condition)
-}
-
-function Get-AccessibleText {
-    param([Parameter(Mandatory = $true)][System.Windows.Automation.AutomationElement]$Root)
-
-    $parts = New-Object System.Collections.Generic.List[string]
-    try {
-        if (-not [string]::IsNullOrWhiteSpace($Root.Current.Name)) {
-            $parts.Add($Root.Current.Name)
-        }
-    }
-    catch [System.Windows.Automation.ElementNotAvailableException] {
-        return ''
-    }
-
-    $all = $Root.FindAll(
-        [System.Windows.Automation.TreeScope]::Descendants,
-        [System.Windows.Automation.Condition]::TrueCondition)
-    foreach ($element in $all) {
-        try {
-            $name = $element.Current.Name
-            if (-not [string]::IsNullOrWhiteSpace($name)) {
-                $parts.Add($name)
-            }
-        }
-        catch [System.Windows.Automation.ElementNotAvailableException] {
-            continue
-        }
-    }
-    return ($parts -join ' | ')
+    return $List.FindAll([System.Windows.Automation.TreeScope]::Descendants, $condition)
 }
 
 function Invoke-Element {
@@ -152,6 +122,7 @@ $process = Wait-Until -FailureMessage "Process '$ProcessName' did not expose a n
         Where-Object { $_.MainWindowHandle -ne [IntPtr]::Zero } |
         Select-Object -First 1
 }
+Write-Host "[ux-smoke] Native process exposed a main window."
 
 $windowHandle = $process.MainWindowHandle
 $root = [System.Windows.Automation.AutomationElement]::FromHandle($windowHandle)
@@ -181,7 +152,7 @@ if (-not [XueqingWindowNativeMethods]::SetWindowPos(
     $SWP_NOMOVE)) {
     throw "SetWindowPos failed with Win32 error $([Runtime.InteropServices.Marshal]::GetLastWin32Error())."
 }
-Write-Host "Native UX pressure window: ${targetWidthDips}x${targetHeightDips} DIP at ${dpi} DPI (${targetWidthPixels}x${targetHeightPixels} px)."
+Write-Host "[ux-smoke] Pressure window: ${targetWidthDips}x${targetHeightDips} DIP at ${dpi} DPI (${targetWidthPixels}x${targetHeightPixels} px)."
 Start-Sleep -Milliseconds 500
 
 $today = Find-ByAutomationId -Root $root -AutomationId 'TodayNavigation'
@@ -194,6 +165,7 @@ if ($null -eq $studentsNav) {
     throw 'Students navigation item is not exposed to UI Automation.'
 }
 Invoke-Element -Element $studentsNav
+Write-Host '[ux-smoke] Navigated to Students.'
 
 $searchBox = Wait-Until -FailureMessage 'Student search box did not appear after navigating to Students.' -Condition {
     Find-ByAutomationId -Root $root -AutomationId 'StudentSearchBox'
@@ -205,30 +177,41 @@ if (-not $searchBox.TryGetCurrentPattern([System.Windows.Automation.ValuePattern
 }
 ([System.Windows.Automation.ValuePattern]$valuePattern).SetValue('S000777')
 
-# Do not assume a TextBlock has a stable UIA Name. WinUI virtualizes and
-# replaces row descendants while filtering. Re-acquire the ListView and select
-# the one live ListItem that remains after the unique student-code search.
-$studentItem = Wait-Until -FailureMessage 'Filtered student S000777 did not materialize as a native ListItem.' -Condition {
+Wait-Until -FailureMessage 'Student search box did not retain the requested unique student code.' -Condition {
+    $liveSearch = Find-ByAutomationId -Root $root -AutomationId 'StudentSearchBox'
+    if ($null -eq $liveSearch) {
+        return $false
+    }
+    $liveValue = $null
+    if (-not $liveSearch.TryGetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern, [ref]$liveValue)) {
+        return $false
+    }
+    return ([System.Windows.Automation.ValuePattern]$liveValue).Current.Value -eq 'S000777'
+} | Out-Null
+Write-Host '[ux-smoke] Unique student-code search accepted.'
+
+# The query S000777 is unique in the deterministic 1,000-student fixture. Do
+# not depend on TextBlock UIA Name values: WinUI virtualizes row descendants and
+# those names are not a stable contract. Instead require the native ListView to
+# converge to exactly one live ListItem after the unique query, then select it.
+$studentItem = Wait-Until -FailureMessage 'Unique S000777 search did not converge to exactly one native ListItem.' -Condition {
     $liveList = Find-ByAutomationId -Root $root -AutomationId 'StudentList'
     if ($null -eq $liveList) {
         return $null
     }
-    $item = Find-FirstListItem -List $liveList
-    if ($null -eq $item) {
+    $items = Find-ListItems -List $liveList
+    if ($items.Count -ne 1) {
         return $null
     }
-    $accessibleText = Get-AccessibleText -Root $item
-    if ($accessibleText -notlike '*S000777*') {
-        return $null
-    }
-    Write-Host "Filtered native student row: $accessibleText"
-    return $item
+    return $items[0]
 }
+Write-Host '[ux-smoke] Filtered StudentList exposes exactly one native ListItem.'
 Invoke-Element -Element $studentItem
 
-$backButton = Wait-Until -FailureMessage 'Compact Student Detail did not expose the return action.' -Condition {
+$backButton = Wait-Until -FailureMessage 'Compact Student Detail did not expose the return action after selecting the filtered student.' -Condition {
     Find-ByAutomationId -Root $root -AutomationId 'BackToStudentList'
 }
+Write-Host '[ux-smoke] Compact Student Detail opened.'
 Invoke-Element -Element $backButton
 
 $searchBoxAfterReturn = Wait-Until -FailureMessage 'Student list was not restored after returning from detail.' -Condition {
@@ -241,17 +224,21 @@ if (-not $searchBoxAfterReturn.TryGetCurrentPattern([System.Windows.Automation.V
 if (([System.Windows.Automation.ValuePattern]$valueAfterReturn).Current.Value -ne 'S000777') {
     throw 'Returning from Student Detail lost the search context.'
 }
+Write-Host '[ux-smoke] Search context survived detail return.'
 
-$studentList = Find-ByAutomationId -Root $root -AutomationId 'StudentList'
-if ($null -eq $studentList) {
-    throw 'Restored Student list is not exposed to UI Automation.'
-}
-$focused = [System.Windows.Automation.AutomationElement]::FocusedElement
-if ($null -eq $focused) {
-    throw 'No focused native element was reported after returning from Student Detail.'
-}
-if (-not (Is-DescendantOf -Element $focused -Ancestor $studentList)) {
-    throw "Focus did not return to the Student list after detail close. Focused='$($focused.Current.AutomationId)'."
-}
+# Focus changes are asynchronous across the WinUI/UIA boundary. Re-acquire both
+# the focused element and the live list until the programmatic focus restoration
+# becomes observable instead of sampling once and creating a timing-only failure.
+Wait-Until -FailureMessage 'Focus did not return to the Student list after detail close.' -Condition {
+    $liveList = Find-ByAutomationId -Root $root -AutomationId 'StudentList'
+    if ($null -eq $liveList) {
+        return $false
+    }
+    $focused = [System.Windows.Automation.AutomationElement]::FocusedElement
+    if ($null -eq $focused) {
+        return $false
+    }
+    return Is-DescendantOf -Element $focused -Ancestor $liveList
+} | Out-Null
 
-Write-Host 'Windows native UX smoke passed: 800 DIP compact navigation, search, detail, context and focus restoration.'
+Write-Host 'Windows native UX smoke passed: 800 DIP compact navigation, unique search, detail, context and focus restoration.'
