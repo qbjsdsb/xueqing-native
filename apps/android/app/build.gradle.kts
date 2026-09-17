@@ -70,6 +70,11 @@ dependencies {
     implementation("androidx.room:room-ktx:$roomVersion")
     ksp("androidx.room:room-compiler:$roomVersion")
 
+    // Keep the accepted Room 2 / API 36 baseline. SQLCipher's current Android
+    // Community artifact integrates with Room 2 through SupportOpenHelperFactory.
+    implementation("net.zetetic:sqlcipher-android:4.19.0@aar")
+    implementation("androidx.sqlite:sqlite:2.7.0")
+
     debugImplementation("androidx.compose.ui:ui-tooling")
 
     testImplementation("junit:junit:4.13.2")

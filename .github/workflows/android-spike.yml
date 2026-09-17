@@ -70,6 +70,10 @@ jobs:
           grep -Eq "compileSdk[[:space:]]*=[[:space:]]*$stable_api" "$app_build"
           grep -Eq "targetSdk[[:space:]]*=[[:space:]]*$stable_api" "$app_build"
           grep -Fq "platforms;android-$stable_api" "$workflow"
+          grep -Fq 'val roomVersion = "2.8.5"' "$app_build"
+          grep -Fq 'val lifecycleVersion = "2.10.0"' "$app_build"
+          grep -Fq 'net.zetetic:sqlcipher-android:4.19.0@aar' "$app_build"
+          grep -Fq 'androidx.sqlite:sqlite:2.7.0' "$app_build"
 
           if grep -Eq "(compileSdk|targetSdk)[[:space:]]*=[[:space:]]*$next_api|compileSdkPreview|targetSdkPreview" "$app_build"; then
             echo 'Preview/API 37 SDK configuration is not allowed in the stable bootstrap.' >&2
@@ -85,6 +89,24 @@ jobs:
             echo 'Dynamic or prerelease build/plugin versions are not allowed in the stable bootstrap.' >&2
             exit 1
           fi
+
+          if grep -R -n 'androidx\.security\.crypto' apps/android/app/src "$app_build"; then
+            echo 'Deprecated androidx.security.crypto APIs are not allowed in the encrypted baseline.' >&2
+            exit 1
+          fi
+
+      - name: Verify encrypted Durable Intent backup exclusions
+        shell: bash
+        run: |
+          set -euo pipefail
+          manifest='apps/android/app/src/main/AndroidManifest.xml'
+          backup='apps/android/app/src/main/res/xml/backup_rules.xml'
+          extraction='apps/android/app/src/main/res/xml/data_extraction_rules.xml'
+          grep -Fq 'android:fullBackupContent="@xml/backup_rules"' "$manifest"
+          grep -Fq 'android:dataExtractionRules="@xml/data_extraction_rules"' "$manifest"
+          grep -Fq '<exclude domain="database" path="." />' "$backup"
+          test "$(grep -Fc '<exclude domain="database" path="." />' "$extraction")" -eq 2
+          grep -Fq 'context.noBackupFilesDir' apps/android/app/src/main/java/com/xueqing/app/durability/EncryptedDatabaseKeyManager.kt
 
       - name: Validate Android AAR metadata
         shell: bash
@@ -201,7 +223,7 @@ jobs:
           "$adb" shell input keyevent 82 || true
           "$adb" devices -l
 
-      - name: Run draft and Quick Capture instrumentation tests
+      - name: Run encrypted draft and Quick Capture instrumentation tests
         shell: bash
         run: |
           set -euo pipefail
@@ -246,7 +268,7 @@ jobs:
           PY
           find apps/android/app/build/outputs/androidTest-results/connected/debug -name 'TEST-*.xml' -type f -exec cp {} "$diagnostic_dir" \; 2>/dev/null || true
 
-      - name: Verify durability instrumentation tests executed
+      - name: Verify encrypted durability instrumentation tests executed
         shell: bash
         run: |
           set -euo pipefail
@@ -257,8 +279,8 @@ jobs:
           files = glob.glob('apps/android/app/build/outputs/androidTest-results/connected/debug/**/TEST-*.xml', recursive=True)
           test_count = sum(int(ET.parse(path).getroot().attrib.get('tests', '0')) for path in files)
           print(f'Android instrumentation tests executed: {test_count}')
-          if test_count < 6:
-              raise SystemExit('Expected at least six Android draft and Quick Capture instrumentation tests.')
+          if test_count < 14:
+              raise SystemExit('Expected at least fourteen Android encrypted-draft and Quick Capture instrumentation tests.')
           PY
 
       - name: Install APKs and seed known draft without uninstalling target app
@@ -295,7 +317,7 @@ jobs:
             "$adb" exec-out cat /sdcard/xueqing-window.xml > "$RUNNER_TEMP/xueqing-window.xml" || true
             if grep -Fq "$sentinel" "$RUNNER_TEMP/xueqing-window.xml"; then
               grep -Fq '已恢复本机草稿' "$RUNNER_TEMP/xueqing-window.xml"
-              echo 'Process-death recovery proved: persisted draft is visible after force-stop and relaunch.'
+              echo 'Process-death recovery proved: encrypted persisted draft is visible after force-stop and relaunch.'
               exit 0
             fi
             sleep 1
@@ -318,11 +340,11 @@ jobs:
         shell: bash
         run: cat "$RUNNER_TEMP/xueqing-emulator.log" || true
 
-      - name: Upload Android durability diagnostics
-        if: failure()
+      - name: Upload Android encrypted-durability diagnostics
+        if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: android-draft-durability-diagnostics
+          name: android-encrypted-durability-diagnostics
           path: artifacts/android-draft-durability/diagnostics
           if-no-files-found: warn
           retention-days: 7
