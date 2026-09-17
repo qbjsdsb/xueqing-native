@@ -4,19 +4,66 @@ import android.content.Context
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import java.io.File
 import net.zetetic.database.sqlcipher.SupportOpenHelperFactory
 
 @Database(
-    entities = [DraftEntity::class, DraftScopeStateEntity::class],
-    version = 1,
+    entities = [
+        DraftEntity::class,
+        DraftScopeStateEntity::class,
+        ObservationOutboxEntity::class,
+    ],
+    version = 2,
     exportSchema = true,
 )
 abstract class DraftDatabase : RoomDatabase() {
     abstract fun draftDao(): DraftDao
+    abstract fun durableIntentDao(): DurableIntentDao
 
     companion object {
         const val DATABASE_NAME = "xueqing-durable-intent.db"
+
+        val MIGRATION_1_2 = object : Migration(1, 2) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `observation_outbox` (
+                        `local_sequence` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `operation_id` TEXT NOT NULL,
+                        `command_type` TEXT NOT NULL,
+                        `scope_key` TEXT NOT NULL,
+                        `environment_id` TEXT NOT NULL,
+                        `app_user_id` TEXT NOT NULL,
+                        `organization_id` TEXT NOT NULL,
+                        `payload_json` TEXT NOT NULL,
+                        `queue_status` TEXT NOT NULL,
+                        `attempt_count` INTEGER NOT NULL,
+                        `last_error_class` TEXT,
+                        `next_attempt_at_epoch_millis` INTEGER NOT NULL,
+                        `lease_id` TEXT,
+                        `lease_expires_at_epoch_millis` INTEGER,
+                        `acknowledged_at_epoch_millis` INTEGER,
+                        `server_receipt_json` TEXT,
+                        `created_at_epoch_millis` INTEGER NOT NULL
+                    )
+                    """.trimIndent(),
+                )
+                db.execSQL(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS `index_observation_outbox_operation_id` ON `observation_outbox` (`operation_id`)",
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_observation_outbox_queue_status_next_attempt_at_epoch_millis` ON `observation_outbox` (`queue_status`, `next_attempt_at_epoch_millis`)",
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_observation_outbox_environment_id_app_user_id_local_sequence` ON `observation_outbox` (`environment_id`, `app_user_id`, `local_sequence`)",
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_observation_outbox_scope_key` ON `observation_outbox` (`scope_key`)",
+                )
+            }
+        }
 
         @Volatile
         private var instance: DraftDatabase? = null
@@ -41,6 +88,7 @@ abstract class DraftDatabase : RoomDatabase() {
                 databaseFile.absolutePath,
             )
                 .openHelperFactory(factory)
+                .addMigrations(MIGRATION_1_2)
                 .build()
         }
 
