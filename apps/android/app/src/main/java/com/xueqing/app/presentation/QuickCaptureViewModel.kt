@@ -117,13 +117,19 @@ class QuickCaptureViewModel(
         text: String,
         targetRevision: Long,
     ) {
+        // Bind every queued write to the session/epoch that existed when the
+        // write was scheduled. A later discard may replace `session`; the old
+        // write must never silently adopt that new epoch. The DAO epoch check
+        // then provides a second barrier even if revision logic is changed.
+        val scheduledSession = session
+
         viewModelScope.launch {
             saveMutex.withLock {
                 if (targetRevision != revision) {
                     return@withLock
                 }
 
-                val currentSession = session ?: run {
+                val currentSession = scheduledSession ?: run {
                     if (targetRevision == revision) {
                         _uiState.update { current -> current.copy(status = LocalDraftStatus.PersistenceFailed) }
                     }
