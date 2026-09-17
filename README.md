@@ -96,17 +96,17 @@ Teaching Evidence、Intervention、Assessment、Quick Capture 等教学事实必
 
 公开仓库只能使用虚构数据、脱敏示例和无 Secret 配置。真实学生、教师、家长数据、访问令牌、service role key、数据库密码、临时凭据、生产附件均不得进入 GitHub。
 
-Local-first 引入新的本地数据安全风险，因此离线授权期限、本地缓存范围、加密方式、退出/停用清理和附件留存策略必须先通过安全 Spike 冻结。
+Local-first 引入新的本地数据安全风险，因此离线授权期限、本地缓存范围、加密方式、退出/停用清理和附件留存策略必须先通过安全 Gate 冻结。
 
-## 当前阶段：Native UX + Client Durability Spikes
+## 当前阶段：Android Security + Backend Contracts
 
 Phase 0 已完成并接受 **Architecture Baseline v1**。广泛架构研究已经停止；后续方向变化必须由新的实验/生产证据和 superseding ADR 驱动。
 
-Windows 的架构与真实 LocalState/MSIX 基线已经通过：真实 WinUI App 已在云端完成 locked restore、构建、MSIX 签名/安装、SQLite3MC + DPAPI 加密 Durable Intent、重启、v1 → v2 原位升级、同一安装/数据库/operation 连续性与卸载清理验证。Windows 下一道门是 **Native UX Prototype**：用确定性虚构数据把 Today、Students、Learning Case 与 Organization Management 的 WinUI 原生交互、布局、可访问性和键鼠效率变成可执行证据，再冻结 UX v1。
+Windows 的架构、加密 LocalState/MSIX 与 **Native UX Gate** 已经完成。真实 WinUI App 已在云端完成 locked restore、构建、MSIX 签名/安装、SQLite3MC + DPAPI 加密 Durable Intent、重启、v1 → v2 原位升级，以及 800 / 960 / 1024 / 1280 / 1600 DIP、800×480、键盘/焦点、Light/Dark、系统 High Contrast 和 100 / 150 / 200 / 225% text scale 的真实 UIA 验证。Issue #11 中真实中文 IME composition 与物理 mouse hover 仍保留为设备/人工证据项；Windows Prototype 线不再继续扩张。
 
-Android 已完成稳定 API 36 的 Kotlin + Compose bootstrap，并正在收口 **Room + Draft Engine + process-death recovery** Gate：候选实现已把草稿按 environment / app-user / organization / Student / subject / context 隔离，使用事务 epoch barrier 防止显式丢弃后旧 autosave 复活，并通过 Activity 重建、前后台切换、真实 `force-stop` 后 UI 恢复和 Room schema drift 的云端设备验证。该 Gate 只证明本机文本草稿的耐久性；Android 本地加密/Keystore、Outbox/WorkManager、附件暂存、生产身份 scope 与任何服务端“保存成功”语义仍是后续独立 Gate。
+Android 已完成稳定 API 36 的 Kotlin + Compose bootstrap，并完成 **Room + Draft Engine + process-death recovery** Gate。PR #18 已证明草稿按 environment / app-user / organization / Student / subject / context 隔离，事务 epoch barrier 可阻止显式丢弃后旧 autosave 复活，并通过 Activity 重建、前后台切换、真实 `force-stop` 后 UI 恢复和 Room schema drift 的云端设备验证。该结论只代表 Draft Durability 已完成；完整 Android Issue #12 仍未完成，本地加密/Keystore、IME/TalkBack、Outbox/WorkManager、附件与其他真实产品路径继续由后续 Gate/Vertical Slice 证明。
 
-Backend 仍处于 PostgreSQL-first / Supabase development-provider 的 Spike 前状态。客户端上述基础证据稳定后，再进入 Backend/API-schema + Provider Conformance；这些 Gate 通过后才开始第一条正式学生业务 Vertical Slice。
+下一阶段只允许两条 feature 主线并行：**Android encrypted-storage baseline** 与 **Backend CreateObservation contract/API**。两条线都绿后进入 Provider Adapter conformance，然后立即建设第一条文本 Quick Capture → Observation Vertical Slice；不再为了“完成 Issue”继续铺独立 Demo。
 
 动态工程状态以 `docs/project/PROJECT_STATE.yaml` 为准。
 
