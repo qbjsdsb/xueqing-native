@@ -8,14 +8,7 @@ public static class UxPrototypeFixtureFactory
 
     public static IReadOnlyList<TodayActionItem> CreateTodayActions()
     {
-        var states = new[]
-        {
-            PrototypeSaveState.Ready,
-            PrototypeSaveState.Saving,
-            PrototypeSaveState.SaveFailed,
-            PrototypeSaveState.PendingSync,
-            PrototypeSaveState.ReadOnly,
-        };
+        var states = Enum.GetValues<PrototypeInteractionState>();
 
         var result = new List<TodayActionItem>(28);
         for (var index = 0; index < 28; index++)
@@ -51,7 +44,7 @@ public static class UxPrototypeFixtureFactory
                 Title: title,
                 Bucket: bucket,
                 DueDate: dueDate,
-                SaveState: states[index % states.Length]));
+                InteractionState: states[index % states.Length]));
         }
 
         return result;

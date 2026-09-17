@@ -9,7 +9,7 @@ namespace Xueqing.Windows.Core.Tests;
 public sealed class UxPrototypeFixtureTests
 {
     [TestMethod]
-    public void Today_fixture_has_one_bucket_per_action_and_all_hostile_states()
+    public void Today_fixture_has_one_bucket_per_action_and_all_interaction_contract_states()
     {
         var actions = UxPrototypeFixtureFactory.CreateTodayActions();
 
@@ -20,10 +20,46 @@ public sealed class UxPrototypeFixtureTests
             Enum.GetValues<TodayActionBucket>(),
             actions.Select(action => action.Bucket).Distinct().ToArray());
         CollectionAssert.AreEquivalent(
-            Enum.GetValues<PrototypeSaveState>(),
-            actions.Select(action => action.SaveState).Distinct().ToArray());
+            Enum.GetValues<PrototypeInteractionState>(),
+            actions.Select(action => action.InteractionState).Distinct().ToArray());
         Assert.IsTrue(actions.Any(action => action.DueDate is null));
         Assert.IsTrue(actions.Any(action => action.Title.Length > 40));
+
+        var labels = actions.Select(action => action.InteractionStateLabel).ToArray();
+        Assert.IsFalse(labels.Any(label => label.Contains("保存成功", StringComparison.Ordinal)));
+        Assert.IsFalse(labels.Any(label => label.Contains("本地版本", StringComparison.Ordinal)));
+        Assert.IsFalse(labels.Any(label => label.Contains("云端版本", StringComparison.Ordinal)));
+
+        var committed = actions.First(action => action.InteractionState == PrototypeInteractionState.Committed);
+        Assert.IsTrue(committed.AuthoritativeCompletionKnown);
+        Assert.AreEqual(string.Empty, committed.InteractionStateLabel, "Normal authoritative success should stay quiet.");
+
+        var localDraft = actions.First(action => action.InteractionState == PrototypeInteractionState.LocalDraftSafe);
+        Assert.IsFalse(localDraft.AuthoritativeCompletionKnown);
+        Assert.IsTrue(localDraft.PreservesRecoverableLocalContent);
+        StringAssert.Contains(localDraft.InteractionStateLabel, "本机");
+        StringAssert.Contains(localDraft.InteractionStateLabel, "尚未提交");
+
+        var unknown = actions.First(action => action.InteractionState == PrototypeInteractionState.ResultUnknown);
+        Assert.IsTrue(unknown.RequiresSameOperationIdentity);
+        Assert.IsFalse(unknown.AuthoritativeCompletionKnown);
+        Assert.IsTrue(unknown.PreservesRecoverableLocalContent);
+        StringAssert.Contains(unknown.InteractionStateLabel, "确认结果");
+
+        var rejected = actions.First(action => action.InteractionState == PrototypeInteractionState.ServerRejected);
+        Assert.IsTrue(rejected.PreservesRecoverableLocalContent);
+        StringAssert.Contains(rejected.InteractionStateLabel, "本机内容仍保留");
+
+        var conflict = actions.First(action => action.InteractionState == PrototypeInteractionState.VersionConflict);
+        Assert.IsTrue(conflict.PreservesRecoverableLocalContent);
+        StringAssert.Contains(conflict.InteractionStateLabel, "本机草稿仍保留");
+
+        var permissionReduced = actions.First(action => action.InteractionState == PrototypeInteractionState.PermissionReduced);
+        StringAssert.Contains(permissionReduced.InteractionStateLabel, "无法继续提交");
+
+        var offlineAllowed = actions.First(action => action.InteractionState == PrototypeInteractionState.OfflineAccessAllowed);
+        var offlineUnavailable = actions.First(action => action.InteractionState == PrototypeInteractionState.OfflineAccessUnavailable);
+        Assert.AreNotEqual(offlineAllowed.InteractionStateLabel, offlineUnavailable.InteractionStateLabel);
     }
 
     [TestMethod]

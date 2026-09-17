@@ -47,7 +47,7 @@
                         <StackPanel Grid.Column="1" Margin="8,0,20,0" Spacing="3">
                             <TextBlock FontWeight="SemiBold" Text="{Binding Title}" TextWrapping="Wrap" />
                             <TextBlock Opacity="0.72" Text="{Binding StudentDisplayName}" />
-                            <TextBlock FontSize="12" Opacity="0.62" Text="{Binding SaveStateLabel}" TextWrapping="Wrap" />
+                            <TextBlock FontSize="12" Opacity="0.62" Text="{Binding InteractionStateLabel}" TextWrapping="Wrap" />
                         </StackPanel>
 
                         <TextBlock
