@@ -70,6 +70,8 @@ The accepted matrix remains intentionally conservative:
 - compile / target SDK: `36`;
 - minimum SDK: `26` for the current native baseline.
 
+The SQLCipher 4.17.0 + AndroidX SQLite 2.7.0 combination is accepted only with the API 36 AAR/build/device evidence from this encryption gate; it is not an assumed compatibility claim.
+
 Do not opportunistically upgrade Compose, Room, Lifecycle, AGP, Kotlin or API level inside security/product feature PRs. API 37 / newer AGP and later SQLCipher upgrades belong in a separate toolchain gate.
 
 ## Package boundary
