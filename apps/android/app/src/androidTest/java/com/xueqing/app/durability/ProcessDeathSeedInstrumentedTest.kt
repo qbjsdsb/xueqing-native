@@ -3,6 +3,8 @@ package com.xueqing.app.durability
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.xueqing.app.BuildVariantQuickCaptureBootstrap
+import com.xueqing.app.application.bootstrap.PersonalBootstrapResult
 import com.xueqing.app.presentation.QuickCaptureViewModel
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
@@ -16,7 +18,16 @@ class ProcessDeathSeedInstrumentedTest {
     fun leavesKnownDraftForForceStopRestartVerification() = runBlocking {
         val context = ApplicationProvider.getApplicationContext<Context>()
         val store = DraftStore(DraftDatabase.get(context).draftDao())
-        val scope = QuickCaptureViewModel.FIXTURE_SCOPE
+        val bootstrap = BuildVariantQuickCaptureBootstrap.remote().fetch() as PersonalBootstrapResult.Loaded
+        val teachingContext = bootstrap.bootstrap.teachingContexts.single()
+        val scope = DraftScope(
+            environmentId = BuildVariantQuickCaptureBootstrap.ENVIRONMENT_ID,
+            appUserId = bootstrap.bootstrap.actor.appUserId.toString(),
+            organizationId = teachingContext.organizationId.toString(),
+            studentId = teachingContext.studentId.toString(),
+            subjectId = teachingContext.subjectProfileId.toString(),
+            contextId = QuickCaptureViewModel.QUICK_CAPTURE_CONTEXT_ID,
+        )
 
         val existing = store.open(scope)
         store.discard(existing)
