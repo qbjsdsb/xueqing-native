@@ -113,6 +113,14 @@ jobs:
               raise SystemExit('Expected at least one executed Android unit test.')
           PY
 
+      - name: Verify committed Room schema matches generated schema
+        shell: bash
+        run: |
+          set -euo pipefail
+          schema='apps/android/app/schemas/com.xueqing.app.durability.DraftDatabase/1.json'
+          test -f "$schema"
+          git diff --exit-code -- apps/android/app/schemas
+
       - name: Run Android lint
         shell: bash
         run: |
@@ -214,13 +222,22 @@ jobs:
               raise SystemExit('Expected at least six Android draft and Quick Capture instrumentation tests.')
           PY
 
-      - name: Seed known draft after test suite
+      - name: Install APKs and seed known draft without uninstalling target app
         shell: bash
         run: |
           set -euo pipefail
-          gradle -p apps/android :app:connectedDebugAndroidTest \
-            -Pandroid.testInstrumentationRunnerArguments.class=com.xueqing.app.durability.ProcessDeathSeedInstrumentedTest \
-            --no-daemon --stacktrace
+          adb="$ANDROID_HOME/platform-tools/adb"
+          app_apk='apps/android/app/build/outputs/apk/debug/app-debug.apk'
+          test_apk='apps/android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk'
+
+          test -f "$app_apk"
+          test -f "$test_apk"
+          "$adb" install -r "$app_apk"
+          "$adb" install -r "$test_apk"
+          "$adb" shell am instrument -w \
+            -e class com.xueqing.app.durability.ProcessDeathSeedInstrumentedTest \
+            com.xueqing.app.test/androidx.test.runner.AndroidJUnitRunner
+          "$adb" shell pm path com.xueqing.app
 
       - name: Prove force-stop and process restart recovery in UI
         shell: bash
@@ -248,12 +265,14 @@ jobs:
           cat "$RUNNER_TEMP/xueqing-window.xml" >&2 || true
           exit 1
 
-      - name: Print generated Room schema
+      - name: Verify generated Room schema remains committed
         if: always()
         shell: bash
         run: |
           set -euo pipefail
-          find apps/android/app/schemas -type f -maxdepth 3 -print -exec cat {} \; 2>/dev/null || true
+          schema='apps/android/app/schemas/com.xueqing.app.durability.DraftDatabase/1.json'
+          test -f "$schema"
+          git diff --exit-code -- apps/android/app/schemas
 
       - name: Print emulator log on failure
         if: failure()
