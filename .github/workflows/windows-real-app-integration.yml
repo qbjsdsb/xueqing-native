@@ -69,20 +69,25 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $packageName = 'Xueqing.Native.Development'
           $processName = 'Xueqing.Windows'
+          $diagnosticDirectory = Join-Path $env:GITHUB_WORKSPACE 'artifacts/windows-real-app-integration/diagnostics'
+          $transcriptPath = Join-Path $diagnosticDirectory 'native-ux-smoke.txt'
+          New-Item -ItemType Directory -Force -Path $diagnosticDirectory | Out-Null
+          Start-Transcript -Path $transcriptPath -Force | Out-Null
+
           $certificatePath = Join-Path $env:GITHUB_WORKSPACE 'artifacts/windows-real-app-integration/xueqing-native-real-app.cer'
           $packagePath = Get-ChildItem (Join-Path $env:GITHUB_WORKSPACE 'artifacts/windows-real-app-integration/v2') -Recurse -File -Filter *.msix |
             Where-Object { $_.FullName -notmatch '\\Dependencies\\' } |
             Select-Object -First 1
 
-          if ($null -eq $packagePath) {
-            throw 'Validated v2 MSIX was not found for the native UX smoke.'
-          }
-          if (-not (Test-Path $certificatePath)) {
-            throw 'Development certificate was not found for the native UX smoke.'
-          }
-
-          $certificate = Import-Certificate -FilePath $certificatePath -CertStoreLocation 'Cert:\LocalMachine\TrustedPeople'
           try {
+            if ($null -eq $packagePath) {
+              throw 'Validated v2 MSIX was not found for the native UX smoke.'
+            }
+            if (-not (Test-Path $certificatePath)) {
+              throw 'Development certificate was not found for the native UX smoke.'
+            }
+
+            $certificate = Import-Certificate -FilePath $certificatePath -CertStoreLocation 'Cert:\LocalMachine\TrustedPeople'
             Add-AppxPackage -Path $packagePath.FullName -ForceApplicationShutdown -ErrorAction Stop
             $package = Get-AppxPackage -Name $packageName -ErrorAction Stop
             $executable = Join-Path $package.InstallLocation "$processName.exe"
@@ -97,6 +102,7 @@ jobs:
             if ($null -ne $certificate) {
               Remove-Item "Cert:\LocalMachine\TrustedPeople\$($certificate.Thumbprint)" -Force -ErrorAction SilentlyContinue
             }
+            Stop-Transcript -ErrorAction SilentlyContinue | Out-Null
           }
 
       - name: Upload real-app integration diagnostics
