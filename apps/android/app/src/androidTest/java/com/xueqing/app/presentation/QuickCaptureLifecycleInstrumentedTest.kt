@@ -51,11 +51,18 @@ class QuickCaptureLifecycleInstrumentedTest {
     }
 
     @Test
-    fun discardedObservationDoesNotReturnAfterActivityRecreation() {
+    fun discardAfterLifecycleFlushDoesNotReturnAfterActivityRecreation() {
         openQuickCapture()
-        val text = "丢弃测试：这条文字必须被显式删除，Activity 重建后也不能复活。"
+        val text = "丢弃测试：生命周期 flush 之后显式删除，Activity 重建后也不能复活。"
 
         composeRule.onNodeWithTag("quick-capture-input").performTextReplacement(text)
+        awaitLocalSafe()
+
+        // Exercise the lifecycle flush path before the destructive barrier. A
+        // queued/finished flush must not weaken the later explicit discard.
+        composeRule.activityRule.scenario.moveToState(Lifecycle.State.CREATED)
+        composeRule.activityRule.scenario.moveToState(Lifecycle.State.RESUMED)
+        composeRule.onNodeWithTag("quick-capture-input").assertTextContains(text)
         awaitLocalSafe()
 
         composeRule.onNodeWithText("丢弃草稿").performClick()
