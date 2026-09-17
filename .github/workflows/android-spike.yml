@@ -113,6 +113,14 @@ jobs:
               raise SystemExit('Expected at least one executed Android unit test.')
           PY
 
+      - name: Verify committed Room schema matches generated schema
+        shell: bash
+        run: |
+          set -euo pipefail
+          schema='apps/android/app/schemas/com.xueqing.app.durability.DraftDatabase/1.json'
+          test -f "$schema"
+          git diff --exit-code -- apps/android/app/schemas
+
       - name: Run Android lint
         shell: bash
         run: |
@@ -124,3 +132,197 @@ jobs:
         run: |
           set -euo pipefail
           gradle -p apps/android :app:assembleDebug --no-daemon --stacktrace
+
+  durability-device:
+    name: android-draft-durability-device
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+
+      - name: Setup JDK 17
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Gradle 8.13
+        uses: gradle/actions/setup-gradle@0723195856401067f7a2779048b490ace7a47d7c
+        with:
+          gradle-version: '8.13'
+
+      - name: Install API 36 emulator image
+        shell: bash
+        run: |
+          set -euo pipefail
+          export ANDROID_AVD_HOME="$RUNNER_TEMP/android-avd"
+          sdkmanager="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          mkdir -p "$ANDROID_AVD_HOME"
+          "$sdkmanager" 'platform-tools' 'emulator' 'platforms;android-36' 'build-tools;35.0.0' 'system-images;android-36;google_apis;x86_64'
+          echo no | "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" create avd \
+            --force \
+            --name xueqing-ci \
+            --package 'system-images;android-36;google_apis;x86_64' \
+            --device pixel_6
+          "$ANDROID_HOME/emulator/emulator" -list-avds
+
+      - name: Boot emulator
+        shell: bash
+        run: |
+          set -euo pipefail
+          export ANDROID_AVD_HOME="$RUNNER_TEMP/android-avd"
+          adb="$ANDROID_HOME/platform-tools/adb"
+          if [ -e /dev/kvm ]; then
+            sudo chmod 666 /dev/kvm
+          fi
+          nohup "$ANDROID_HOME/emulator/emulator" \
+            -avd xueqing-ci \
+            -no-window \
+            -no-audio \
+            -no-boot-anim \
+            -gpu swiftshader_indirect \
+            -camera-back none \
+            -camera-front none \
+            > "$RUNNER_TEMP/xueqing-emulator.log" 2>&1 &
+
+          "$adb" wait-for-device
+          for attempt in $(seq 1 120); do
+            if [ "$("$adb" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = "1" ]; then
+              break
+            fi
+            if [ "$attempt" -eq 120 ]; then
+              cat "$RUNNER_TEMP/xueqing-emulator.log" >&2
+              exit 1
+            fi
+            sleep 2
+          done
+          "$adb" shell input keyevent 82 || true
+          "$adb" devices -l
+
+      - name: Run draft and Quick Capture instrumentation tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          gradle -p apps/android :app:connectedDebugAndroidTest --no-daemon --stacktrace
+
+      - name: Report instrumentation test results
+        if: always()
+        shell: bash
+        run: |
+          set -o pipefail
+          diagnostic_dir='artifacts/android-draft-durability/diagnostics'
+          mkdir -p "$diagnostic_dir"
+          python3 - <<'PY' | tee "$diagnostic_dir/instrumentation-summary.txt"
+          import glob
+          import xml.etree.ElementTree as ET
+
+          files = glob.glob('apps/android/app/build/outputs/androidTest-results/connected/debug/**/TEST-*.xml', recursive=True)
+          print(f'Instrumentation XML files: {len(files)}')
+          total = failures = errors = skipped = 0
+          for path in files:
+              root = ET.parse(path).getroot()
+              total += int(root.attrib.get('tests', '0'))
+              failures += int(root.attrib.get('failures', '0'))
+              errors += int(root.attrib.get('errors', '0'))
+              skipped += int(root.attrib.get('skipped', '0'))
+              for case in root.findall('.//testcase'):
+                  failure = case.find('failure')
+                  error = case.find('error')
+                  problem = failure if failure is not None else error
+                  if problem is None:
+                      continue
+                  name = case.attrib.get('name', '<unknown>')
+                  classname = case.attrib.get('classname', '<unknown>')
+                  message = problem.attrib.get('message', '')
+                  body = (problem.text or '').strip()
+                  print(f'FAILED {classname}.{name}')
+                  if message:
+                      print(f'MESSAGE: {message}')
+                  if body:
+                      print(body[:12000])
+          print(f'Instrumentation summary: tests={total}, failures={failures}, errors={errors}, skipped={skipped}')
+          PY
+          find apps/android/app/build/outputs/androidTest-results/connected/debug -name 'TEST-*.xml' -type f -exec cp {} "$diagnostic_dir" \; 2>/dev/null || true
+
+      - name: Verify durability instrumentation tests executed
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import glob
+          import xml.etree.ElementTree as ET
+
+          files = glob.glob('apps/android/app/build/outputs/androidTest-results/connected/debug/**/TEST-*.xml', recursive=True)
+          test_count = sum(int(ET.parse(path).getroot().attrib.get('tests', '0')) for path in files)
+          print(f'Android instrumentation tests executed: {test_count}')
+          if test_count < 6:
+              raise SystemExit('Expected at least six Android draft and Quick Capture instrumentation tests.')
+          PY
+
+      - name: Install APKs and seed known draft without uninstalling target app
+        shell: bash
+        run: |
+          set -euo pipefail
+          adb="$ANDROID_HOME/platform-tools/adb"
+          app_apk='apps/android/app/build/outputs/apk/debug/app-debug.apk'
+          test_apk='apps/android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk'
+
+          test -f "$app_apk"
+          test -f "$test_apk"
+          "$adb" install -r "$app_apk"
+          "$adb" install -r "$test_apk"
+          "$adb" shell am instrument -w \
+            -e class com.xueqing.app.durability.ProcessDeathSeedInstrumentedTest \
+            com.xueqing.app.test/androidx.test.runner.AndroidJUnitRunner
+          "$adb" shell pm path com.xueqing.app
+
+      - name: Prove force-stop and process restart recovery in UI
+        shell: bash
+        run: |
+          set -euo pipefail
+          adb="$ANDROID_HOME/platform-tools/adb"
+          sentinel='进程重启证据：这条课堂观察必须从 Room 恢复。'
+
+          "$adb" shell am force-stop com.xueqing.app
+          "$adb" shell am start -W \
+            -n com.xueqing.app/.MainActivity \
+            --ez com.xueqing.app.extra.OPEN_QUICK_CAPTURE true
+
+          for attempt in $(seq 1 30); do
+            "$adb" shell uiautomator dump /sdcard/xueqing-window.xml >/dev/null 2>&1 || true
+            "$adb" exec-out cat /sdcard/xueqing-window.xml > "$RUNNER_TEMP/xueqing-window.xml" || true
+            if grep -Fq "$sentinel" "$RUNNER_TEMP/xueqing-window.xml"; then
+              grep -Fq '已恢复本机草稿' "$RUNNER_TEMP/xueqing-window.xml"
+              echo 'Process-death recovery proved: persisted draft is visible after force-stop and relaunch.'
+              exit 0
+            fi
+            sleep 1
+          done
+
+          cat "$RUNNER_TEMP/xueqing-window.xml" >&2 || true
+          exit 1
+
+      - name: Verify generated Room schema remains committed
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          schema='apps/android/app/schemas/com.xueqing.app.durability.DraftDatabase/1.json'
+          test -f "$schema"
+          git diff --exit-code -- apps/android/app/schemas
+
+      - name: Print emulator log on failure
+        if: failure()
+        shell: bash
+        run: cat "$RUNNER_TEMP/xueqing-emulator.log" || true
+
+      - name: Upload Android durability diagnostics
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: android-draft-durability-diagnostics
+          path: artifacts/android-draft-durability/diagnostics
+          if-no-files-found: warn
+          retention-days: 7
