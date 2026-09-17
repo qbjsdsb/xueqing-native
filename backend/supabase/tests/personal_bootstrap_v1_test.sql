@@ -39,57 +39,53 @@ select set_config('request.jwt.claim.sub', 'a0000000-0000-0000-0000-000000000001
 select set_config('request.jwt.claim.role', 'authenticated', true);
 select set_config('request.jwt.claims', '{"sub":"a0000000-0000-0000-0000-000000000001","role":"authenticated"}', true);
 set local role authenticated;
-create temporary table bootstrap_teacher_a as
-select public.get_personal_bootstrap_v1() as payload;
-reset role;
 
 select is(
-    (select payload ->> 'contract' from bootstrap_teacher_a),
+    public.get_personal_bootstrap_v1() ->> 'contract',
     'personal_bootstrap_v1',
     'projection advertises the frozen v1 contract'
 );
 select is(
-    (select payload #>> '{actor,app_user_id}' from bootstrap_teacher_a),
+    public.get_personal_bootstrap_v1() #>> '{actor,app_user_id}',
     '10000000-0000-0000-0000-000000000001',
     'actor application id is derived from the authenticated subject'
 );
 select is(
-    (select payload #>> '{actor,display_name}' from bootstrap_teacher_a),
+    public.get_personal_bootstrap_v1() #>> '{actor,display_name}',
     '虚构教师甲',
     'actor display name is returned from application identity'
 );
 select is(
-    (select pg_catalog.jsonb_array_length(payload -> 'organizations') from bootstrap_teacher_a),
+    pg_catalog.jsonb_array_length(public.get_personal_bootstrap_v1() -> 'organizations'),
     2,
     'Teacher A sees both active organization memberships'
 );
 select is(
-    (select pg_catalog.jsonb_array_length(payload -> 'teaching_contexts') from bootstrap_teacher_a),
+    pg_catalog.jsonb_array_length(public.get_personal_bootstrap_v1() -> 'teaching_contexts'),
     1,
     'Teacher A sees only the one currently assigned teaching context'
 );
 select is(
-    (select payload #>> '{teaching_contexts,0,assignment_id}' from bootstrap_teacher_a),
+    public.get_personal_bootstrap_v1() #>> '{teaching_contexts,0,assignment_id}',
     '50000000-0000-0000-0000-000000000001',
     'teaching context returns the real assignment id required by CreateObservation'
 );
 select is(
-    (select payload #>> '{teaching_contexts,0,subject_key}' from bootstrap_teacher_a),
+    public.get_personal_bootstrap_v1() #>> '{teaching_contexts,0,subject_key}',
     'chinese',
     'teaching context returns its active subject key'
 );
+reset role;
 
 select set_config('request.jwt.claim.sub', 'a0000000-0000-0000-0000-000000000002', true);
 select set_config('request.jwt.claims', '{"sub":"a0000000-0000-0000-0000-000000000002","role":"authenticated"}', true);
 set local role authenticated;
-create temporary table bootstrap_teacher_b as
-select public.get_personal_bootstrap_v1() as payload;
-reset role;
 select is(
-    (select pg_catalog.jsonb_array_length(payload -> 'teaching_contexts') from bootstrap_teacher_b),
+    pg_catalog.jsonb_array_length(public.get_personal_bootstrap_v1() -> 'teaching_contexts'),
     0,
     'active teaching-capable member without assignment receives no teaching context'
 );
+reset role;
 
 update public.app_users
 set enabled = false
