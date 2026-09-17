@@ -19,6 +19,8 @@ public sealed partial class StudentsView : UserControl
 
         if (mode == WindowLayoutMode.Expanded)
         {
+            Grid.SetColumn(ListPane, 0);
+            Grid.SetColumn(DetailPane, 1);
             ListColumn.Width = new GridLength(360);
             DetailColumn.Width = new GridLength(1, GridUnitType.Star);
             ListPane.Visibility = Visibility.Visible;
@@ -28,7 +30,7 @@ public sealed partial class StudentsView : UserControl
         }
 
         ListColumn.Width = new GridLength(1, GridUnitType.Star);
-        DetailColumn.Width = new GridLength(1, GridUnitType.Star);
+        DetailColumn.Width = new GridLength(0);
         ShowListOnly();
     }
 
@@ -48,16 +50,18 @@ public sealed partial class StudentsView : UserControl
 
     private void ShowListOnly()
     {
+        Grid.SetColumn(ListPane, 0);
+        Grid.SetColumn(DetailPane, 1);
         ListPane.Visibility = Visibility.Visible;
         DetailPane.Visibility = Visibility.Collapsed;
-        Grid.SetColumn(ListPane, 0);
+        BackToListButton.Visibility = Visibility.Collapsed;
     }
 
     private void ShowDetailOnly()
     {
+        Grid.SetColumn(DetailPane, 0);
         ListPane.Visibility = Visibility.Collapsed;
         DetailPane.Visibility = Visibility.Visible;
-        Grid.SetColumn(DetailPane, 0);
         BackToListButton.Visibility = Visibility.Visible;
     }
 }
