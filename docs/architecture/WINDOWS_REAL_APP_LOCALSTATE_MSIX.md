@@ -1,12 +1,23 @@
 # Windows Real-App LocalState + MSIX Integration
 
-Status: implementation gate in progress.
+Status: **accepted on Phase 1 Windows baseline**.
 
-This gate moves the packaging and encrypted-local-data evidence from an isolated probe into the real `Xueqing.Windows` application without adding product features.
+This gate moved the packaging and encrypted-local-data evidence from an isolated probe into the real `Xueqing.Windows` application without adding product features.
 
-## Scope
+## Accepted evidence
 
-The real Windows application must prove that it can:
+Final PR #9 head `f5deb9db8d468a43f904610e841049634c13e688` passed all required exact-head gates:
+
+- Foundation — run `35147322328` / #105;
+- Windows Spike — run `35147322438` / #68;
+- Windows Real App Integration — run `35147322445` / #20;
+- Real App job `104966672589` passed locked encrypted-infrastructure restore, restore/build from the committed lock graph, and `Build, sign, install, upgrade and validate real app`.
+
+PR #9 was then merged to `main` as `4cd122e59ceb5274f512f177eda906e7f876a0a3`. The accepted implementation preserves DPAPI `CurrentUser`, SQLite3MC encryption and Durable Intent semantics.
+
+## Scope proved by this gate
+
+The real Windows application proved that it can:
 
 - build as an x64 WinUI 3 MSIX using the already-proven self-contained Windows App SDK path;
 - reference the production-shaped `Xueqing.Windows.Infrastructure` project;
@@ -49,4 +60,4 @@ The package identity and reused probe artwork in this gate are development-only 
 
 ## Lock discipline
 
-Adding Infrastructure to the real app changes its NuGet graph. The first PR run may use a narrowly scoped Windows-runner bootstrap workflow to regenerate only `apps/windows/src/Xueqing.Windows/packages.lock.json`. Before acceptance, the workflow must return to read-only permissions and `--locked-mode`, and the exact final head must pass the real install/upgrade gate.
+The real app lock graph is committed and CI uses read-only permissions plus locked restore. Any future dependency change that alters this graph requires fresh exact-head evidence; the accepted gate must not be weakened back to a bootstrap/write-permission workflow.
