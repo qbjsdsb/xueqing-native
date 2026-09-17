@@ -70,6 +70,11 @@ dependencies {
     implementation("androidx.room:room-ktx:$roomVersion")
     ksp("androidx.room:room-compiler:$roomVersion")
 
+    // SQLCipher 4.18+ raises its Android compileSdk floor to API 37. Keep the
+    // accepted API 36 / AGP 8.13 baseline on the latest compatible 4.17 line.
+    implementation("net.zetetic:sqlcipher-android:4.17.0@aar")
+    implementation("androidx.sqlite:sqlite:2.7.0")
+
     debugImplementation("androidx.compose.ui:ui-tooling")
 
     testImplementation("junit:junit:4.13.2")
