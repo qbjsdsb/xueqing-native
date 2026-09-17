@@ -1,25 +1,52 @@
 # Backend / Supabase
 
-Development/reference backend for Xueqing Native.
+Development/reference backend for Xueqing Native. PostgreSQL semantics are authoritative; Supabase is the current development provider, not permission to leak provider SDK types into client Domain/ViewModel code.
 
-The product is PostgreSQL-first and provider-neutral. Supabase is the default development path because it provides PostgreSQL, Auth, RLS, Storage and Functions with a strong local-development workflow. Production provider/region is not frozen until compatibility, real-network, old-token, Storage and restore gates pass.
+## Current Phase 1 slice
 
-When implementation starts, this directory will contain:
+Only the minimum schema needed for `CreateObservation v1` exists:
+
+- AppUser;
+- Organization;
+- Membership;
+- Student;
+- StudentSubjectProfile;
+- StudentTeacherAssignment;
+- Observation;
+- operation receipt / idempotency.
+
+Learning Case, Evidence, Assessment, Action, attachments, realtime and generic sync cursors are intentionally absent.
+
+The Git migration is schema truth. `seed.sql` contains deterministic fictional fixtures only. Database tests live under `tests/` and run through `supabase test db` / pgTAP.
+
+## Security boundary
+
+All application tables are in the exposed `public` schema, have RLS enabled, and grant **no direct table privileges** to `anon` or `authenticated`. There are no permissive RLS policies in this first write slice, so accidental future grants still encounter deny-by-default RLS until an explicit read projection is designed.
+
+`public.create_observation` is the one intentional `SECURITY DEFINER` command boundary. This exception is justified because the command must atomically read live Membership/Profile/Assignment rows that clients are not allowed to CRUD directly and then append Observation + receipt. It therefore:
+
+- sets `search_path=''`;
+- schema-qualifies all referenced relations/functions;
+- derives actor from `auth.uid()` rather than trusting a client actor id;
+- re-evaluates the Teaching Fact Gate inside the transaction;
+- serializes by stable `operation_id`;
+- grants execute only to `authenticated`;
+- returns an authoritative committed receipt.
+
+Do not widen table grants merely to avoid this command boundary.
+
+## Local / CI
+
+The committed project lives at `backend/supabase`; use the repository root as working directory and pass `--workdir backend` to the Supabase CLI.
 
 ```text
-migrations/
-functions/
-tests/
-seed.sql
-config.toml
+supabase start --workdir backend
+supabase db reset --workdir backend
+supabase db lint --workdir backend --schema public --fail-on error
+supabase test db --workdir backend
+supabase stop --workdir backend
 ```
 
-Rules:
+CI pins a stable Supabase CLI and starts the local stack with no hosted-project credentials. Ordinary PRs therefore receive no production/staging secrets.
 
-- migrations are schema truth;
-- only fictional seed data;
-- RLS/GRANT tests prove authorization independently of UI;
-- high-risk domain state changes use transactional database commands/RPC;
-- service/admin secrets never enter clients or Git;
-- Realtime must not be required for correctness;
-- backup plans must include both DB and Storage objects.
+Production provider/region remains a later gate. Realtime is not required for correctness.
