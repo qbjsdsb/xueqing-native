@@ -63,6 +63,14 @@ jobs:
         run: |
           ./tools/packaging/run-windows-real-app-integration.ps1 -RepositoryRoot "$env:GITHUB_WORKSPACE"
 
+      - name: Configure native UX test display
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Set-DisplayResolution -Width 1920 -Height 1080 -Force
+          Start-Sleep -Seconds 2
+          Write-Host 'Native UX display configured to 1920x1080 for the 800/960/1024/1280/1600 DIP matrix.'
+
       - name: Reinstall validated v2 package and run native UX smoke
         shell: pwsh
         run: |
