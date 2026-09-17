@@ -128,7 +128,7 @@ jobs:
   durability-device:
     name: android-draft-durability-device
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 40
 
     steps:
       - name: Checkout
@@ -193,14 +193,13 @@ jobs:
           "$adb" shell input keyevent 82 || true
           "$adb" devices -l
 
-      - name: Run Room durability instrumentation tests
+      - name: Run draft and Quick Capture instrumentation tests
         shell: bash
         run: |
           set -euo pipefail
           gradle -p apps/android :app:connectedDebugAndroidTest --no-daemon --stacktrace
 
       - name: Verify durability instrumentation tests executed
-        if: always()
         shell: bash
         run: |
           set -euo pipefail
@@ -211,9 +210,50 @@ jobs:
           files = glob.glob('apps/android/app/build/outputs/androidTest-results/connected/debug/**/TEST-*.xml', recursive=True)
           test_count = sum(int(ET.parse(path).getroot().attrib.get('tests', '0')) for path in files)
           print(f'Android instrumentation tests executed: {test_count}')
-          if test_count < 3:
-              raise SystemExit('Expected at least three Android draft durability instrumentation tests.')
+          if test_count < 6:
+              raise SystemExit('Expected at least six Android draft and Quick Capture instrumentation tests.')
           PY
+
+      - name: Seed known draft after test suite
+        shell: bash
+        run: |
+          set -euo pipefail
+          gradle -p apps/android :app:connectedDebugAndroidTest \
+            -Pandroid.testInstrumentationRunnerArguments.class=com.xueqing.app.durability.ProcessDeathSeedInstrumentedTest \
+            --no-daemon --stacktrace
+
+      - name: Prove force-stop and process restart recovery in UI
+        shell: bash
+        run: |
+          set -euo pipefail
+          adb="$ANDROID_HOME/platform-tools/adb"
+          sentinel='进程重启证据：这条课堂观察必须从 Room 恢复。'
+
+          "$adb" shell am force-stop com.xueqing.app
+          "$adb" shell am start -W \
+            -n com.xueqing.app/.MainActivity \
+            --ez com.xueqing.app.extra.OPEN_QUICK_CAPTURE true
+
+          for attempt in $(seq 1 30); do
+            "$adb" shell uiautomator dump /sdcard/xueqing-window.xml >/dev/null 2>&1 || true
+            "$adb" exec-out cat /sdcard/xueqing-window.xml > "$RUNNER_TEMP/xueqing-window.xml" || true
+            if grep -Fq "$sentinel" "$RUNNER_TEMP/xueqing-window.xml"; then
+              grep -Fq '已恢复本机草稿' "$RUNNER_TEMP/xueqing-window.xml"
+              echo 'Process-death recovery proved: persisted draft is visible after force-stop and relaunch.'
+              exit 0
+            fi
+            sleep 1
+          done
+
+          cat "$RUNNER_TEMP/xueqing-window.xml" >&2 || true
+          exit 1
+
+      - name: Print generated Room schema
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          find apps/android/app/schemas -type f -maxdepth 3 -print -exec cat {} \; 2>/dev/null || true
 
       - name: Print emulator log on failure
         if: failure()
