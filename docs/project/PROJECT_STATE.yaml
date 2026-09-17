@@ -1,7 +1,7 @@
 schema_version: 1
 project: xueqing-native
 phase: phase-1
-milestone: command-adapter-and-first-observation-slice
+milestone: first-observation-product-slice
 status: active
 architecture_baseline: v1-accepted
 
@@ -26,9 +26,10 @@ completed_gates:
   - android-draft-durability-gate
   - android-local-data-encryption-gate
   - backend-create-observation-contract
+  - create-observation-command-adapter-conformance
+  - personal-bootstrap-v1
 
 open_gates:
-  - create-observation-command-adapter-conformance
   - text-quick-capture-observation-vertical-slice
   - provider-adapter-conformance-spike
   - offline-access-lease-duration-and-clock-rollback-spike
@@ -39,10 +40,8 @@ open_gates:
 next_execution:
   parallel_limit: 1
   lines:
-    - create-observation-command-adapter-conformance
-  after_current_green:
-    - personal-bootstrap-v1
     - text-quick-capture-observation-vertical-slice
+  after_current_green:
     - windows-student-recent-observation-v1
 
 later:
