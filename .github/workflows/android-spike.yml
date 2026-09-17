@@ -72,7 +72,7 @@ jobs:
           grep -Fq "platforms;android-$stable_api" "$workflow"
           grep -Fq 'val roomVersion = "2.8.5"' "$app_build"
           grep -Fq 'val lifecycleVersion = "2.10.0"' "$app_build"
-          grep -Fq 'net.zetetic:sqlcipher-android:4.19.0@aar' "$app_build"
+          grep -Fq 'net.zetetic:sqlcipher-android:4.17.0@aar' "$app_build"
           grep -Fq 'androidx.sqlite:sqlite:2.7.0' "$app_build"
 
           if grep -Eq "(compileSdk|targetSdk)[[:space:]]*=[[:space:]]*$next_api|compileSdkPreview|targetSdkPreview" "$app_build"; then
