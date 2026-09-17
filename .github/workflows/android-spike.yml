@@ -207,6 +207,41 @@ jobs:
           set -euo pipefail
           gradle -p apps/android :app:connectedDebugAndroidTest --no-daemon --stacktrace
 
+      - name: Report instrumentation test results
+        if: always()
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import glob
+          import xml.etree.ElementTree as ET
+
+          files = glob.glob('apps/android/app/build/outputs/androidTest-results/connected/debug/**/TEST-*.xml', recursive=True)
+          print(f'Instrumentation XML files: {len(files)}')
+          total = failures = errors = skipped = 0
+          for path in files:
+              root = ET.parse(path).getroot()
+              total += int(root.attrib.get('tests', '0'))
+              failures += int(root.attrib.get('failures', '0'))
+              errors += int(root.attrib.get('errors', '0'))
+              skipped += int(root.attrib.get('skipped', '0'))
+              for case in root.findall('.//testcase'):
+                  failure = case.find('failure')
+                  error = case.find('error')
+                  problem = failure if failure is not None else error
+                  if problem is None:
+                      continue
+                  name = case.attrib.get('name', '<unknown>')
+                  classname = case.attrib.get('classname', '<unknown>')
+                  message = problem.attrib.get('message', '')
+                  body = (problem.text or '').strip()
+                  print(f'FAILED {classname}.{name}')
+                  if message:
+                      print(f'MESSAGE: {message}')
+                  if body:
+                      print(body[:12000])
+          print(f'Instrumentation summary: tests={total}, failures={failures}, errors={errors}, skipped={skipped}')
+          PY
+
       - name: Verify durability instrumentation tests executed
         shell: bash
         run: |
