@@ -55,4 +55,27 @@ public sealed class UxPrototypeFixtureTests
         Assert.IsTrue(rows.Any(row => row.CanUseBulkSafeAction));
         Assert.IsTrue(rows.Any(row => !row.CanUseBulkSafeAction));
     }
+
+    [TestMethod]
+    public void Student_search_filters_one_thousand_rows_without_changing_source_order()
+    {
+        var students = SyntheticDataFactory.CreateStudents(1_000);
+
+        var byName = StudentSearch.Filter(students, "虚构学生0100");
+        Assert.AreEqual(1, byName.Count);
+        Assert.AreEqual("student-000100", byName[0].Id);
+
+        var byCode = StudentSearch.Filter(students, "S000777");
+        Assert.AreEqual(1, byCode.Count);
+        Assert.AreEqual("student-000777", byCode[0].Id);
+
+        var bySubject = StudentSearch.Filter(students, "语文");
+        Assert.AreEqual(250, bySubject.Count);
+        Assert.IsTrue(bySubject.All(student => student.PrimarySubject == "语文"));
+        Assert.IsTrue(bySubject.Zip(bySubject.Skip(1), (left, right) => StringComparer.Ordinal.Compare(left.Id, right.Id) < 0).All(value => value));
+
+        var reset = StudentSearch.Filter(students, "   ");
+        Assert.AreEqual(1_000, reset.Count);
+        CollectionAssert.AreEqual(students.ToArray(), reset.ToArray());
+    }
 }
