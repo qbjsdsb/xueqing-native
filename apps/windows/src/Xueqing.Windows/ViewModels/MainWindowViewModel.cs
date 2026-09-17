@@ -55,6 +55,9 @@ public sealed class MainWindowViewModel : ObservableObject
             }
         }
 
-        SelectedStudent = filtered.Count > 0 ? filtered[0] : null;
+        // Filtering must not implicitly activate the first result. In compact
+        // list/detail mode that would turn typing into an unexpected navigation
+        // to Student Detail. The teacher explicitly chooses the next student.
+        SelectedStudent = null;
     }
 }
