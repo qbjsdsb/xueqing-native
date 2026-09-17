@@ -35,8 +35,8 @@ Xueqing 不是 ERP、CRM、排课系统、收费系统、Excel 网页版、Todo 
 - WinUI 3
 - Windows App SDK Stable
 - CommunityToolkit.Mvvm
-- SQLite（本地缓存、Outbox 与同步状态；具体加密方案经 Spike 冻结）
-- MSIX 作为正式打包方向
+- SQLite3MC + DPAPI CurrentUser 作为已证明的 Durable Intent 本地加密基线
+- MSIX 真实应用安装、重启与 v1 → v2 原位升级链已通过云端证据
 
 ### Android
 
@@ -98,13 +98,15 @@ Teaching Evidence、Intervention、Assessment、Quick Capture 等教学事实必
 
 Local-first 引入新的本地数据安全风险，因此离线授权期限、本地缓存范围、加密方式、退出/停用清理和附件留存策略必须先通过安全 Spike 冻结。
 
-## 当前阶段：Architecture Spikes
+## 当前阶段：Native UX + Local Durability Prototypes
 
 Phase 0 已完成并接受 **Architecture Baseline v1**。广泛架构研究已经停止；后续方向变化必须由新的实验/生产证据和 superseding ADR 驱动。
 
-当前第一优先级是 **WinUI 3 Architecture Spike**。Spike 只使用确定性的虚构数据，先验证 WinUI 3、SQLite、列表/时间线虚拟化、窗口缩放与单一断点来源、100/150/200% DPI、暗色/高对比度、键盘与中文 IME、Durable Outbox、云端 Windows CI、MSIX 打包和安装/卸载 smoke。
+Windows 架构与真实 LocalState/MSIX 基线已经完成：真实 WinUI App 已证明 committed lock graph、DPAPI + SQLite3MC 加密 Durable Intent、真实 MSIX 安装/重启、v1 → v2 原位升级、同一安装/数据库/operation continuity 与卸载清理。Windows 当前进入 **Native UX Prototype**，用确定性虚构数据验证 Today、Students、Learning Case、Organization Management，以及窗口缩放、大文本、Light/Dark/High Contrast、键盘、中文 IME、焦点恢复和列表虚拟化；在这些证据完成前不冻结 UX v1。
 
-随后进入 Android Architecture Spike 与 Backend/API-schema + Provider Conformance Spike。Spike 通过后才开始正式学生业务 Vertical Slice。
+Android 已完成稳定 API 36 的 Kotlin/Compose 云端 bootstrap。下一硬切片是 **Room + Draft Engine + process-death recovery**：先证明老师输入在 Activity recreate、后台/前台与 OS process death 后仍能在正确 user / organization / Student / subject scope 中恢复，再引入 WorkManager/云同步。Android 完整 Native UX acceptance 仍由 Issue #12 跟踪。
+
+Backend/API-schema + Provider Conformance Spike 排在上述客户端证据之后。正式学生业务 Vertical Slice 只有在本地耐久性、UX 原型和最小服务端权限/命令契约得到可执行证据后开始；首条目标是最窄的 Quick Capture teaching-fact 闭环，而不是一次迁移完整旧系统。
 
 动态工程状态以 `docs/project/PROJECT_STATE.yaml` 为准。
 
