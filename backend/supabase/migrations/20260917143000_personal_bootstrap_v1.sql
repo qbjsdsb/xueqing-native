@@ -38,7 +38,7 @@ begin
 
     v_generated_at := pg_catalog.clock_timestamp();
 
-    select pg_catalog.coalesce(
+    select coalesce(
         pg_catalog.jsonb_agg(
             pg_catalog.jsonb_build_object(
                 'organization_id', organization.id,
@@ -56,7 +56,7 @@ begin
      where membership.app_user_id = v_actor_id
        and membership.status = 'active';
 
-    select pg_catalog.coalesce(
+    select coalesce(
         pg_catalog.jsonb_agg(
             pg_catalog.jsonb_build_object(
                 'organization_id', assignment.organization_id,
