@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
+<UserControl
+    x:Class="Xueqing.Windows.Views.LearningView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <Grid Padding="28,20,28,24" RowSpacing="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <Grid MaxWidth="860" HorizontalAlignment="Left">
+            <StackPanel Spacing="8">
+                <TextBlock FontSize="12" Opacity="0.62" Text="学情 · 虚构案例" />
+                <TextBlock FontSize="28" FontWeight="SemiBold" Text="{Binding LearningCase.Title}" TextWrapping="Wrap" />
+                <TextBlock TextWrapping="Wrap">
+                    <Run Text="{Binding LearningCase.StudentDisplayName}" />
+                    <Run Text=" · " />
+                    <Run Text="{Binding LearningCase.Subject}" />
+                    <Run Text=" · " />
+                    <Run Text="{Binding LearningCase.StateLabel}" />
+                </TextBlock>
+                <TextBlock Opacity="0.72" Text="{Binding LearningCase.ResponsibleTeacher}" />
+
+                <StackPanel Margin="0,10,0,2" Spacing="4">
+                    <TextBlock FontSize="18" FontWeight="SemiBold" Text="下一步" />
+                    <TextBlock Text="{Binding LearningCase.NextAction}" TextWrapping="Wrap" />
+                </StackPanel>
+            </StackPanel>
+        </Grid>
+
+        <ListView
+            Grid.Row="1"
+            MaxWidth="860"
+            HorizontalAlignment="Left"
+            ItemsSource="{Binding LearningCase.Timeline}"
+            SelectionMode="None">
+            <ListView.ItemTemplate>
+                <DataTemplate>
+                    <Grid Padding="4,10,8,14" MinHeight="72">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="120" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Spacing="2">
+                            <TextBlock FontSize="12" Opacity="0.62" Text="{Binding DateLabel}" TextWrapping="Wrap" />
+                            <TextBlock FontWeight="SemiBold" Text="{Binding Heading}" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="1" Margin="16,0,0,0" Spacing="5">
+                            <TextBlock Text="{Binding Body}" TextWrapping="Wrap" />
+                            <TextBlock FontSize="12" Opacity="0.62" Text="{Binding ActorDisplayName}" />
+                        </StackPanel>
+                    </Grid>
+                </DataTemplate>
+            </ListView.ItemTemplate>
+        </ListView>
+    </Grid>
+</UserControl>
