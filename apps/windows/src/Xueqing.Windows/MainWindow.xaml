@@ -5,87 +5,34 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:views="using:Xueqing.Windows.Views"
     mc:Ignorable="d">
 
-    <Grid x:Name="RootGrid" SizeChanged="RootGrid_SizeChanged">
+    <Grid
+        x:Name="RootGrid"
+        Loaded="RootGrid_Loaded"
+        SizeChanged="RootGrid_SizeChanged">
         <NavigationView
             x:Name="Shell"
             IsBackButtonVisible="Collapsed"
             IsSettingsVisible="False"
-            PaneDisplayMode="Left">
+            PaneDisplayMode="Left"
+            SelectionChanged="Shell_SelectionChanged">
 
             <NavigationView.MenuItems>
-                <NavigationViewItem Content="今日" Tag="today" />
+                <NavigationViewItem x:Name="TodayNav" Content="今日" IsSelected="True" Tag="today" />
                 <NavigationViewItem Content="学生" Tag="students" />
-                <NavigationViewItem Content="学情" Tag="cases" />
+                <NavigationViewItem Content="学情" Tag="learning" />
+                <NavigationViewItemSeparator />
+                <NavigationViewItemHeader Content="机构工作区" />
+                <NavigationViewItem Content="机构管理" Tag="organization-management" />
             </NavigationView.MenuItems>
 
-            <Grid Padding="24" ColumnSpacing="20">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition x:Name="ListColumn" Width="360" />
-                    <ColumnDefinition x:Name="DetailColumn" Width="*" />
-                </Grid.ColumnDefinitions>
-
-                <Grid Grid.Column="0" RowSpacing="12">
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="*" />
-                    </Grid.RowDefinitions>
-
-                    <StackPanel Spacing="4">
-                        <TextBlock FontSize="28" FontWeight="SemiBold" Text="学生" />
-                        <TextBlock Opacity="0.68" Text="Architecture Spike · 1000 名确定性虚构学生" />
-                    </StackPanel>
-
-                    <TextBox
-                        Grid.Row="1"
-                        AutomationProperties.Name="搜索学生"
-                        PlaceholderText="搜索学生（后续 Spike 接入索引）" />
-
-                    <ListView
-                        x:Name="StudentList"
-                        Grid.Row="2"
-                        ItemsSource="{x:Bind ViewModel.Students}"
-                        SelectionChanged="StudentList_SelectionChanged"
-                        SelectionMode="Single">
-                        <ListView.ItemTemplate>
-                            <DataTemplate>
-                                <Grid Padding="12,10">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="Auto" />
-                                    </Grid.ColumnDefinitions>
-                                    <StackPanel Spacing="2">
-                                        <TextBlock FontWeight="SemiBold" Text="{Binding DisplayName}" />
-                                        <TextBlock FontSize="12" Opacity="0.62" Text="{Binding StudentCode}" />
-                                    </StackPanel>
-                                    <StackPanel Grid.Column="1" HorizontalAlignment="Right" Spacing="2">
-                                        <TextBlock HorizontalAlignment="Right" Text="{Binding PrimarySubject}" />
-                                        <TextBlock FontSize="12" Opacity="0.62" Text="{Binding ActiveCaseCount}" />
-                                    </StackPanel>
-                                </Grid>
-                            </DataTemplate>
-                        </ListView.ItemTemplate>
-                    </ListView>
-                </Grid>
-
-                <Grid
-                    x:Name="DetailPanel"
-                    Grid.Column="1"
-                    Padding="28,16"
-                    Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
-                    CornerRadius="12">
-                    <StackPanel Spacing="10">
-                        <TextBlock FontSize="12" Opacity="0.62" Text="学生详情 · Spike" />
-                        <TextBlock
-                            FontSize="32"
-                            FontWeight="SemiBold"
-                            Text="{x:Bind ViewModel.SelectedStudent.DisplayName, Mode=OneWay}" />
-                        <TextBlock Text="{x:Bind ViewModel.SelectedStudent.StudentCode, Mode=OneWay}" />
-                        <TextBlock Text="该面板只验证 List/Detail、状态所有权、虚拟化与断点行为；正式教学业务尚未进入。" TextWrapping="Wrap" />
-                    </StackPanel>
-                </Grid>
+            <Grid>
+                <views:TodayView x:Name="TodayView" />
+                <views:StudentsView x:Name="StudentsView" Visibility="Collapsed" />
+                <views:LearningView x:Name="LearningView" Visibility="Collapsed" />
+                <views:OrganizationManagementView x:Name="OrganizationManagementView" Visibility="Collapsed" />
             </Grid>
         </NavigationView>
     </Grid>
