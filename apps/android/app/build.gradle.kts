@@ -52,7 +52,9 @@ dependencies {
     // from this stable API 36 bootstrap.
     val composeBom = platform("androidx.compose:compose-bom:2026.06.00")
     val roomVersion = "2.8.5"
-    val lifecycleVersion = "2.11.0"
+    // Lifecycle 2.11 Compose artifacts require API 37 / newer AGP. Keep the
+    // accepted API-36 bootstrap on the last compatible stable Lifecycle line.
+    val lifecycleVersion = "2.10.0"
 
     implementation(composeBom)
     androidTestImplementation(composeBom)
@@ -69,7 +71,6 @@ dependencies {
     ksp("androidx.room:room-compiler:$roomVersion")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
-    debugImplementation("androidx.compose.ui:ui-test-manifest")
 
     testImplementation("junit:junit:4.13.2")
 
@@ -78,4 +79,7 @@ dependencies {
     androidTestImplementation("androidx.test:core-ktx:1.7.0")
     androidTestImplementation("androidx.room:room-testing:$roomVersion")
     androidTestImplementation("androidx.compose.ui:ui-test-junit4")
+    androidTestImplementation("androidx.lifecycle:lifecycle-runtime-compose:$lifecycleVersion") {
+        version { strictly(lifecycleVersion) }
+    }
 }
