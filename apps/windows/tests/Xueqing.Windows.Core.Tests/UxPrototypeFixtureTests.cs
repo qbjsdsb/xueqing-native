@@ -1,4 +1,5 @@
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Xueqing.Windows.Core.Layout;
 using Xueqing.Windows.Core.Models;
 using Xueqing.Windows.Core.Services;
 
@@ -57,6 +58,22 @@ public sealed class UxPrototypeFixtureTests
     }
 
     [TestMethod]
+    public void Student_fixture_exercises_large_list_long_names_and_case_count_pressure()
+    {
+        var students = SyntheticDataFactory.CreateStudents(1_000);
+
+        Assert.AreEqual(1_000, students.Count);
+        Assert.AreEqual(1_000, students.Select(student => student.Id).Distinct().Count());
+        Assert.IsTrue(students.Any(student => student.DisplayName.Length > 20));
+        Assert.IsTrue(students.Any(student => student.ActiveCaseCount == 0));
+        Assert.IsTrue(students.Any(student => student.ActiveCaseCount == 1));
+        Assert.IsTrue(students.Any(student => student.ActiveCaseCount >= 20));
+        CollectionAssert.AreEquivalent(
+            new[] { "语文", "数学", "英语", "物理" },
+            students.Select(student => student.PrimarySubject).Distinct().ToArray());
+    }
+
+    [TestMethod]
     public void Student_search_filters_one_thousand_rows_without_changing_source_order()
     {
         var students = SyntheticDataFactory.CreateStudents(1_000);
@@ -77,5 +94,28 @@ public sealed class UxPrototypeFixtureTests
         var reset = StudentSearch.Filter(students, "   ");
         Assert.AreEqual(1_000, reset.Count);
         CollectionAssert.AreEqual(students.ToArray(), reset.ToArray());
+    }
+
+    [TestMethod]
+    public void Window_layout_policy_covers_required_native_validation_widths()
+    {
+        var matrix = new Dictionary<double, WindowLayoutMode>
+        {
+            [800] = WindowLayoutMode.Compact,
+            [960] = WindowLayoutMode.Standard,
+            [1024] = WindowLayoutMode.Standard,
+            [1280] = WindowLayoutMode.Expanded,
+            [1600] = WindowLayoutMode.Expanded,
+        };
+
+        foreach (var (width, expected) in matrix)
+        {
+            Assert.AreEqual(expected, WindowLayoutPolicy.Resolve(width), $"Unexpected layout at {width} DIP.");
+        }
+
+        Assert.AreEqual(WindowLayoutMode.Compact, WindowLayoutPolicy.Resolve(WindowLayoutPolicy.CompactBreakpoint - 0.01));
+        Assert.AreEqual(WindowLayoutMode.Standard, WindowLayoutPolicy.Resolve(WindowLayoutPolicy.CompactBreakpoint));
+        Assert.AreEqual(WindowLayoutMode.Standard, WindowLayoutPolicy.Resolve(WindowLayoutPolicy.ExpandedBreakpoint - 0.01));
+        Assert.AreEqual(WindowLayoutMode.Expanded, WindowLayoutPolicy.Resolve(WindowLayoutPolicy.ExpandedBreakpoint));
     }
 }
