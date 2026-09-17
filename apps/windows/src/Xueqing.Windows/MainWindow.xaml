@@ -14,18 +14,19 @@
         SizeChanged="RootGrid_SizeChanged">
         <NavigationView
             x:Name="Shell"
+            AutomationProperties.AutomationId="ShellNavigation"
             IsBackButtonVisible="Collapsed"
             IsSettingsVisible="False"
             PaneDisplayMode="Left"
             SelectionChanged="Shell_SelectionChanged">
 
             <NavigationView.MenuItems>
-                <NavigationViewItem x:Name="TodayNav" Content="今日" IsSelected="True" Tag="today" />
-                <NavigationViewItem Content="学生" Tag="students" />
-                <NavigationViewItem Content="学情" Tag="learning" />
+                <NavigationViewItem x:Name="TodayNav" AutomationProperties.AutomationId="TodayNavigation" Content="今日" IsSelected="True" Tag="today" />
+                <NavigationViewItem AutomationProperties.AutomationId="StudentsNavigation" Content="学生" Tag="students" />
+                <NavigationViewItem AutomationProperties.AutomationId="LearningNavigation" Content="学情" Tag="learning" />
                 <NavigationViewItemSeparator />
                 <NavigationViewItemHeader Content="机构工作区" />
-                <NavigationViewItem Content="机构管理" Tag="organization-management" />
+                <NavigationViewItem AutomationProperties.AutomationId="OrganizationManagementNavigation" Content="机构管理" Tag="organization-management" />
             </NavigationView.MenuItems>
 
             <Grid>
