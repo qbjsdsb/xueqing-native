@@ -25,7 +25,31 @@ public sealed record TodayActionItem(
     string Title,
     TodayActionBucket Bucket,
     DateOnly? DueDate,
-    PrototypeSaveState SaveState);
+    PrototypeSaveState SaveState)
+{
+    public string BucketLabel => Bucket switch
+    {
+        TodayActionBucket.Overdue => "逾期",
+        TodayActionBucket.Today => "今天",
+        TodayActionBucket.Undated => "待安排",
+        TodayActionBucket.Future => "之后",
+        _ => "",
+    };
+
+    public string DueLabel => DueDate is null
+        ? "未安排日期"
+        : DueDate.Value.ToString("MM月dd日");
+
+    public string SaveStateLabel => SaveState switch
+    {
+        PrototypeSaveState.Ready => "",
+        PrototypeSaveState.Saving => "正在保存…",
+        PrototypeSaveState.SaveFailed => "保存失败 · 可重试",
+        PrototypeSaveState.PendingSync => "已安全保存在本地 · 等待同步",
+        PrototypeSaveState.ReadOnly => "只读 · 权限已变化",
+        _ => "",
+    };
+}
 
 public enum CaseTimelineEntryKind
 {
@@ -42,7 +66,10 @@ public sealed record CaseTimelineEntry(
     CaseTimelineEntryKind Kind,
     string Heading,
     string Body,
-    string ActorDisplayName);
+    string ActorDisplayName)
+{
+    public string DateLabel => OccurredAt.ToString("MM月dd日 HH:mm");
+}
 
 public sealed record LearningCasePrototype(
     string Id,
@@ -60,4 +87,7 @@ public sealed record OrganizationMemberRow(
     string RoleLabel,
     string StatusLabel,
     string RecentActivity,
-    bool CanUseBulkSafeAction);
+    bool CanUseBulkSafeAction)
+{
+    public string BulkSafetyLabel => CanUseBulkSafeAction ? "可安全批量操作" : "需单独确认";
+}
