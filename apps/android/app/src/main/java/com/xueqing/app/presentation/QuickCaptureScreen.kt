@@ -28,8 +28,13 @@ internal fun QuickCaptureScreen(
     onTextChanged: (String) -> Unit,
     onClose: () -> Unit,
     onDiscard: () -> Unit,
+    onSubmit: () -> Unit,
 ) {
     BackHandler(onBack = onClose)
+
+    val contextReady = state.teachingContextStatus == TeachingContextStatus.Ready
+    val draftLoaded = state.draftStatus != LocalDraftStatus.Loading
+    val draftWritable = state.draftStatus != LocalDraftStatus.PersistenceFailed
 
     Column(
         modifier = Modifier
@@ -45,7 +50,7 @@ internal fun QuickCaptureScreen(
                 Text("返回")
             }
             TextButton(
-                enabled = state.status != LocalDraftStatus.Loading,
+                enabled = contextReady && draftLoaded,
                 onClick = onDiscard,
             ) {
                 Text("丢弃草稿")
@@ -58,10 +63,17 @@ internal fun QuickCaptureScreen(
             style = MaterialTheme.typography.headlineSmall,
         )
         Text(
-            text = "虚构学生林晨 · 语文",
+            text = when (state.teachingContextStatus) {
+                TeachingContextStatus.Loading -> "正在读取教学上下文…"
+                TeachingContextStatus.Ready -> "${state.studentDisplayName} · ${state.subjectLabel}"
+                TeachingContextStatus.AuthenticationRequired -> "需要登录后才能记录"
+                TeachingContextStatus.Unavailable -> "当前没有可用的任课关系"
+            },
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(top = 4.dp),
+            modifier = Modifier
+                .padding(top = 4.dp)
+                .testTag("quick-capture-teaching-context"),
         )
 
         Spacer(Modifier.height(24.dp))
@@ -72,7 +84,7 @@ internal fun QuickCaptureScreen(
         OutlinedTextField(
             value = state.text,
             onValueChange = onTextChanged,
-            enabled = state.status != LocalDraftStatus.Loading,
+            enabled = contextReady && draftLoaded,
             modifier = Modifier
                 .fillMaxWidth()
                 .heightIn(min = 220.dp)
@@ -81,38 +93,64 @@ internal fun QuickCaptureScreen(
             placeholder = { Text("例如：概括题仍然容易照抄原句，不能主动压缩信息。") },
         )
 
-        Text(
-            text = when (state.status) {
-                LocalDraftStatus.Loading -> "正在读取本机草稿…"
-                LocalDraftStatus.Saving -> "正在保护草稿…"
-                LocalDraftStatus.SafeOnDevice -> if (state.recoveredFromDisk) {
-                    "已恢复本机草稿"
-                } else {
-                    "草稿已保存在本机"
-                }
-                LocalDraftStatus.PersistenceFailed -> "本机草稿保存失败，当前文字仍保留在界面中"
-            },
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier
-                .padding(top = 12.dp)
-                .testTag("quick-capture-draft-status"),
-        )
+        if (contextReady) {
+            Text(
+                text = when (state.draftStatus) {
+                    LocalDraftStatus.Loading -> "正在读取本机草稿…"
+                    LocalDraftStatus.Saving -> "正在保护草稿…"
+                    LocalDraftStatus.SafeOnDevice -> if (state.recoveredFromDisk) {
+                        "已恢复本机草稿"
+                    } else {
+                        "草稿已保存在本机"
+                    }
+                    LocalDraftStatus.PersistenceFailed -> "本机草稿保存失败，当前文字仍保留在界面中"
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier
+                    .padding(top = 12.dp)
+                    .testTag("quick-capture-draft-status"),
+            )
+        }
+
+        submissionMessage(state)?.let { message ->
+            Text(
+                text = message,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier
+                    .padding(top = 8.dp)
+                    .testTag("quick-capture-submission-status"),
+            )
+        }
 
         Button(
-            onClick = onClose,
-            enabled = state.status != LocalDraftStatus.Loading,
+            onClick = onSubmit,
+            enabled = contextReady && draftLoaded && draftWritable && state.text.isNotBlank(),
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(top = 28.dp),
         ) {
-            Text("完成记录")
+            Text("提交记录")
         }
         Text(
-            text = "此原型只证明本机草稿安全；“完成记录”不会提交到服务端。",
+            text = "提交后会先安全写入本机队列；服务端仍会重新检查当前任课权限。",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(top = 8.dp, bottom = 16.dp),
         )
+    }
+}
+
+private fun submissionMessage(state: QuickCaptureUiState): String? = when (state.submissionStatus) {
+    ObservationSubmissionStatus.None -> null
+    ObservationSubmissionStatus.WaitingToSync -> "待同步"
+    ObservationSubmissionStatus.Syncing -> "正在同步"
+    ObservationSubmissionStatus.WaitingToRetry -> "待重试 · 记录已安全保存在本机"
+    ObservationSubmissionStatus.AuthenticationRequired -> "登录状态已失效 · 记录仍保存在本机"
+    ObservationSubmissionStatus.Accepted -> "服务端已接受"
+    ObservationSubmissionStatus.Rejected -> when (state.submissionErrorCode) {
+        "XQ_TEACHER_ASSIGNMENT_REQUIRED" -> "服务器拒绝 · 当前任课关系已变化，原记录仍保存在本机"
+        else -> "服务器拒绝 · 原记录仍保存在本机"
     }
 }
