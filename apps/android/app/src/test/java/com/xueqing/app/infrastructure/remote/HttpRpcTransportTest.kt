@@ -39,9 +39,10 @@ class HttpRpcTransportTest {
     }
 
     @Test
-    fun originCannotEmbedCredentialsQueryOrFragment() {
+    fun originCannotEmbedCredentialsPathQueryOrFragment() {
         listOf(
             "https://user@example.invalid",
+            "https://example.invalid/rest",
             "https://example.invalid?token=value",
             "https://example.invalid#fragment",
         ).forEach { invalidOrigin ->
