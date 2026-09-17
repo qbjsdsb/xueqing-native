@@ -1,6 +1,7 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Xueqing.Windows.Core.Layout;
+using Xueqing.Windows.ViewModels;
 
 namespace Xueqing.Windows.Views;
 
@@ -32,6 +33,14 @@ public sealed partial class StudentsView : UserControl
         ListColumn.Width = new GridLength(1, GridUnitType.Star);
         DetailColumn.Width = new GridLength(0);
         ShowListOnly();
+    }
+
+    private void SearchBox_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        if (DataContext is MainWindowViewModel viewModel)
+        {
+            viewModel.FilterStudents(SearchBox.Text);
+        }
     }
 
     private void StudentList_SelectionChanged(object sender, SelectionChangedEventArgs e)
