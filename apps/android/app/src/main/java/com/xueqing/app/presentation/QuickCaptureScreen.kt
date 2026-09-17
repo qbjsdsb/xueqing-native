@@ -68,6 +68,7 @@ internal fun QuickCaptureScreen(
                 TeachingContextStatus.Ready -> "${state.studentDisplayName} · ${state.subjectLabel}"
                 TeachingContextStatus.AuthenticationRequired -> "需要登录后才能记录"
                 TeachingContextStatus.Unavailable -> "当前没有可用的任课关系"
+                TeachingContextStatus.SelectionRequired -> "请先选择明确的学生和学科后再记录"
             },
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
