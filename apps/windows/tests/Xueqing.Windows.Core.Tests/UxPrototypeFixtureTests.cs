@@ -31,8 +31,12 @@ public sealed class UxPrototypeFixtureTests
         var first = UxPrototypeFixtureFactory.CreateLearningCase();
         var second = UxPrototypeFixtureFactory.CreateLearningCase();
 
-        Assert.AreEqual(first, second);
+        Assert.AreEqual(first.Id, second.Id);
+        Assert.AreEqual(first.Title, second.Title);
+        Assert.AreEqual(first.StateLabel, second.StateLabel);
+        Assert.AreEqual(first.NextAction, second.NextAction);
         Assert.AreEqual(100, first.Timeline.Count);
+        CollectionAssert.AreEqual(first.Timeline.ToArray(), second.Timeline.ToArray());
         Assert.IsTrue(first.Timeline.Any(entry => entry.Kind == CaseTimelineEntryKind.Lifecycle && entry.Heading == "重新打开"));
         Assert.IsTrue(first.Timeline.Any(entry => entry.Body.Length > 60));
         Assert.IsFalse(string.IsNullOrWhiteSpace(first.NextAction));
