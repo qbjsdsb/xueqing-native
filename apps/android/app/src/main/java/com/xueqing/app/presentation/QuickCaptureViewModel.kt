@@ -77,11 +77,14 @@ class QuickCaptureViewModel(
             return
         }
 
+        // A lifecycle flush is still revision-bound. It must never bypass a
+        // later edit or explicit discard: if either happens before this queued
+        // write acquires the mutex, the newer revision wins and this snapshot
+        // is dropped instead of being written into a newly opened epoch.
         revision = Math.addExact(revision, 1)
         persist(
             text = current.text,
             targetRevision = revision,
-            force = true,
         )
     }
 
@@ -113,11 +116,10 @@ class QuickCaptureViewModel(
     private fun persist(
         text: String,
         targetRevision: Long,
-        force: Boolean = false,
     ) {
         viewModelScope.launch {
             saveMutex.withLock {
-                if (!force && targetRevision != revision) {
+                if (targetRevision != revision) {
                     return@withLock
                 }
 
