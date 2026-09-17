@@ -23,6 +23,9 @@ public static class XueqingWindowNativeMethods
         int cx,
         int cy,
         uint uFlags);
+
+    [DllImport("user32.dll")]
+    public static extern uint GetDpiForWindow(IntPtr hWnd);
 }
 '@
 
@@ -115,12 +118,29 @@ if ($null -eq $root) {
     throw 'UI Automation could not obtain the WinUI root element.'
 }
 
-# Exercise the acceptance gate at the narrowest required width. Height remains
-# intentionally short enough to pressure vertical layout without clipping the app.
+# SetWindowPos consumes physical pixels, while the UX acceptance matrix is in
+# device-independent pixels. Convert the required 800 x 640 DIP pressure case
+# using the actual DPI of the native window instead of assuming 100% scaling.
+$dpi = [XueqingWindowNativeMethods]::GetDpiForWindow($windowHandle)
+if ($dpi -eq 0) {
+    throw 'GetDpiForWindow returned 0; the 800 DIP validation would be ambiguous.'
+}
+$targetWidthDips = 800
+$targetHeightDips = 640
+$targetWidthPixels = [int][Math]::Round($targetWidthDips * $dpi / 96.0)
+$targetHeightPixels = [int][Math]::Round($targetHeightDips * $dpi / 96.0)
 $SWP_NOMOVE = 0x0002
-if (-not [XueqingWindowNativeMethods]::SetWindowPos($windowHandle, [IntPtr]::Zero, 0, 0, 800, 640, $SWP_NOMOVE)) {
+if (-not [XueqingWindowNativeMethods]::SetWindowPos(
+    $windowHandle,
+    [IntPtr]::Zero,
+    0,
+    0,
+    $targetWidthPixels,
+    $targetHeightPixels,
+    $SWP_NOMOVE)) {
     throw "SetWindowPos failed with Win32 error $([Runtime.InteropServices.Marshal]::GetLastWin32Error())."
 }
+Write-Host "Native UX pressure window: ${targetWidthDips}x${targetHeightDips} DIP at ${dpi} DPI (${targetWidthPixels}x${targetHeightPixels} px)."
 Start-Sleep -Milliseconds 500
 
 $today = Find-ByAutomationId -Root $root -AutomationId 'TodayNavigation'
@@ -179,8 +199,11 @@ if ($null -eq $studentList) {
     throw 'Restored Student list is not exposed to UI Automation.'
 }
 $focused = [System.Windows.Automation.AutomationElement]::FocusedElement
-if ($null -eq $focused -or -not (Is-DescendantOf -Element $focused -Ancestor $studentList)) {
+if ($null -eq $focused) {
+    throw 'No focused native element was reported after returning from Student Detail.'
+}
+if (-not (Is-DescendantOf -Element $focused -Ancestor $studentList)) {
     throw "Focus did not return to the Student list after detail close. Focused='$($focused.Current.AutomationId)'."
 }
 
-Write-Host 'Windows native UX smoke passed: 800px compact navigation, search, detail, context and focus restoration.'
+Write-Host 'Windows native UX smoke passed: 800 DIP compact navigation, search, detail, context and focus restoration.'
