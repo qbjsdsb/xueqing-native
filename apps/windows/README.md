@@ -33,7 +33,8 @@ Windows 架构与真实本地数据/打包链已经完成关键证明：
 必须重点验证：
 
 - 800 / 960 / 1024 / 1280 / 1600 DIP；
-- 100 / 150 / 200% 文本缩放，并在支持时做 225% destructive pass；
+- 100 / 150 / 200% Windows 显示 DPI 缩放；
+- normal / 150 / 200% 文本缩放，并在支持时做 225% destructive pass；
 - Light / Dark / High Contrast；
 - 键盘-only 核心流程、鼠标 hover/selection/context menu；
 - detail/dialog/light-layer 关闭后的 selection/focus/context 恢复；
