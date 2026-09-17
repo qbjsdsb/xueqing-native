@@ -58,11 +58,13 @@ class HttpRpcTransport(
         val explicitDevelopmentLoopback =
             allowInsecureLoopbackForDevelopment &&
                 uri?.scheme == "http" &&
+                host != null &&
                 host in DEVELOPMENT_LOOPBACK_HOSTS
         require(secureOrigin || explicitDevelopmentLoopback) {
             "RPC base URL must be HTTPS, except explicit development loopback origins."
         }
         require(uri?.rawUserInfo == null) { "RPC base URL must not contain user info." }
+        require(uri?.rawPath.isNullOrEmpty()) { "RPC base URL must not contain a path." }
         require(uri?.rawQuery == null && uri?.rawFragment == null) {
             "RPC base URL must be an origin without query or fragment."
         }
