@@ -33,6 +33,7 @@ enum class TeachingContextStatus {
     Ready,
     AuthenticationRequired,
     Unavailable,
+    SelectionRequired,
 }
 
 enum class LocalDraftStatus {
@@ -160,7 +161,7 @@ class QuickCaptureViewModel(
                 val currentScope = scope ?: return@withLock
                 val currentContext = teachingContext ?: return@withLock
                 val currentActor = actorAppUserId ?: return@withLock
-                val finalText = currentState.text.trim()
+                val finalText = currentState.text
 
                 if (
                     currentState.teachingContextStatus != TeachingContextStatus.Ready ||
@@ -239,10 +240,22 @@ class QuickCaptureViewModel(
             val bootstrap = withContext(Dispatchers.IO) { bootstrapRemote.fetch() }
             when (bootstrap) {
                 is PersonalBootstrapResult.Loaded -> {
-                    val context = bootstrap.bootstrap.teachingContexts.firstOrNull()
-                    if (context == null) {
-                        _uiState.update { it.copy(teachingContextStatus = TeachingContextStatus.Unavailable) }
-                        return@launch
+                    val contexts = bootstrap.bootstrap.teachingContexts
+                    val context = when (contexts.size) {
+                        0 -> {
+                            _uiState.update { it.copy(teachingContextStatus = TeachingContextStatus.Unavailable) }
+                            return@launch
+                        }
+
+                        1 -> contexts.single()
+
+                        else -> {
+                            // Quick Capture must never guess which student/subject
+                            // receives a teaching fact. A later selected-context
+                            // navigation flow can provide an explicit target.
+                            _uiState.update { it.copy(teachingContextStatus = TeachingContextStatus.SelectionRequired) }
+                            return@launch
+                        }
                     }
                     val draftScope = DraftScope(
                         environmentId = environmentId,
