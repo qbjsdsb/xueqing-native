@@ -1,6 +1,7 @@
 package com.xueqing.app.presentation
 
 import androidx.compose.ui.test.assertTextContains
+import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
@@ -46,6 +47,29 @@ class QuickCaptureLifecycleInstrumentedTest {
         composeRule.activityRule.scenario.moveToState(Lifecycle.State.RESUMED)
 
         composeRule.onNodeWithTag("quick-capture-input").assertTextContains(text)
+        awaitLocalSafe()
+    }
+
+    @Test
+    fun discardedObservationDoesNotReturnAfterActivityRecreation() {
+        openQuickCapture()
+        val text = "丢弃测试：这条文字必须被显式删除，Activity 重建后也不能复活。"
+
+        composeRule.onNodeWithTag("quick-capture-input").performTextReplacement(text)
+        awaitLocalSafe()
+
+        composeRule.onNodeWithText("丢弃草稿").performClick()
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            composeRule.onAllNodesWithText(text)
+                .fetchSemanticsNodes(atLeastOneRootRequired = false)
+                .isEmpty()
+        }
+        composeRule.onNodeWithTag("quick-capture-input").assertTextEquals("")
+        awaitLocalSafe()
+
+        composeRule.activityRule.scenario.recreate()
+
+        composeRule.onNodeWithTag("quick-capture-input").assertTextEquals("")
         awaitLocalSafe()
     }
 
