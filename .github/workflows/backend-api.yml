@@ -57,6 +57,12 @@ jobs:
           set -euo pipefail
           supabase test db --workdir backend
 
+      - name: Prove concurrent authority revoke cannot pass an in-flight command
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash backend/supabase/tests/create_observation_concurrency.sh
+
       - name: Print local stack diagnostics on failure
         if: failure()
         shell: bash
