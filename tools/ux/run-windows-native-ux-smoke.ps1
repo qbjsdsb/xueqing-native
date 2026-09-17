@@ -38,9 +38,19 @@ function Wait-Until {
 
     $deadline = [DateTimeOffset]::UtcNow.AddSeconds($TimeoutSeconds)
     do {
-        $result = & $Condition
-        if ($result) {
-            return $result
+        try {
+            $result = & $Condition
+            if ($result) {
+                return $result
+            }
+        }
+        catch [System.Windows.Automation.ElementNotAvailableException] {
+            # WinUI can briefly replace virtualized elements while a filtered
+            # ItemsSource is changing. Re-acquire them on the next iteration.
+        }
+        catch [System.InvalidOperationException] {
+            # Some providers surface transient COM/UIA invalid-operation errors
+            # during reparenting. A later query against the live tree is valid.
         }
         Start-Sleep -Milliseconds 200
     } while ([DateTimeOffset]::UtcNow -lt $deadline)
@@ -60,16 +70,43 @@ function Find-ByAutomationId {
     return $Root.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $condition)
 }
 
-function Find-ByName {
-    param(
-        [Parameter(Mandatory = $true)][System.Windows.Automation.AutomationElement]$Root,
-        [Parameter(Mandatory = $true)][string]$Name
-    )
+function Find-FirstListItem {
+    param([Parameter(Mandatory = $true)][System.Windows.Automation.AutomationElement]$List)
 
     $condition = New-Object System.Windows.Automation.PropertyCondition(
-        [System.Windows.Automation.AutomationElement]::NameProperty,
-        $Name)
-    return $Root.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $condition)
+        [System.Windows.Automation.AutomationElement]::ControlTypeProperty,
+        [System.Windows.Automation.ControlType]::ListItem)
+    return $List.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $condition)
+}
+
+function Get-AccessibleText {
+    param([Parameter(Mandatory = $true)][System.Windows.Automation.AutomationElement]$Root)
+
+    $parts = New-Object System.Collections.Generic.List[string]
+    try {
+        if (-not [string]::IsNullOrWhiteSpace($Root.Current.Name)) {
+            $parts.Add($Root.Current.Name)
+        }
+    }
+    catch [System.Windows.Automation.ElementNotAvailableException] {
+        return ''
+    }
+
+    $all = $Root.FindAll(
+        [System.Windows.Automation.TreeScope]::Descendants,
+        [System.Windows.Automation.Condition]::TrueCondition)
+    foreach ($element in $all) {
+        try {
+            $name = $element.Current.Name
+            if (-not [string]::IsNullOrWhiteSpace($name)) {
+                $parts.Add($name)
+            }
+        }
+        catch [System.Windows.Automation.ElementNotAvailableException] {
+            continue
+        }
+    }
+    return ($parts -join ' | ')
 }
 
 function Invoke-Element {
@@ -100,16 +137,20 @@ function Is-DescendantOf {
         if ($current -eq $Ancestor) {
             return $true
         }
-        $current = $walker.GetParent($current)
+        try {
+            $current = $walker.GetParent($current)
+        }
+        catch [System.Windows.Automation.ElementNotAvailableException] {
+            return $false
+        }
     }
     return $false
 }
 
 $process = Wait-Until -FailureMessage "Process '$ProcessName' did not expose a native main window." -Condition {
-    $candidate = Get-Process -Name $ProcessName -ErrorAction SilentlyContinue |
+    Get-Process -Name $ProcessName -ErrorAction SilentlyContinue |
         Where-Object { $_.MainWindowHandle -ne [IntPtr]::Zero } |
         Select-Object -First 1
-    return $candidate
 }
 
 $windowHandle = $process.MainWindowHandle
@@ -164,17 +205,24 @@ if (-not $searchBox.TryGetCurrentPattern([System.Windows.Automation.ValuePattern
 }
 ([System.Windows.Automation.ValuePattern]$valuePattern).SetValue('S000777')
 
-$studentText = Wait-Until -FailureMessage 'Filtered student S000777 was not rendered.' -Condition {
-    Find-ByName -Root $root -Name '虚构学生0777'
-}
-
-$walker = [System.Windows.Automation.TreeWalker]::ControlViewWalker
-$studentItem = $studentText
-while ($null -ne $studentItem -and $studentItem.Current.ControlType -ne [System.Windows.Automation.ControlType]::ListItem) {
-    $studentItem = $walker.GetParent($studentItem)
-}
-if ($null -eq $studentItem) {
-    throw 'Could not resolve the filtered student to a native ListItem.'
+# Do not assume a TextBlock has a stable UIA Name. WinUI virtualizes and
+# replaces row descendants while filtering. Re-acquire the ListView and select
+# the one live ListItem that remains after the unique student-code search.
+$studentItem = Wait-Until -FailureMessage 'Filtered student S000777 did not materialize as a native ListItem.' -Condition {
+    $liveList = Find-ByAutomationId -Root $root -AutomationId 'StudentList'
+    if ($null -eq $liveList) {
+        return $null
+    }
+    $item = Find-FirstListItem -List $liveList
+    if ($null -eq $item) {
+        return $null
+    }
+    $accessibleText = Get-AccessibleText -Root $item
+    if ($accessibleText -notlike '*S000777*') {
+        return $null
+    }
+    Write-Host "Filtered native student row: $accessibleText"
+    return $item
 }
 Invoke-Element -Element $studentItem
 
