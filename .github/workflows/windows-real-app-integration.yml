@@ -8,6 +8,7 @@ on:
       - 'apps/windows/src/Xueqing.Windows.Core/**'
       - 'apps/windows/spikes/Xueqing.Windows.PackagingProbe/Assets/**'
       - 'tools/packaging/run-windows-real-app-integration.ps1'
+      - 'tools/ux/**'
       - 'docs/architecture/WINDOWS_REAL_APP_LOCALSTATE_MSIX.md'
       - 'docs/project/PROJECT_STATE.yaml'
       - 'Directory.Packages.props'
@@ -62,8 +63,59 @@ jobs:
         run: |
           ./tools/packaging/run-windows-real-app-integration.ps1 -RepositoryRoot "$env:GITHUB_WORKSPACE"
 
-      - name: Upload real-app integration diagnostics
-        if: failure()
+      - name: Configure native UX test display
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Set-DisplayResolution -Width 1920 -Height 1080 -Force
+          Start-Sleep -Seconds 2
+          Write-Host 'Native UX display configured to 1920x1080 for the 800/960/1024/1280/1600 DIP matrix.'
+
+      - name: Reinstall validated v2 package and run native UX smoke
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $packageName = 'Xueqing.Native.Development'
+          $processName = 'Xueqing.Windows'
+          $diagnosticDirectory = Join-Path $env:GITHUB_WORKSPACE 'artifacts/windows-real-app-integration/diagnostics'
+          $evidenceDirectory = Join-Path $diagnosticDirectory 'native-ux-evidence'
+          $transcriptPath = Join-Path $diagnosticDirectory 'native-ux-smoke.txt'
+          New-Item -ItemType Directory -Force -Path $diagnosticDirectory | Out-Null
+          Start-Transcript -Path $transcriptPath -Force | Out-Null
+
+          $certificatePath = Join-Path $env:GITHUB_WORKSPACE 'artifacts/windows-real-app-integration/xueqing-native-real-app.cer'
+          $packagePath = Get-ChildItem (Join-Path $env:GITHUB_WORKSPACE 'artifacts/windows-real-app-integration/v2') -Recurse -File -Filter *.msix |
+            Where-Object { $_.FullName -notmatch '\\Dependencies\\' } |
+            Select-Object -First 1
+
+          try {
+            if ($null -eq $packagePath) {
+              throw 'Validated v2 MSIX was not found for the native UX smoke.'
+            }
+            if (-not (Test-Path $certificatePath)) {
+              throw 'Development certificate was not found for the native UX smoke.'
+            }
+
+            $certificate = Import-Certificate -FilePath $certificatePath -CertStoreLocation 'Cert:\LocalMachine\TrustedPeople'
+            Add-AppxPackage -Path $packagePath.FullName -ForceApplicationShutdown -ErrorAction Stop
+            $package = Get-AppxPackage -Name $packageName -ErrorAction Stop
+            $executable = Join-Path $package.InstallLocation "$processName.exe"
+            Start-Process -FilePath $executable | Out-Null
+            ./tools/ux/run-windows-native-ux-smoke.ps1 -ProcessName $processName -EvidenceDirectory $evidenceDirectory
+          }
+          finally {
+            Get-Process -Name $processName -ErrorAction SilentlyContinue |
+              Stop-Process -Force -ErrorAction SilentlyContinue
+            Get-AppxPackage -Name $packageName -ErrorAction SilentlyContinue |
+              ForEach-Object { Remove-AppxPackage -Package $_.PackageFullName -ErrorAction SilentlyContinue }
+            if ($null -ne $certificate) {
+              Remove-Item "Cert:\LocalMachine\TrustedPeople\$($certificate.Thumbprint)" -Force -ErrorAction SilentlyContinue
+            }
+            Stop-Transcript -ErrorAction SilentlyContinue | Out-Null
+          }
+
+      - name: Upload real-app integration diagnostics and UX evidence
+        if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: windows-real-app-integration-diagnostics

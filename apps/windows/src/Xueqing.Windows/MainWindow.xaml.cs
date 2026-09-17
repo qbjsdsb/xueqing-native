@@ -1,7 +1,6 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Xueqing.Windows.Core.Layout;
-using Xueqing.Windows.Core.Models;
 using Xueqing.Windows.ViewModels;
 
 namespace Xueqing.Windows;
@@ -13,33 +12,39 @@ public sealed partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
-        Title = "学情 Native · WinUI Architecture Spike";
-        StudentList.SelectedItem = ViewModel.SelectedStudent;
+        Title = "学情 Native";
+        RootGrid.DataContext = ViewModel;
+    }
+
+    private void RootGrid_Loaded(object sender, RoutedEventArgs e)
+    {
+        ApplyLayout(RootGrid.ActualWidth);
     }
 
     private void RootGrid_SizeChanged(object sender, SizeChangedEventArgs e)
     {
-        var mode = WindowLayoutPolicy.Resolve(e.NewSize.Width);
+        ApplyLayout(e.NewSize.Width);
+    }
+
+    private void ApplyLayout(double width)
+    {
+        var mode = WindowLayoutPolicy.Resolve(width);
 
         Shell.PaneDisplayMode = mode == WindowLayoutMode.Compact
             ? NavigationViewPaneDisplayMode.LeftCompact
             : NavigationViewPaneDisplayMode.Left;
 
-        var showDetail = mode == WindowLayoutMode.Expanded;
-        DetailPanel.Visibility = showDetail ? Visibility.Visible : Visibility.Collapsed;
-        ListColumn.Width = showDetail
-            ? new GridLength(360)
-            : new GridLength(1, GridUnitType.Star);
-        DetailColumn.Width = showDetail
-            ? new GridLength(1, GridUnitType.Star)
-            : new GridLength(0);
+        StudentsView.ApplyLayout(mode);
+        OrganizationManagementView.ApplyLayout(mode);
     }
 
-    private void StudentList_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    private void Shell_SelectionChanged(NavigationView sender, NavigationViewSelectionChangedEventArgs args)
     {
-        if (StudentList.SelectedItem is StudentSummary student)
-        {
-            ViewModel.SelectedStudent = student;
-        }
+        var tag = args.SelectedItemContainer?.Tag?.ToString();
+
+        TodayView.Visibility = tag == "today" ? Visibility.Visible : Visibility.Collapsed;
+        StudentsView.Visibility = tag == "students" ? Visibility.Visible : Visibility.Collapsed;
+        LearningView.Visibility = tag == "learning" ? Visibility.Visible : Visibility.Collapsed;
+        OrganizationManagementView.Visibility = tag == "organization-management" ? Visibility.Visible : Visibility.Collapsed;
     }
 }

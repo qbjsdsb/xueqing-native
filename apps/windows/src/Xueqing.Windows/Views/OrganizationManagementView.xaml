@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="utf-8"?>
+<UserControl
+    x:Class="Xueqing.Windows.Views.OrganizationManagementView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <Grid
+        Padding="28,20,28,24"
+        RowSpacing="14">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <Grid ColumnSpacing="16">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <StackPanel Spacing="4">
+                <TextBlock
+                    AutomationProperties.AutomationId="OrganizationManagementHeading"
+                    FontSize="28"
+                    FontWeight="SemiBold"
+                    Text="机构管理" />
+                <TextBlock
+                    AutomationProperties.AutomationId="OrganizationManagementSurface"
+                    Opacity="0.68"
+                    Text="成员与责任操作 · 密集但不牺牲可读性" />
+            </StackPanel>
+            <Button Grid.Column="1" VerticalAlignment="Bottom" Content="邀请成员" />
+        </Grid>
+
+        <TextBox
+            Grid.Row="1"
+            MaxWidth="420"
+            HorizontalAlignment="Left"
+            AutomationProperties.AutomationId="OrganizationSearchBox"
+            AutomationProperties.Name="搜索机构成员"
+            PlaceholderText="搜索姓名、角色或状态" />
+
+        <Grid Grid.Row="2">
+            <ListView
+                x:Name="WideList"
+                AutomationProperties.AutomationId="OrganizationWideList"
+                ItemsSource="{Binding OrganizationMembers}"
+                SelectionMode="Single">
+                <ListView.Header>
+                    <Grid Padding="4,8" ColumnSpacing="18">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="2*" />
+                            <ColumnDefinition Width="1.3*" />
+                            <ColumnDefinition Width="1.1*" />
+                            <ColumnDefinition Width="2*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock FontSize="12" Opacity="0.62" Text="姓名" />
+                        <TextBlock Grid.Column="1" FontSize="12" Opacity="0.62" Text="角色" />
+                        <TextBlock Grid.Column="2" FontSize="12" Opacity="0.62" Text="状态" />
+                        <TextBlock Grid.Column="3" FontSize="12" Opacity="0.62" Text="最近活动" />
+                        <TextBlock Grid.Column="4" FontSize="12" Opacity="0.62" Text="操作" />
+                    </Grid>
+                </ListView.Header>
+                <ListView.ItemTemplate>
+                    <DataTemplate>
+                        <Grid Padding="4,10" ColumnSpacing="18" MinHeight="52">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="2*" />
+                                <ColumnDefinition Width="1.3*" />
+                                <ColumnDefinition Width="1.1*" />
+                                <ColumnDefinition Width="2*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="{Binding DisplayName}" TextWrapping="Wrap" />
+                            <TextBlock Grid.Column="1" Text="{Binding RoleLabel}" TextWrapping="Wrap" />
+                            <TextBlock Grid.Column="2" Text="{Binding StatusLabel}" TextWrapping="Wrap" />
+                            <TextBlock Grid.Column="3" Opacity="0.72" Text="{Binding RecentActivity}" TextWrapping="Wrap" />
+                            <Button Grid.Column="4" Content="更多" />
+                        </Grid>
+                    </DataTemplate>
+                </ListView.ItemTemplate>
+            </ListView>
+
+            <ListView
+                x:Name="CompactList"
+                AutomationProperties.AutomationId="OrganizationCompactList"
+                ItemsSource="{Binding OrganizationMembers}"
+                SelectionMode="Single"
+                Visibility="Collapsed">
+                <ListView.ItemTemplate>
+                    <DataTemplate>
+                        <Grid Padding="4,10,8,12" MinHeight="64">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Spacing="3">
+                                <TextBlock FontWeight="SemiBold" Text="{Binding DisplayName}" TextWrapping="Wrap" />
+                                <TextBlock Opacity="0.72" Text="{Binding RoleLabel}" TextWrapping="Wrap" />
+                                <TextBlock FontSize="12" Opacity="0.62" Text="{Binding StatusLabel}" />
+                            </StackPanel>
+                            <Button Grid.Column="1" Margin="16,0,0,0" VerticalAlignment="Top" Content="更多" />
+                        </Grid>
+                    </DataTemplate>
+                </ListView.ItemTemplate>
+            </ListView>
+        </Grid>
+    </Grid>
+</UserControl>

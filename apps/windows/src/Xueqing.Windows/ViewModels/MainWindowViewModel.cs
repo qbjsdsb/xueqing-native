@@ -7,19 +7,57 @@ namespace Xueqing.Windows.ViewModels;
 
 public sealed class MainWindowViewModel : ObservableObject
 {
-    private StudentSummary _selectedStudent;
+    private readonly IReadOnlyList<StudentSummary> _allStudents;
+    private StudentSummary? _selectedStudent;
 
     public MainWindowViewModel()
     {
-        Students = new ObservableCollection<StudentSummary>(SyntheticDataFactory.CreateStudents(1_000));
+        _allStudents = SyntheticDataFactory.CreateStudents(1_000);
+        Students = new ObservableCollection<StudentSummary>(_allStudents);
+        TodayActions = new ObservableCollection<TodayActionItem>(UxPrototypeFixtureFactory.CreateTodayActions());
+        OrganizationMembers = new ObservableCollection<OrganizationMemberRow>(UxPrototypeFixtureFactory.CreateOrganizationMembers());
+        LearningCase = UxPrototypeFixtureFactory.CreateLearningCase();
         _selectedStudent = Students[0];
     }
 
     public ObservableCollection<StudentSummary> Students { get; }
 
-    public StudentSummary SelectedStudent
+    public ObservableCollection<TodayActionItem> TodayActions { get; }
+
+    public LearningCasePrototype LearningCase { get; }
+
+    public ObservableCollection<OrganizationMemberRow> OrganizationMembers { get; }
+
+    public StudentSummary? SelectedStudent
     {
         get => _selectedStudent;
         set => SetProperty(ref _selectedStudent, value);
+    }
+
+    public void FilterStudents(string? query)
+    {
+        var selectedId = SelectedStudent?.Id;
+        var filtered = StudentSearch.Filter(_allStudents, query);
+
+        Students.Clear();
+        foreach (var student in filtered)
+        {
+            Students.Add(student);
+        }
+
+        if (selectedId is not null)
+        {
+            var retained = filtered.FirstOrDefault(student => student.Id == selectedId);
+            if (retained is not null)
+            {
+                SelectedStudent = retained;
+                return;
+            }
+        }
+
+        // Filtering must not implicitly activate the first result. In compact
+        // list/detail mode that would turn typing into an unexpected navigation
+        // to Student Detail. The teacher explicitly chooses the next student.
+        SelectedStudent = null;
     }
 }
