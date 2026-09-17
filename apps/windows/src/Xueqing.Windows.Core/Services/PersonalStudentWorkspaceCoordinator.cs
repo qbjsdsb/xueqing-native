@@ -114,23 +114,32 @@ public sealed class PersonalStudentWorkspaceCoordinator
     {
         ArgumentNullException.ThrowIfNull(context);
 
-        PersonalBootstrapSnapshot? bootstrap;
+        Task<StudentRecentObservationsViewState>? pending = null;
         lock (_gate)
         {
-            bootstrap = _current.Status == PersonalStudentWorkspaceStatus.Ready
+            var bootstrap = _current.Status == PersonalStudentWorkspaceStatus.Ready
                 ? _current.Bootstrap
                 : null;
+
+            if (bootstrap is not null && ContainsContext(bootstrap, context))
+            {
+                // Start the read before releasing the workspace generation gate.
+                // A concurrent Refresh can then deterministically invalidate this
+                // exact request via RecentObservations.Reset(), rather than letting
+                // a stale context begin after the reset has already happened.
+                pending = _recentObservations.LoadAsync(
+                    context.ObservationScope,
+                    bootstrap.ActorAppUserId,
+                    cancellationToken);
+            }
         }
 
-        if (bootstrap is null || !ContainsContext(bootstrap, context))
+        if (pending is null)
         {
             return _recentObservations.Reset();
         }
 
-        return await _recentObservations.LoadAsync(
-            context.ObservationScope,
-            bootstrap.ActorAppUserId,
-            cancellationToken).ConfigureAwait(false);
+        return await pending.ConfigureAwait(false);
     }
 
     public PersonalStudentWorkspaceState Reset()
@@ -164,11 +173,13 @@ public sealed class PersonalStudentWorkspaceCoordinator
                 null,
                 null);
             _current = loading;
+
+            // Authority is being re-evaluated. Reset while holding the same gate
+            // that authorizes starting a recent-read request so the ordering is
+            // deterministic under account/scope refresh races.
+            _recentObservations.Reset();
         }
 
-        // Authority is being re-evaluated. Do not keep facts from the previous
-        // account/scope visible while a new bootstrap is in flight.
-        _recentObservations.Reset();
         return loading;
     }
 
