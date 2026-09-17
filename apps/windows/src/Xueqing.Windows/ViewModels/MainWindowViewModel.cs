@@ -12,10 +12,19 @@ public sealed class MainWindowViewModel : ObservableObject
     public MainWindowViewModel()
     {
         Students = new ObservableCollection<StudentSummary>(SyntheticDataFactory.CreateStudents(1_000));
+        TodayActions = new ObservableCollection<TodayActionItem>(UxPrototypeFixtureFactory.CreateTodayActions());
+        OrganizationMembers = new ObservableCollection<OrganizationMemberRow>(UxPrototypeFixtureFactory.CreateOrganizationMembers());
+        LearningCase = UxPrototypeFixtureFactory.CreateLearningCase();
         _selectedStudent = Students[0];
     }
 
     public ObservableCollection<StudentSummary> Students { get; }
+
+    public ObservableCollection<TodayActionItem> TodayActions { get; }
+
+    public LearningCasePrototype LearningCase { get; }
+
+    public ObservableCollection<OrganizationMemberRow> OrganizationMembers { get; }
 
     public StudentSummary SelectedStudent
     {
