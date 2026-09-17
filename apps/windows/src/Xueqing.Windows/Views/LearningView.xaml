@@ -6,8 +6,7 @@
 
     <Grid
         Padding="28,20,28,24"
-        RowSpacing="16"
-        AutomationProperties.AutomationId="LearningSurface">
+        RowSpacing="16">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
@@ -15,7 +14,11 @@
 
         <Grid MaxWidth="860" HorizontalAlignment="Left">
             <StackPanel Spacing="8">
-                <TextBlock FontSize="12" Opacity="0.62" Text="学情 · 虚构案例" />
+                <TextBlock
+                    AutomationProperties.AutomationId="LearningSurface"
+                    FontSize="12"
+                    Opacity="0.62"
+                    Text="学情 · 虚构案例" />
                 <TextBlock
                     AutomationProperties.AutomationId="LearningHeading"
                     FontSize="28"
