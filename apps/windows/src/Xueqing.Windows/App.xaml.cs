@@ -1,5 +1,6 @@
 using Microsoft.UI.Xaml;
 using Xueqing.Windows.Integration;
+using Xueqing.Windows.ViewModels;
 
 namespace Xueqing.Windows;
 
@@ -14,7 +15,9 @@ public partial class App : Application
 
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
-        _window = new MainWindow();
+        var personalWorkspace = LocalReferenceProviderStudentWorkspaceFactory.CreateFromEnvironment();
+        var viewModel = new MainWindowViewModel(personalWorkspace);
+        _window = new MainWindow(viewModel);
         _window.Activate();
 
         if (WindowsPackagedAppIntegrationProbe.IsEnabled())

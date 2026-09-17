@@ -5,4 +5,13 @@ public sealed record StudentSummary(
     string DisplayName,
     string StudentCode,
     string PrimarySubject,
-    int ActiveCaseCount);
+    int ActiveCaseCount)
+{
+    public string SecondaryLabel => string.IsNullOrWhiteSpace(StudentCode)
+        ? "当前任教学员"
+        : StudentCode;
+
+    public string ActiveCaseCountLabel => ActiveCaseCount < 0
+        ? string.Empty
+        : ActiveCaseCount.ToString(System.Globalization.CultureInfo.InvariantCulture);
+}

@@ -29,9 +29,10 @@ completed_gates:
   - create-observation-command-adapter-conformance
   - personal-bootstrap-v1
   - text-quick-capture-observation-vertical-slice
+  - windows-student-recent-observation-v1
 
 open_gates:
-  - windows-student-recent-observation-v1
+  - provider-session-auth-conformance
   - provider-adapter-conformance-spike
   - offline-access-lease-duration-and-clock-rollback-spike
   - production-provider-region-data-residency-gate
@@ -41,11 +42,11 @@ open_gates:
 next_execution:
   parallel_limit: 1
   lines:
-    - windows-student-recent-observation-v1
-  after_current_green: []
+    - provider-session-auth-conformance
+  after_current_green:
+    - provider-adapter-conformance-spike
 
 later:
-  - provider-session-auth-conformance
   - provider-projection-conformance
   - provider-storage-conformance
   - generic-change-list-or-cursor-sync

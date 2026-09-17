@@ -59,6 +59,34 @@ public sealed partial class StudentsView : UserControl
         }
     }
 
+    private async void StudentList_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (DataContext is MainWindowViewModel viewModel &&
+            viewModel.IsAuthoritativeStudentWorkspace &&
+            viewModel.SelectedTeachingContexts.Count == 1)
+        {
+            await viewModel.LoadSelectedTeachingContextAsync();
+        }
+    }
+
+    private async void SubjectContextBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (DataContext is MainWindowViewModel viewModel &&
+            viewModel.SelectedTeachingContexts.Count > 1 &&
+            viewModel.SelectedTeachingContext is not null)
+        {
+            await viewModel.LoadSelectedTeachingContextAsync();
+        }
+    }
+
+    private async void RefreshAuthoritativeStudents_Click(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is MainWindowViewModel viewModel)
+        {
+            await viewModel.RefreshAuthoritativeStudentsAsync();
+        }
+    }
+
     private void StudentList_KeyDown(object sender, KeyRoutedEventArgs e)
     {
         if (_layoutMode == WindowLayoutMode.Expanded || StudentList.SelectedItem is null)
