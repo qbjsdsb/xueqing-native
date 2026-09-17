@@ -86,6 +86,7 @@ internal static class PersonalBootstrapJsonParser
             .ToHashSet();
         var assignmentIds = new HashSet<Guid>();
         var scopeKeys = new HashSet<(Guid OrganizationId, Guid StudentId, Guid SubjectProfileId)>();
+        var studentNames = new Dictionary<(Guid OrganizationId, Guid StudentId), string>();
         var contexts = new List<PersonalTeachingContext>();
 
         foreach (var item in element.EnumerateArray())
@@ -95,6 +96,8 @@ internal static class PersonalBootstrapJsonParser
             var studentId = GetRequiredGuid(item, "student_id");
             var subjectProfileId = GetRequiredGuid(item, "subject_profile_id");
             var assignmentId = GetRequiredGuid(item, "assignment_id");
+            var studentDisplayName = GetRequiredNonBlankString(item, "student_display_name");
+            var subjectKey = GetRequiredNonBlankString(item, "subject_key");
 
             if (!teachingOrganizations.Contains(organizationId))
             {
@@ -109,12 +112,25 @@ internal static class PersonalBootstrapJsonParser
                 throw new InvalidDataException("PersonalBootstrap contains a duplicate teaching scope.");
             }
 
+            var studentKey = (organizationId, studentId);
+            if (studentNames.TryGetValue(studentKey, out var existingName))
+            {
+                if (!string.Equals(existingName, studentDisplayName, StringComparison.Ordinal))
+                {
+                    throw new InvalidDataException("PersonalBootstrap gives one Student inconsistent display names across teaching contexts.");
+                }
+            }
+            else
+            {
+                studentNames.Add(studentKey, studentDisplayName);
+            }
+
             contexts.Add(new PersonalTeachingContext(
                 organizationId,
                 studentId,
-                GetRequiredNonBlankString(item, "student_display_name"),
+                studentDisplayName,
                 subjectProfileId,
-                GetRequiredNonBlankString(item, "subject_key"),
+                subjectKey,
                 assignmentId));
         }
 
