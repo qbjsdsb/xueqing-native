@@ -9,6 +9,8 @@ import com.xueqing.app.application.bootstrap.PersonalBootstrapResult
  * authenticated composition.
  */
 object BuildVariantQuickCaptureBootstrap {
+    const val ENVIRONMENT_ID = "release-unconfigured"
+
     fun remote(): PersonalBootstrapRemote = PersonalBootstrapRemote {
         PersonalBootstrapResult.AuthenticationRequired
     }
