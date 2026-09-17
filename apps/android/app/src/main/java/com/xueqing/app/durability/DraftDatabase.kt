@@ -16,11 +16,19 @@ abstract class DraftDatabase : RoomDatabase() {
     companion object {
         const val DATABASE_NAME = "xueqing-durable-intent.db"
 
+        @Volatile
+        private var instance: DraftDatabase? = null
+
         fun create(context: Context): DraftDatabase =
             Room.databaseBuilder(
                 context.applicationContext,
                 DraftDatabase::class.java,
                 DATABASE_NAME,
             ).build()
+
+        fun get(context: Context): DraftDatabase =
+            instance ?: synchronized(this) {
+                instance ?: create(context).also { created -> instance = created }
+            }
     }
 }
