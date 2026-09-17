@@ -1,7 +1,7 @@
 schema_version: 1
 project: xueqing-native
 phase: phase-1
-milestone: android-security-and-backend-contracts
+milestone: command-adapter-and-first-observation-slice
 status: active
 architecture_baseline: v1-accepted
 
@@ -9,6 +9,7 @@ frozen:
   windows: winui3
   windows_durable_intent_encryption: sqlite3mc-2.4.0-plus-dpapi-currentuser
   android: kotlin-compose
+  android_durable_intent_encryption: sqlcipher-4.17.0-plus-android-keystore
   backend: postgres-first
   development_provider: supabase
   client_api: versioned-domain-projections-and-commands
@@ -23,10 +24,12 @@ completed_gates:
   - windows-native-ux-prototype
   - android-architecture-spike
   - android-draft-durability-gate
+  - android-local-data-encryption-gate
+  - backend-create-observation-contract
 
 open_gates:
-  - android-local-data-encryption-spike
-  - backend-api-schema-spike
+  - create-observation-command-adapter-conformance
+  - text-quick-capture-observation-vertical-slice
   - provider-adapter-conformance-spike
   - offline-access-lease-duration-and-clock-rollback-spike
   - production-provider-region-data-residency-gate
@@ -34,15 +37,18 @@ open_gates:
   - backup-storage-restore-gate
 
 next_execution:
-  parallel_limit: 2
+  parallel_limit: 1
   lines:
-    - android-local-data-encryption
-    - backend-create-observation-contract
-  after_both_green:
-    - provider-adapter-conformance
+    - create-observation-command-adapter-conformance
+  after_current_green:
+    - personal-bootstrap-v1
     - text-quick-capture-observation-vertical-slice
+    - windows-student-recent-observation-v1
 
 later:
+  - provider-session-auth-conformance
+  - provider-projection-conformance
+  - provider-storage-conformance
   - generic-change-list-or-cursor-sync
   - large-history-full-text-search
   - realtime-freshness
