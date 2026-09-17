@@ -13,7 +13,6 @@ permissions:
 env:
   ANDROID_HOME: /usr/local/lib/android/sdk
   ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
-  ANDROID_AVD_HOME: ${{ runner.temp }}/android-avd
 
 concurrency:
   group: android-spike-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -150,6 +149,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          export ANDROID_AVD_HOME="$RUNNER_TEMP/android-avd"
           sdkmanager="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
           mkdir -p "$ANDROID_AVD_HOME"
           "$sdkmanager" 'platform-tools' 'emulator' 'platforms;android-36' 'build-tools;35.0.0' 'system-images;android-36;google_apis;x86_64'
@@ -164,6 +164,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          export ANDROID_AVD_HOME="$RUNNER_TEMP/android-avd"
           adb="$ANDROID_HOME/platform-tools/adb"
           if [ -e /dev/kvm ]; then
             sudo chmod 666 /dev/kvm
