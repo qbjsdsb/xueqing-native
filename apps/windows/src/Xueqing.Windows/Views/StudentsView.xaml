@@ -25,6 +25,7 @@
             <TextBox
                 x:Name="SearchBox"
                 Grid.Row="1"
+                AutomationProperties.AutomationId="StudentSearchBox"
                 AutomationProperties.Name="搜索学生"
                 PlaceholderText="搜索姓名、学号或学科"
                 TextChanged="SearchBox_TextChanged" />
@@ -32,6 +33,7 @@
             <ListView
                 x:Name="StudentList"
                 Grid.Row="2"
+                AutomationProperties.AutomationId="StudentList"
                 ItemsSource="{Binding Students}"
                 SelectedItem="{Binding SelectedStudent, Mode=TwoWay}"
                 SelectionChanged="StudentList_SelectionChanged"
@@ -67,6 +69,7 @@
                 x:Name="BackToListButton"
                 Margin="0,0,0,12"
                 HorizontalAlignment="Left"
+                AutomationProperties.AutomationId="BackToStudentList"
                 Click="BackToListButton_Click"
                 Content="返回学生列表"
                 Visibility="Collapsed" />
