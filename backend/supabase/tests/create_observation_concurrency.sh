@@ -9,6 +9,8 @@ assignment_id='50000000-0000-0000-0000-000000000001'
 actor_id='10000000-0000-0000-0000-000000000001'
 auth_subject='a0000000-0000-0000-0000-000000000001'
 lock_key=42424217
+holder_app='xueqing_concurrency_lock_holder'
+writer_app='xueqing_concurrency_create_observation'
 
 db_container="$(docker ps --filter 'name=supabase_db_' --format '{{.Names}}' | head -n 1)"
 if [[ -z "$db_container" ]]; then
@@ -22,8 +24,13 @@ psql_db() {
 
 holder_pid=''
 writer_pid=''
+terminate_test_sessions() {
+  psql_db -Atc "select pg_catalog.pg_terminate_backend(pid) from pg_catalog.pg_stat_activity where application_name in ('$holder_app', '$writer_app') and pid <> pg_catalog.pg_backend_pid()" >/dev/null 2>&1 || true
+}
+
 cleanup() {
   set +e
+  terminate_test_sessions
   if [[ -n "$holder_pid" ]]; then kill "$holder_pid" 2>/dev/null || true; fi
   if [[ -n "$writer_pid" ]]; then kill "$writer_pid" 2>/dev/null || true; fi
   wait "$holder_pid" 2>/dev/null || true
@@ -73,22 +80,25 @@ SQL
 # A separate session owns the advisory lock. When the command reaches the
 # trigger it blocks there while retaining every Teaching Fact FOR SHARE lock.
 psql_db > /tmp/xueqing-lock-holder.log 2>&1 <<SQL &
+set application_name = '$holder_app';
 select pg_catalog.pg_advisory_lock($lock_key);
 select pg_catalog.pg_sleep(30);
 SQL
 holder_pid=$!
 
+granted=0
 for _ in $(seq 1 40); do
-  granted="$(psql_db -Atc "select count(*) from pg_catalog.pg_locks where locktype = 'advisory' and granted")"
+  granted="$(psql_db -Atc "select count(*) from pg_catalog.pg_locks as locks join pg_catalog.pg_stat_activity as activity on activity.pid = locks.pid where locks.locktype = 'advisory' and locks.granted and activity.application_name = '$holder_app'")"
   if [[ "$granted" -ge 1 ]]; then break; fi
   sleep 0.1
 done
-if [[ "${granted:-0}" -lt 1 ]]; then
+if [[ "$granted" -lt 1 ]]; then
   echo 'Test holder never acquired the advisory lock.' >&2
   exit 1
 fi
 
 psql_db > /tmp/xueqing-create-observation.log 2>&1 <<SQL &
+set application_name = '$writer_app';
 select pg_catalog.set_config('request.jwt.claim.sub', '$auth_subject', false);
 select pg_catalog.set_config('request.jwt.claim.role', 'authenticated', false);
 select pg_catalog.set_config('request.jwt.claims', '{"sub":"$auth_subject","role":"authenticated"}', false);
@@ -107,10 +117,10 @@ SQL
 writer_pid=$!
 
 # Do not guess that the writer reached the trigger: wait until PostgreSQL shows
-# an ungranted advisory lock request from the CreateObservation transaction.
+# the writer waiting for the holder's advisory lock.
 waiting=0
 for _ in $(seq 1 80); do
-  waiting="$(psql_db -Atc "select count(*) from pg_catalog.pg_locks where locktype = 'advisory' and not granted")"
+  waiting="$(psql_db -Atc "select count(*) from pg_catalog.pg_locks as locks join pg_catalog.pg_stat_activity as activity on activity.pid = locks.pid where locks.locktype = 'advisory' and not locks.granted and activity.application_name = '$writer_app'")"
   if [[ "$waiting" -ge 1 ]]; then break; fi
   sleep 0.1
 done
@@ -154,9 +164,10 @@ expect_revoke_blocked \
   'Assignment revoke' \
   "update public.student_teacher_assignments set active = false where id = '$assignment_id'::uuid;"
 
-# Release the test barrier. The command may now commit; the locks must then be
-# released and the same authority changes must become immediately writable.
-kill "$holder_pid"
+# Release the test barrier by terminating the dedicated holder backend. The
+# command may now commit; the locks must then be released and the same authority
+# changes must become immediately writable.
+psql_db -Atc "select pg_catalog.pg_terminate_backend(pid) from pg_catalog.pg_stat_activity where application_name = '$holder_app'" >/dev/null
 wait "$holder_pid" 2>/dev/null || true
 holder_pid=''
 wait "$writer_pid"
