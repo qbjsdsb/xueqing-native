@@ -104,7 +104,7 @@ Phase 0 已完成并接受 **Architecture Baseline v1**。广泛架构研究已�
 
 Windows 的架构与真实 LocalState/MSIX 基线已经通过：真实 WinUI App 已在云端完成 locked restore、构建、MSIX 签名/安装、SQLite3MC + DPAPI 加密 Durable Intent、重启、v1 → v2 原位升级、同一安装/数据库/operation 连续性与卸载清理验证。Windows 下一道门是 **Native UX Prototype**：用确定性虚构数据把 Today、Students、Learning Case 与 Organization Management 的 WinUI 原生交互、布局、可访问性和键鼠效率变成可执行证据，再冻结 UX v1。
 
-Android 已完成稳定 API 36 的 Kotlin + Compose 云端 bootstrap。下一道门不是云同步，而是 **Room + Draft Engine + process-death recovery**：先证明课堂输入在 Activity 重建、后台切换和 OS 进程死亡后仍能按正确 user / organization / Student / subject scope 恢复，再进入 Outbox / WorkManager 与 Android 本地加密 Gate。
+Android 已完成稳定 API 36 的 Kotlin + Compose bootstrap，并正在收口 **Room + Draft Engine + process-death recovery** Gate：候选实现已把草稿按 environment / app-user / organization / Student / subject / context 隔离，使用事务 epoch barrier 防止显式丢弃后旧 autosave 复活，并通过 Activity 重建、前后台切换、真实 `force-stop` 后 UI 恢复和 Room schema drift 的云端设备验证。该 Gate 只证明本机文本草稿的耐久性；Android 本地加密/Keystore、Outbox/WorkManager、附件暂存、生产身份 scope 与任何服务端“保存成功”语义仍是后续独立 Gate。
 
 Backend 仍处于 PostgreSQL-first / Supabase development-provider 的 Spike 前状态。客户端上述基础证据稳定后，再进入 Backend/API-schema + Provider Conformance；这些 Gate 通过后才开始第一条正式学生业务 Vertical Slice。
 

@@ -17,9 +17,11 @@ import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -39,45 +41,65 @@ internal enum class PrimaryDestination(
 }
 
 @Composable
-internal fun XueqingApp() {
+internal fun XueqingApp(
+    quickCaptureViewModel: QuickCaptureViewModel,
+    startInQuickCapture: Boolean = false,
+) {
     val colorScheme = if (isSystemInDarkTheme()) darkColorScheme() else lightColorScheme()
+    val quickCaptureState by quickCaptureViewModel.uiState.collectAsState()
 
     MaterialTheme(colorScheme = colorScheme) {
         var selectedName by rememberSaveable { mutableStateOf(PrimaryDestination.Today.name) }
+        var showingQuickCapture by rememberSaveable { mutableStateOf(startInQuickCapture) }
         val selected = PrimaryDestination.entries.firstOrNull { it.name == selectedName }
             ?: PrimaryDestination.Today
 
-        Scaffold(
-            bottomBar = {
-                NavigationBar {
-                    PrimaryDestination.entries.forEach { destination ->
-                        NavigationBarItem(
-                            selected = selected == destination,
-                            onClick = { selectedName = destination.name },
-                            icon = {
-                                Text(
-                                    text = destination.bootstrapGlyph,
-                                    modifier = Modifier.clearAndSetSemantics { },
-                                    style = MaterialTheme.typography.labelMedium,
-                                )
-                            },
-                            label = { Text(destination.label) },
-                        )
+        if (showingQuickCapture) {
+            QuickCaptureScreen(
+                state = quickCaptureState,
+                onTextChanged = quickCaptureViewModel::onTextChanged,
+                onClose = { showingQuickCapture = false },
+                onDiscard = quickCaptureViewModel::discard,
+            )
+        } else {
+            Scaffold(
+                bottomBar = {
+                    NavigationBar {
+                        PrimaryDestination.entries.forEach { destination ->
+                            NavigationBarItem(
+                                selected = selected == destination,
+                                onClick = { selectedName = destination.name },
+                                icon = {
+                                    Text(
+                                        text = destination.bootstrapGlyph,
+                                        modifier = Modifier.clearAndSetSemantics { },
+                                        style = MaterialTheme.typography.labelMedium,
+                                    )
+                                },
+                                label = { Text(destination.label) },
+                            )
+                        }
                     }
+                },
+            ) { innerPadding ->
+                when (selected) {
+                    PrimaryDestination.Today -> TodayScreen(
+                        innerPadding = innerPadding,
+                        onQuickCapture = { showingQuickCapture = true },
+                    )
+                    PrimaryDestination.Students -> StudentsScreen(innerPadding)
+                    PrimaryDestination.Learning -> LearningScreen(innerPadding)
                 }
-            },
-        ) { innerPadding ->
-            when (selected) {
-                PrimaryDestination.Today -> TodayScreen(innerPadding)
-                PrimaryDestination.Students -> StudentsScreen(innerPadding)
-                PrimaryDestination.Learning -> LearningScreen(innerPadding)
             }
         }
     }
 }
 
 @Composable
-private fun TodayScreen(innerPadding: PaddingValues) {
+private fun TodayScreen(
+    innerPadding: PaddingValues,
+    onQuickCapture: () -> Unit,
+) {
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
@@ -86,9 +108,25 @@ private fun TodayScreen(innerPadding: PaddingValues) {
         verticalArrangement = Arrangement.spacedBy(0.dp),
     ) {
         item {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = "今日",
+                    style = MaterialTheme.typography.headlineSmall,
+                )
+                TextButton(onClick = onQuickCapture) {
+                    Text("记录")
+                }
+            }
+        }
+        item {
             Text(
-                text = "今日",
-                style = MaterialTheme.typography.headlineSmall,
+                text = "个人教学行动",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(bottom = 24.dp),
             )
         }
