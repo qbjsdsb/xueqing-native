@@ -6,8 +6,7 @@
 
     <Grid
         Padding="28,20,28,24"
-        RowSpacing="14"
-        AutomationProperties.AutomationId="OrganizationManagementSurface">
+        RowSpacing="14">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
@@ -25,7 +24,10 @@
                     FontSize="28"
                     FontWeight="SemiBold"
                     Text="机构管理" />
-                <TextBlock Opacity="0.68" Text="成员与责任操作 · 密集但不牺牲可读性" />
+                <TextBlock
+                    AutomationProperties.AutomationId="OrganizationManagementSurface"
+                    Opacity="0.68"
+                    Text="成员与责任操作 · 密集但不牺牲可读性" />
             </StackPanel>
             <Button Grid.Column="1" VerticalAlignment="Bottom" Content="邀请成员" />
         </Grid>
