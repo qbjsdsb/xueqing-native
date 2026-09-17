@@ -8,6 +8,7 @@ on:
       - 'apps/windows/src/Xueqing.Windows.Core/**'
       - 'apps/windows/spikes/Xueqing.Windows.PackagingProbe/Assets/**'
       - 'tools/packaging/run-windows-real-app-integration.ps1'
+      - 'tools/ux/**'
       - 'docs/architecture/WINDOWS_REAL_APP_LOCALSTATE_MSIX.md'
       - 'docs/project/PROJECT_STATE.yaml'
       - 'Directory.Packages.props'
@@ -61,6 +62,42 @@ jobs:
           XUEQING_WINDOWS_INTEGRATION_DIAGNOSTIC_OUTPUT: ${{ github.workspace }}\artifacts\windows-real-app-integration\diagnostics\xueqing-app-integration.json
         run: |
           ./tools/packaging/run-windows-real-app-integration.ps1 -RepositoryRoot "$env:GITHUB_WORKSPACE"
+
+      - name: Reinstall validated v2 package and run native UX smoke
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $packageName = 'Xueqing.Native.Development'
+          $processName = 'Xueqing.Windows'
+          $certificatePath = Join-Path $env:GITHUB_WORKSPACE 'artifacts/windows-real-app-integration/xueqing-native-real-app.cer'
+          $packagePath = Get-ChildItem (Join-Path $env:GITHUB_WORKSPACE 'artifacts/windows-real-app-integration/v2') -Recurse -File -Filter *.msix |
+            Where-Object { $_.FullName -notmatch '\\Dependencies\\' } |
+            Select-Object -First 1
+
+          if ($null -eq $packagePath) {
+            throw 'Validated v2 MSIX was not found for the native UX smoke.'
+          }
+          if (-not (Test-Path $certificatePath)) {
+            throw 'Development certificate was not found for the native UX smoke.'
+          }
+
+          $certificate = Import-Certificate -FilePath $certificatePath -CertStoreLocation 'Cert:\LocalMachine\TrustedPeople'
+          try {
+            Add-AppxPackage -Path $packagePath.FullName -ForceApplicationShutdown -ErrorAction Stop
+            $package = Get-AppxPackage -Name $packageName -ErrorAction Stop
+            $executable = Join-Path $package.InstallLocation "$processName.exe"
+            Start-Process -FilePath $executable | Out-Null
+            ./tools/ux/run-windows-native-ux-smoke.ps1 -ProcessName $processName
+          }
+          finally {
+            Get-Process -Name $processName -ErrorAction SilentlyContinue |
+              Stop-Process -Force -ErrorAction SilentlyContinue
+            Get-AppxPackage -Name $packageName -ErrorAction SilentlyContinue |
+              ForEach-Object { Remove-AppxPackage -Package $_.PackageFullName -ErrorAction SilentlyContinue }
+            if ($null -ne $certificate) {
+              Remove-Item "Cert:\LocalMachine\TrustedPeople\$($certificate.Thumbprint)" -Force -ErrorAction SilentlyContinue
+            }
+          }
 
       - name: Upload real-app integration diagnostics
         if: failure()
