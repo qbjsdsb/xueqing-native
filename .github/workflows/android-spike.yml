@@ -211,7 +211,10 @@ jobs:
         if: always()
         shell: bash
         run: |
-          python3 - <<'PY'
+          set -o pipefail
+          diagnostic_dir='artifacts/android-draft-durability/diagnostics'
+          mkdir -p "$diagnostic_dir"
+          python3 - <<'PY' | tee "$diagnostic_dir/instrumentation-summary.txt"
           import glob
           import xml.etree.ElementTree as ET
 
@@ -241,6 +244,7 @@ jobs:
                       print(body[:12000])
           print(f'Instrumentation summary: tests={total}, failures={failures}, errors={errors}, skipped={skipped}')
           PY
+          find apps/android/app/build/outputs/androidTest-results/connected/debug -name 'TEST-*.xml' -type f -exec cp {} "$diagnostic_dir" \; 2>/dev/null || true
 
       - name: Verify durability instrumentation tests executed
         shell: bash
@@ -313,3 +317,12 @@ jobs:
         if: failure()
         shell: bash
         run: cat "$RUNNER_TEMP/xueqing-emulator.log" || true
+
+      - name: Upload Android durability diagnostics
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: android-draft-durability-diagnostics
+          path: artifacts/android-draft-durability/diagnostics
+          if-no-files-found: warn
+          retention-days: 7
