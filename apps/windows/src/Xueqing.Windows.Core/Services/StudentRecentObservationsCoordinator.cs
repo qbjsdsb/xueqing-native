@@ -116,13 +116,13 @@ public sealed class StudentRecentObservationsCoordinator
     {
         if (result.IsSuccess && result.Snapshot is not null)
         {
-            var status = result.Snapshot.Observations.Count == 0
+            var successStatus = result.Snapshot.Observations.Count == 0
                 ? StudentRecentObservationsViewStatus.Empty
                 : StudentRecentObservationsViewStatus.Data;
             return new StudentRecentObservationsViewState(
                 generation,
                 scope,
-                status,
+                successStatus,
                 result.Snapshot,
                 null);
         }
@@ -130,7 +130,7 @@ public sealed class StudentRecentObservationsCoordinator
         var failure = result.Failure ?? new StudentRecentObservationsFailure(
             StudentRecentObservationsFailureKind.InvalidResponse,
             "XQ_CLIENT_RESULT_INVALID");
-        var status = failure.Kind switch
+        var failureStatus = failure.Kind switch
         {
             StudentRecentObservationsFailureKind.AuthenticationRequired => StudentRecentObservationsViewStatus.AuthenticationRequired,
             StudentRecentObservationsFailureKind.AccessDenied => StudentRecentObservationsViewStatus.AccessDenied,
@@ -140,7 +140,7 @@ public sealed class StudentRecentObservationsCoordinator
         return new StudentRecentObservationsViewState(
             generation,
             scope,
-            status,
+            failureStatus,
             null,
             failure.Code);
     }
