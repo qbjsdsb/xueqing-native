@@ -1,7 +1,7 @@
 package com.xueqing.app.presentation
 
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.assertTextContains
-import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
@@ -71,12 +71,12 @@ class QuickCaptureLifecycleInstrumentedTest {
                 .fetchSemanticsNodes(atLeastOneRootRequired = false)
                 .isEmpty()
         }
-        composeRule.onNodeWithTag("quick-capture-input").assertTextEquals("")
+        awaitEditableTextEmpty()
         awaitLocalSafe()
 
         composeRule.activityRule.scenario.recreate()
 
-        composeRule.onNodeWithTag("quick-capture-input").assertTextEquals("")
+        awaitEditableTextEmpty()
         awaitLocalSafe()
     }
 
@@ -86,6 +86,15 @@ class QuickCaptureLifecycleInstrumentedTest {
             composeRule.onAllNodesWithTag("quick-capture-input")
                 .fetchSemanticsNodes(atLeastOneRootRequired = false)
                 .isNotEmpty()
+        }
+    }
+
+    private fun awaitEditableTextEmpty() {
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            val nodes = composeRule.onAllNodesWithTag("quick-capture-input")
+                .fetchSemanticsNodes(atLeastOneRootRequired = false)
+            nodes.size == 1 &&
+                nodes.single().config[SemanticsProperties.EditableText].text.isEmpty()
         }
     }
 
