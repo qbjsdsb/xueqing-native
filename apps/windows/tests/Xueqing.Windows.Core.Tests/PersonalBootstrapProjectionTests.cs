@@ -51,6 +51,17 @@ public sealed class PersonalBootstrapProjectionTests
     }
 
     [TestMethod]
+    public async Task Reader_rejects_inconsistent_student_identity_across_subject_contexts()
+    {
+        var reader = CreateReader(new StubHandler(HttpStatusCode.OK, InconsistentStudentNamesEnvelope()));
+
+        var result = await reader.ReadAsync();
+
+        Assert.AreEqual(PersonalBootstrapFailureKind.InvalidResponse, result.Failure?.Kind);
+        Assert.AreEqual("XQ_BOOTSTRAP_CONTRACT_INVALID", result.Failure?.Code);
+    }
+
+    [TestMethod]
     public async Task Reader_maps_actor_disable_without_exposing_provider_error_types()
     {
         var reader = CreateReader(new StubHandler(
@@ -102,6 +113,35 @@ public sealed class PersonalBootstrapProjectionTests
               "subject_profile_id":"40000000-0000-0000-0000-000000000001",
               "subject_key":"chinese",
               "assignment_id":"50000000-0000-0000-0000-000000000001"
+            }
+          ]
+        }
+        """;
+
+    private static string InconsistentStudentNamesEnvelope() => """
+        {
+          "contract":"personal_bootstrap_v1",
+          "generated_at_server":"2026-09-17T12:00:00Z",
+          "actor":{"app_user_id":"10000000-0000-0000-0000-000000000001","display_name":"虚构老师"},
+          "organizations":[
+            {"organization_id":"20000000-0000-0000-0000-000000000001","name":"虚构机构","can_teach":true}
+          ],
+          "teaching_contexts":[
+            {
+              "organization_id":"20000000-0000-0000-0000-000000000001",
+              "student_id":"30000000-0000-0000-0000-000000000001",
+              "student_display_name":"虚构学生0001",
+              "subject_profile_id":"40000000-0000-0000-0000-000000000001",
+              "subject_key":"chinese",
+              "assignment_id":"50000000-0000-0000-0000-000000000001"
+            },
+            {
+              "organization_id":"20000000-0000-0000-0000-000000000001",
+              "student_id":"30000000-0000-0000-0000-000000000001",
+              "student_display_name":"同一ID却是另一个名字",
+              "subject_profile_id":"40000000-0000-0000-0000-000000000002",
+              "subject_key":"math",
+              "assignment_id":"50000000-0000-0000-0000-000000000002"
             }
           ]
         }
