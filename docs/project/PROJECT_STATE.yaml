@@ -1,7 +1,7 @@
 schema_version: 1
 project: xueqing-native
 phase: phase-1
-milestone: native-ux-and-android-durability-spikes
+milestone: android-security-and-backend-contracts
 status: active
 architecture_baseline: v1-accepted
 
@@ -19,10 +19,12 @@ frozen:
   cloud_development: ci-as-development-lab
   ai_continuity: github-is-engineering-source-of-truth
 
-open_gates:
+completed_gates:
   - windows-native-ux-prototype
   - android-architecture-spike
   - android-draft-durability-gate
+
+open_gates:
   - android-local-data-encryption-spike
   - backend-api-schema-spike
   - provider-adapter-conformance-spike
@@ -30,6 +32,15 @@ open_gates:
   - production-provider-region-data-residency-gate
   - signing-and-recovery-gate
   - backup-storage-restore-gate
+
+next_execution:
+  parallel_limit: 2
+  lines:
+    - android-local-data-encryption
+    - backend-create-observation-contract
+  after_both_green:
+    - provider-adapter-conformance
+    - text-quick-capture-observation-vertical-slice
 
 later:
   - generic-change-list-or-cursor-sync
