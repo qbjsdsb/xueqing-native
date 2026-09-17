@@ -65,12 +65,12 @@ The accepted matrix remains intentionally conservative:
 - Activity Compose: `1.13.0`;
 - Room: `2.8.5`;
 - Lifecycle: `2.10.0`;
-- SQLCipher for Android Community: `4.19.0`;
+- SQLCipher for Android Community: `4.17.0` (latest line kept compatible with the frozen API 36 / AGP 8.13 baseline; SQLCipher 4.18+ requires compileSdk 37);
 - AndroidX SQLite support API: `2.7.0`;
 - compile / target SDK: `36`;
 - minimum SDK: `26` for the current native baseline.
 
-Do not opportunistically upgrade Compose, Room, Lifecycle, AGP, Kotlin or API level inside security/product feature PRs.
+Do not opportunistically upgrade Compose, Room, Lifecycle, AGP, Kotlin or API level inside security/product feature PRs. API 37 / newer AGP and later SQLCipher upgrades belong in a separate toolchain gate.
 
 ## Package boundary
 
