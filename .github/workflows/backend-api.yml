@@ -5,6 +5,7 @@ on:
     paths:
       - 'backend/supabase/**'
       - 'contracts/commands/**'
+      - 'contracts/projections/**'
       - 'contracts/errors/**'
       - '.github/workflows/backend-api.yml'
   workflow_dispatch:
