@@ -177,9 +177,10 @@ public sealed class MainWindowViewModel : ObservableObject
         _allStudents.AddRange(summaries);
         ReplaceStudents(_allStudents);
         SelectedStudent = Students.FirstOrDefault();
-        RecentObservationsStatusText = Students.Count == 0
-            ? "当前账号暂无有效任教学员。"
-            : "选择学生查看服务器已确认的最近记录。";
+        if (Students.Count == 0)
+        {
+            RecentObservationsStatusText = "当前账号暂无有效任教学员。";
+        }
     }
 
     public async Task LoadSelectedTeachingContextAsync(CancellationToken cancellationToken = default)
