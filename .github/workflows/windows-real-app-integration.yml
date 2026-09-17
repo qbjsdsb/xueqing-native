@@ -78,6 +78,7 @@ jobs:
           $packageName = 'Xueqing.Native.Development'
           $processName = 'Xueqing.Windows'
           $diagnosticDirectory = Join-Path $env:GITHUB_WORKSPACE 'artifacts/windows-real-app-integration/diagnostics'
+          $evidenceDirectory = Join-Path $diagnosticDirectory 'native-ux-evidence'
           $transcriptPath = Join-Path $diagnosticDirectory 'native-ux-smoke.txt'
           New-Item -ItemType Directory -Force -Path $diagnosticDirectory | Out-Null
           Start-Transcript -Path $transcriptPath -Force | Out-Null
@@ -100,7 +101,7 @@ jobs:
             $package = Get-AppxPackage -Name $packageName -ErrorAction Stop
             $executable = Join-Path $package.InstallLocation "$processName.exe"
             Start-Process -FilePath $executable | Out-Null
-            ./tools/ux/run-windows-native-ux-smoke.ps1 -ProcessName $processName
+            ./tools/ux/run-windows-native-ux-smoke.ps1 -ProcessName $processName -EvidenceDirectory $evidenceDirectory
           }
           finally {
             Get-Process -Name $processName -ErrorAction SilentlyContinue |
@@ -113,8 +114,8 @@ jobs:
             Stop-Transcript -ErrorAction SilentlyContinue | Out-Null
           }
 
-      - name: Upload real-app integration diagnostics
-        if: failure()
+      - name: Upload real-app integration diagnostics and UX evidence
+        if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: windows-real-app-integration-diagnostics

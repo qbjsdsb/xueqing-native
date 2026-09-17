@@ -1,6 +1,7 @@
 [CmdletBinding()]
 param(
-    [string]$ProcessName = 'Xueqing.Windows'
+    [string]$ProcessName = 'Xueqing.Windows',
+    [string]$EvidenceDirectory = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -9,6 +10,7 @@ Set-StrictMode -Version Latest
 Add-Type -AssemblyName UIAutomationClient
 Add-Type -AssemblyName UIAutomationTypes
 Add-Type -AssemblyName System.Windows.Forms
+Add-Type -AssemblyName System.Drawing.Common
 
 Add-Type @'
 using System;
@@ -401,6 +403,37 @@ function Set-WindowDips {
     Start-Sleep -Milliseconds 300
 }
 
+function Save-WindowScreenshot {
+    param([Parameter(Mandatory = $true)][string]$Name)
+
+    if ([string]::IsNullOrWhiteSpace($EvidenceDirectory)) {
+        return
+    }
+
+    New-Item -ItemType Directory -Force -Path $EvidenceDirectory | Out-Null
+    $rectangle = $script:root.Current.BoundingRectangle
+    $x = [int][Math]::Floor($rectangle.X)
+    $y = [int][Math]::Floor($rectangle.Y)
+    $width = [int][Math]::Ceiling($rectangle.Width)
+    $height = [int][Math]::Ceiling($rectangle.Height)
+    if ($width -le 0 -or $height -le 0) {
+        throw "Cannot capture '$Name': native window has an empty bounding rectangle."
+    }
+
+    $bitmap = New-Object System.Drawing.Bitmap($width, $height)
+    $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
+    try {
+        $graphics.CopyFromScreen($x, $y, 0, 0, $bitmap.Size)
+        $path = Join-Path $EvidenceDirectory "$Name.png"
+        $bitmap.Save($path, [System.Drawing.Imaging.ImageFormat]::Png)
+        Write-Host "[ux-evidence] Saved representative screenshot: $path"
+    }
+    finally {
+        $graphics.Dispose()
+        $bitmap.Dispose()
+    }
+}
+
 function Navigate-ToSurface {
     param(
         [Parameter(Mandatory = $true)][string]$NavigationId,
@@ -417,7 +450,7 @@ function Navigate-ToSurface {
 }
 
 function Set-SearchValue {
-    param([Parameter(Mandatory = $true)][string]$Value)
+    param([Parameter(Mandatory = $true)][AllowEmptyString()][string]$Value)
 
     $searchBox = Wait-Until -FailureMessage 'Student search box is unavailable.' -Condition {
         Find-VisibleByAutomationId -Root $script:root -AutomationId 'StudentSearchBox'
@@ -441,6 +474,37 @@ function Get-UniqueFilteredStudentItem {
         }
         return $items[0]
     }
+}
+
+function Assert-ChineseUnicodeSearch {
+    Set-WindowDips -Width 800 -Height 640
+    Navigate-ToSurface -NavigationId 'StudentsNavigation' -SurfaceId 'StudentsSurface' | Out-Null
+    Set-SearchValue -Value '虚构学生0777'
+
+    $item = Wait-Until -FailureMessage 'Chinese Unicode search did not converge to one Student ListItem.' -Condition {
+        $liveList = Find-VisibleByAutomationId -Root $script:root -AutomationId 'StudentList'
+        if ($null -eq $liveList) {
+            return $null
+        }
+        $items = @(Find-ListItems -List $liveList)
+        if ($items.Count -ne 1) {
+            return $null
+        }
+        return $items[0]
+    }
+    if ($item.Current.Name -notmatch '0777') {
+        throw "Chinese Unicode search returned an unexpected Student item: '$($item.Current.Name)'."
+    }
+
+    Set-SearchValue -Value ''
+    Wait-Until -FailureMessage 'Student list did not repopulate after clearing Chinese Unicode search.' -Condition {
+        $liveList = Find-VisibleByAutomationId -Root $script:root -AutomationId 'StudentList'
+        if ($null -eq $liveList) {
+            return $false
+        }
+        return @(Find-ListItems -List $liveList).Count -gt 1
+    } | Out-Null
+    Write-Host '[ux-matrix] Chinese Unicode search input passed through native UIA ValuePattern; real IME composition remains an explicit manual/device evidence gap.'
 }
 
 function Assert-CompactStudentKeyboardJourney {
@@ -569,6 +633,16 @@ function Assert-RepresentativeSurfaces {
     Navigate-ToSurface -NavigationId 'OrganizationManagementNavigation' -SurfaceId 'OrganizationManagementSurface' | Out-Null
 }
 
+function Capture-BaseRepresentativeEvidence {
+    Set-WindowDips -Width 800 -Height 640
+    Navigate-ToSurface -NavigationId 'StudentsNavigation' -SurfaceId 'StudentsSurface' | Out-Null
+    Save-WindowScreenshot -Name '800-compact-students'
+
+    Set-WindowDips -Width 1280 -Height 640
+    Navigate-ToSurface -NavigationId 'StudentsNavigation' -SurfaceId 'StudentsSurface' | Out-Null
+    Save-WindowScreenshot -Name '1280-expanded-students'
+}
+
 function Assert-NoHardCodedPrototypeColors {
     $repositoryRoot = (Resolve-Path (Join-Path $PSScriptRoot '../..')).Path
     $paths = @(
@@ -617,6 +691,9 @@ function Assert-TextScaleMatrix {
             $null -eq (Find-VisibleByAutomationId -Root $script:root -AutomationId 'StudentList')) {
             throw "Core Student task became unreachable at ${percent}% text scale."
         }
+        if ($percent -eq 225) {
+            Save-WindowScreenshot -Name '225-text-scale-students'
+        }
         Write-Host "[ux-matrix] Text scale ${percent}% -> Student heading UIA height $height px at $($script:dpi) DPI."
     }
 
@@ -644,6 +721,8 @@ $highContrastSnapshot = [XueqingWindowNativeMethods]::GetHighContrastState()
 try {
     Assert-NoHardCodedPrototypeColors
     Assert-WidthMatrix
+    Capture-BaseRepresentativeEvidence
+    Assert-ChineseUnicodeSearch
     Assert-CompactStudentKeyboardJourney
 
     foreach ($theme in @(
@@ -654,6 +733,9 @@ try {
         Set-RegistryDword -Path $personalizePath -Name 'SystemUsesLightTheme' -Value $theme.Value -BroadcastArea 'ImmersiveColorSet'
         Restart-App
         Assert-RepresentativeSurfaces
+        if ($theme.Name -eq 'Dark') {
+            Save-WindowScreenshot -Name 'dark-1280-organization'
+        }
         Write-Host "[ux-matrix] $($theme.Name) theme representative native surfaces passed."
     }
 
@@ -667,6 +749,7 @@ try {
     }
     Assert-CompactStudentKeyboardJourney
     Assert-RepresentativeSurfaces
+    Save-WindowScreenshot -Name 'high-contrast-1280-organization'
     Write-Host '[ux-matrix] Windows High Contrast representative journey passed with real system High Contrast enabled.'
 
     [XueqingWindowNativeMethods]::SetHighContrastState([uint32]$highContrastSnapshot.Item1, [string]$highContrastSnapshot.Item2)
@@ -674,7 +757,7 @@ try {
 
     Assert-TextScaleMatrix -RegistryPath $accessibilityPath -OriginalSnapshot $textScaleSnapshot
 
-    Write-Host 'Windows native UX matrix passed: widths, short window, keyboard activation/focus, Light/Dark, High Contrast and 100/150/200/225% text scale.'
+    Write-Host 'Windows native UX matrix passed: widths, short window, keyboard activation/focus, Chinese Unicode search, Light/Dark, High Contrast and 100/150/200/225% text scale.'
 }
 finally {
     try {
