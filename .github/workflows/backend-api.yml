@@ -70,12 +70,12 @@ jobs:
           set -euo pipefail
           bash backend/supabase/tests/provider_session_auth_conformance.sh
 
-      - name: Print local stack diagnostics on failure
+      - name: Print safe local-stack diagnostics on failure
         if: failure()
         shell: bash
         run: |
-          supabase status --workdir backend || true
-          docker ps -a || true
+          set -euo pipefail
+          docker ps -a --format 'table {{.Names}}\t{{.Status}}\t{{.Image}}' || true
 
       - name: Stop local Supabase stack
         if: always()
