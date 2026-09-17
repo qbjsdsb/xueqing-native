@@ -6,8 +6,7 @@
 
     <Grid
         Padding="28,20,28,24"
-        RowSpacing="14"
-        AutomationProperties.AutomationId="TodaySurface">
+        RowSpacing="14">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
@@ -19,7 +18,10 @@
                 FontSize="28"
                 FontWeight="SemiBold"
                 Text="今日" />
-            <TextBlock Opacity="0.68" Text="明确的待办教学行动，而不是未关闭问题的统计面板" />
+            <TextBlock
+                AutomationProperties.AutomationId="TodaySurface"
+                Opacity="0.68"
+                Text="明确的待办教学行动，而不是未关闭问题的统计面板" />
         </StackPanel>
 
         <ListView
