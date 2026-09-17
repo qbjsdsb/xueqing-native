@@ -174,10 +174,14 @@ begin
         raise exception using errcode = 'P0001', message = 'XQ_AUTH_REQUIRED';
     end if;
 
+    -- Live authority rows use FOR SHARE, not FOR KEY SHARE. Revoking enabled,
+    -- membership status/capability, active Student/Profile, or assignment must
+    -- conflict with an in-flight teaching-fact command before it commits.
     select app_user.id, app_user.enabled
       into v_actor_id, v_actor_enabled
       from public.app_users as app_user
-     where app_user.auth_subject = v_auth_subject;
+     where app_user.auth_subject = v_auth_subject
+     for share;
 
     if not found then
         raise exception using errcode = 'P0001', message = 'XQ_ACTOR_NOT_FOUND';
@@ -223,7 +227,7 @@ begin
       from public.memberships as membership
      where membership.organization_id = p_organization_id
        and membership.app_user_id = v_actor_id
-     for key share;
+     for share;
 
     if not found then
         raise exception using errcode = 'P0001', message = 'XQ_MEMBERSHIP_REQUIRED';
@@ -240,7 +244,7 @@ begin
      where student.organization_id = p_organization_id
        and student.id = p_student_id
        and student.active
-     for key share;
+     for share;
     if not found then
         raise exception using errcode = 'P0001', message = 'XQ_STUDENT_NOT_IN_ORG';
     end if;
@@ -252,7 +256,7 @@ begin
        and profile.student_id = p_student_id
        and profile.id = p_subject_profile_id
        and profile.active
-     for key share;
+     for share;
     if not found then
         raise exception using errcode = 'P0001', message = 'XQ_SUBJECT_PROFILE_REQUIRED';
     end if;
@@ -265,7 +269,7 @@ begin
        and assignment.id = p_assignment_id
        and assignment.teacher_app_user_id = v_actor_id
        and assignment.active
-     for key share;
+     for share;
     if not found then
         raise exception using errcode = 'P0001', message = 'XQ_TEACHER_ASSIGNMENT_REQUIRED';
     end if;
