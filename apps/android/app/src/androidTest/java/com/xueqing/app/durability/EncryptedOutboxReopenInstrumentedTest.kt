@@ -31,24 +31,9 @@ class EncryptedOutboxReopenInstrumentedTest {
 
     @Test
     fun deterministicRejectionAndOriginalPayloadSurviveEncryptedDatabaseReopen() = runBlocking {
-        val scope = DraftScope(
-            environmentId = ENVIRONMENT_ID,
-            appUserId = APP_USER_ID,
-            organizationId = ORGANIZATION_ID,
-            studentId = STUDENT_ID,
-            subjectId = SUBJECT_PROFILE_ID,
-            contextId = "quick-capture",
-        )
+        val scope = scope()
         val operationId = UUID.randomUUID()
-        val request = CreateObservationRequest(
-            operationId = operationId,
-            organizationId = UUID.fromString(ORGANIZATION_ID),
-            studentId = UUID.fromString(STUDENT_ID),
-            subjectProfileId = UUID.fromString(SUBJECT_PROFILE_ID),
-            assignmentId = UUID.fromString(ASSIGNMENT_ID),
-            rawText = SENTINEL,
-            clientCapturedAt = Instant.ofEpochMilli(NOW),
-        )
+        val request = request(operationId, SENTINEL)
 
         val first = DraftDatabase.create(context)
         val store = DraftStore(first.draftDao()) { NOW }
@@ -60,24 +45,7 @@ class EncryptedOutboxReopenInstrumentedTest {
                 expectedEpoch = session.epoch,
                 finalText = request.rawText,
                 updatedAtEpochMillis = NOW,
-                outbox = ObservationOutboxEntity(
-                    operationId = operationId.toString(),
-                    commandType = ObservationOutboxCodec.COMMAND_TYPE,
-                    scopeKey = scope.storageKey,
-                    environmentId = ENVIRONMENT_ID,
-                    appUserId = APP_USER_ID,
-                    organizationId = ORGANIZATION_ID,
-                    payloadJson = ObservationOutboxCodec.encodeRequest(request),
-                    queueStatus = ObservationOutboxStatus.Pending,
-                    attemptCount = 0,
-                    lastErrorClass = null,
-                    nextAttemptAtEpochMillis = NOW,
-                    leaseId = null,
-                    leaseExpiresAtEpochMillis = null,
-                    acknowledgedAtEpochMillis = null,
-                    serverReceiptJson = null,
-                    createdAtEpochMillis = NOW,
-                ),
+                outbox = outbox(scope, request),
             ),
         )
         val claimed = requireNotNull(
@@ -108,6 +76,104 @@ class EncryptedOutboxReopenInstrumentedTest {
         reopened.close()
     }
 
+    @Test
+    fun pendingAndExpiredInFlightIntentSurviveEncryptedDatabaseReopen() = runBlocking {
+        val scope = scope()
+        val operationId = UUID.randomUUID()
+        val request = request(operationId, PENDING_SENTINEL)
+
+        val first = DraftDatabase.create(context)
+        val firstStore = DraftStore(first.draftDao()) { NOW }
+        val firstSession = firstStore.open(scope)
+        requireNotNull(
+            first.durableIntentDao().submitObservation(
+                scopeKey = scope.storageKey,
+                expectedEpoch = firstSession.epoch,
+                finalText = request.rawText,
+                updatedAtEpochMillis = NOW,
+                outbox = outbox(scope, request),
+            ),
+        )
+        first.close()
+
+        val pendingReopen = DraftDatabase.create(context)
+        val pendingDao = pendingReopen.durableIntentDao()
+        val pending = requireNotNull(pendingDao.readByOperationId(operationId.toString()))
+        assertEquals(ObservationOutboxStatus.Pending, pending.queueStatus)
+        assertEquals(PENDING_SENTINEL, ObservationOutboxCodec.decodeRequest(pending.payloadJson).rawText)
+
+        val firstClaim = requireNotNull(
+            pendingDao.claimNextReady(
+                environmentId = ENVIRONMENT_ID,
+                appUserId = APP_USER_ID,
+                nowEpochMillis = NOW,
+                leaseDurationMillis = 100,
+                leaseId = "lease-before-death",
+            ),
+        )
+        assertEquals(ObservationOutboxStatus.InFlight, firstClaim.queueStatus)
+        assertEquals(1, firstClaim.attemptCount)
+        pendingReopen.close()
+
+        val recoveredReopen = DraftDatabase.create(context)
+        val recovered = requireNotNull(
+            recoveredReopen.durableIntentDao().claimNextReady(
+                environmentId = ENVIRONMENT_ID,
+                appUserId = APP_USER_ID,
+                nowEpochMillis = NOW + 101,
+                leaseDurationMillis = 100,
+                leaseId = "lease-after-restart",
+            ),
+        )
+        assertEquals(operationId.toString(), recovered.operationId)
+        assertEquals(ObservationOutboxStatus.InFlight, recovered.queueStatus)
+        assertEquals("lease-after-restart", recovered.leaseId)
+        assertEquals(2, recovered.attemptCount)
+        assertEquals(PENDING_SENTINEL, ObservationOutboxCodec.decodeRequest(recovered.payloadJson).rawText)
+        recoveredReopen.close()
+    }
+
+    private fun scope() = DraftScope(
+        environmentId = ENVIRONMENT_ID,
+        appUserId = APP_USER_ID,
+        organizationId = ORGANIZATION_ID,
+        studentId = STUDENT_ID,
+        subjectId = SUBJECT_PROFILE_ID,
+        contextId = "quick-capture",
+    )
+
+    private fun request(operationId: UUID, rawText: String) = CreateObservationRequest(
+        operationId = operationId,
+        organizationId = UUID.fromString(ORGANIZATION_ID),
+        studentId = UUID.fromString(STUDENT_ID),
+        subjectProfileId = UUID.fromString(SUBJECT_PROFILE_ID),
+        assignmentId = UUID.fromString(ASSIGNMENT_ID),
+        rawText = rawText,
+        clientCapturedAt = Instant.ofEpochMilli(NOW),
+    )
+
+    private fun outbox(
+        scope: DraftScope,
+        request: CreateObservationRequest,
+    ) = ObservationOutboxEntity(
+        operationId = request.operationId.toString(),
+        commandType = ObservationOutboxCodec.COMMAND_TYPE,
+        scopeKey = scope.storageKey,
+        environmentId = ENVIRONMENT_ID,
+        appUserId = APP_USER_ID,
+        organizationId = ORGANIZATION_ID,
+        payloadJson = ObservationOutboxCodec.encodeRequest(request),
+        queueStatus = ObservationOutboxStatus.Pending,
+        attemptCount = 0,
+        lastErrorClass = null,
+        nextAttemptAtEpochMillis = NOW,
+        leaseId = null,
+        leaseExpiresAtEpochMillis = null,
+        acknowledgedAtEpochMillis = null,
+        serverReceiptJson = null,
+        createdAtEpochMillis = NOW,
+    )
+
     private companion object {
         const val NOW = 1_789_632_000_000L
         const val ENVIRONMENT_ID = "ci-encrypted-outbox"
@@ -117,5 +183,6 @@ class EncryptedOutboxReopenInstrumentedTest {
         const val SUBJECT_PROFILE_ID = "40000000-0000-0000-0000-000000000001"
         const val ASSIGNMENT_ID = "50000000-0000-0000-0000-000000000001"
         const val SENTINEL = "确定性拒绝后重启：原始课堂观察必须仍然保留。"
+        const val PENDING_SENTINEL = "待同步记录在进程死亡后必须继续使用同一个 operation。"
     }
 }
