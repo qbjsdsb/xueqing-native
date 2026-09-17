@@ -6,6 +6,7 @@ import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Transaction
 import java.util.UUID
+import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface DurableIntentDao {
@@ -37,12 +38,40 @@ interface DurableIntentDao {
         """
         SELECT * FROM observation_outbox
         WHERE scope_key = :scopeKey
-          AND queue_status IN ('Pending', 'Retry', 'InFlight', 'DeadLetter')
         ORDER BY local_sequence DESC
         LIMIT 1
         """,
     )
-    suspend fun readLatestUnfinishedForScope(scopeKey: String): ObservationOutboxEntity?
+    suspend fun readLatestForScope(scopeKey: String): ObservationOutboxEntity?
+
+    @Query(
+        """
+        SELECT * FROM observation_outbox
+        WHERE scope_key = :scopeKey
+        ORDER BY local_sequence DESC
+        LIMIT 1
+        """,
+    )
+    fun observeLatestForScope(scopeKey: String): Flow<ObservationOutboxEntity?>
+
+    @Query(
+        """
+        SELECT MIN(
+            CASE
+                WHEN queue_status = 'InFlight' THEN lease_expires_at_epoch_millis
+                ELSE next_attempt_at_epoch_millis
+            END
+        )
+        FROM observation_outbox
+        WHERE environment_id = :environmentId
+          AND app_user_id = :appUserId
+          AND queue_status IN ('Pending', 'Retry', 'InFlight')
+        """,
+    )
+    suspend fun readNextWakeAt(
+        environmentId: String,
+        appUserId: String,
+    ): Long?
 
     @Query(
         """
