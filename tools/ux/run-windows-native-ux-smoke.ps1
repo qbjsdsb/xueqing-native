@@ -472,10 +472,10 @@ function Assert-WidthMatrix {
         }
 
         Navigate-ToSurface -NavigationId 'StudentsNavigation' -SurfaceId 'StudentsSurface' | Out-Null
-        if ($null -eq (Find-VisibleByAutomationId -Root $script:root -AutomationId 'StudentListPane')) {
+        if ($null -eq (Find-VisibleByAutomationId -Root $script:root -AutomationId 'StudentList')) {
             throw "Student list pane is unusable at ${width} DIP."
         }
-        $detailVisible = $null -ne (Find-VisibleByAutomationId -Root $script:root -AutomationId 'StudentDetailPane')
+        $detailVisible = $null -ne (Find-VisibleByAutomationId -Root $script:root -AutomationId 'StudentDetailHeading')
         if ($width -ge 1280 -and -not $detailVisible) {
             throw "Expanded Student detail pane is missing at ${width} DIP."
         }
