@@ -22,7 +22,11 @@ class MainActivity : ComponentActivity() {
                 override fun <T : ViewModel> create(modelClass: Class<T>): T {
                     require(modelClass == QuickCaptureViewModel::class.java)
                     @Suppress("UNCHECKED_CAST")
-                    return QuickCaptureViewModel.create(applicationContext) as T
+                    return QuickCaptureViewModel.create(
+                        context = applicationContext,
+                        bootstrapRemote = BuildVariantQuickCaptureBootstrap.remote(),
+                        environmentId = BuildVariantQuickCaptureBootstrap.ENVIRONMENT_ID,
+                    ) as T
                 }
             },
         )[QuickCaptureViewModel::class.java]
