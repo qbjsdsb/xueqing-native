@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - 'apps/android/**'
+      - 'backend/supabase/**'
       - '.github/workflows/android-observation-slice.yml'
   workflow_dispatch:
 
@@ -89,3 +90,211 @@ jobs:
           path: apps/android/app/schemas/com.xueqing.app.durability.DraftDatabase
           if-no-files-found: error
           retention-days: 7
+
+  reference-provider-e2e:
+    name: reference-provider-e2e
+    needs: room-v2-contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      ANDROID_HOME: /usr/local/lib/android/sdk
+      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+
+      - name: Setup stable Supabase CLI 2.117.0
+        uses: supabase/setup-cli@46f7f98c7f948ad727d22c1e67fab04c223a0520 # v3.0.0
+        with:
+          version: 2.117.0
+
+      - name: Setup JDK 17
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Gradle 8.13
+        uses: gradle/actions/setup-gradle@0723195856401067f7a2779048b490ace7a47d7c
+        with:
+          gradle-version: '8.13'
+
+      - name: Start clean fictional reference provider
+        shell: bash
+        run: |
+          set -euo pipefail
+          supabase start --workdir backend
+          supabase db reset --workdir backend
+
+      - name: Create ephemeral fictional teacher JWT
+        shell: bash
+        run: |
+          set -euo pipefail
+          env_file="$RUNNER_TEMP/supabase-local.env"
+          supabase status --workdir backend -o env > "$env_file"
+          set -a
+          source "$env_file"
+          set +a
+          : "${JWT_SECRET:?JWT_SECRET missing from local Supabase status}"
+          : "${ANON_KEY:?ANON_KEY missing from local Supabase status}"
+
+          access_token="$(python3 - <<'PY'
+          import base64
+          import hashlib
+          import hmac
+          import json
+          import os
+          import time
+
+          def b64url(value: bytes) -> str:
+              return base64.urlsafe_b64encode(value).rstrip(b'=').decode('ascii')
+
+          now = int(time.time())
+          header = {"alg": "HS256", "typ": "JWT"}
+          payload = {
+              "iss": "supabase-demo",
+              "sub": "a0000000-0000-0000-0000-000000000001",
+              "aud": "authenticated",
+              "role": "authenticated",
+              "iat": now,
+              "exp": now + 3600,
+          }
+          encoded_header = b64url(json.dumps(header, separators=(',', ':')).encode())
+          encoded_payload = b64url(json.dumps(payload, separators=(',', ':')).encode())
+          signing_input = f"{encoded_header}.{encoded_payload}".encode()
+          signature = hmac.new(
+              os.environ["JWT_SECRET"].encode(),
+              signing_input,
+              hashlib.sha256,
+          ).digest()
+          print(f"{encoded_header}.{encoded_payload}.{b64url(signature)}")
+          PY
+          )"
+
+          echo "::add-mask::$ANON_KEY"
+          echo "::add-mask::$access_token"
+          {
+            echo "REFERENCE_ANON_KEY=$ANON_KEY"
+            echo "REFERENCE_ACCESS_TOKEN=$access_token"
+          } >> "$GITHUB_ENV"
+
+      - name: Install API 36 emulator image
+        shell: bash
+        run: |
+          set -euo pipefail
+          export ANDROID_AVD_HOME="$RUNNER_TEMP/android-avd"
+          sdkmanager="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          mkdir -p "$ANDROID_AVD_HOME"
+          "$sdkmanager" 'platform-tools' 'emulator' 'platforms;android-36' 'build-tools;35.0.0' 'system-images;android-36;google_apis;x86_64'
+          echo no | "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" create avd \
+            --force \
+            --name xueqing-reference-provider \
+            --package 'system-images;android-36;google_apis;x86_64' \
+            --device pixel_6
+
+      - name: Boot emulator
+        shell: bash
+        run: |
+          set -euo pipefail
+          export ANDROID_AVD_HOME="$RUNNER_TEMP/android-avd"
+          adb="$ANDROID_HOME/platform-tools/adb"
+          if [ -e /dev/kvm ]; then
+            sudo chmod 666 /dev/kvm
+          fi
+          nohup "$ANDROID_HOME/emulator/emulator" \
+            -avd xueqing-reference-provider \
+            -no-window \
+            -no-audio \
+            -no-boot-anim \
+            -no-metrics \
+            -gpu swiftshader_indirect \
+            -camera-back none \
+            -camera-front none \
+            > "$RUNNER_TEMP/xueqing-reference-emulator.log" 2>&1 &
+
+          "$adb" wait-for-device
+          for attempt in $(seq 1 120); do
+            if [ "$("$adb" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = "1" ]; then
+              break
+            fi
+            if [ "$attempt" -eq 120 ]; then
+              cat "$RUNNER_TEMP/xueqing-reference-emulator.log" >&2
+              exit 1
+            fi
+            sleep 2
+          done
+          "$adb" shell input keyevent 82 || true
+          "$adb" devices -l
+
+      - name: Run Android Outbox to Supabase reference-provider E2E
+        shell: bash
+        run: |
+          set -euo pipefail
+          gradle -p apps/android :app:connectedDebugAndroidTest --no-daemon --stacktrace \
+            -Pandroid.testInstrumentationRunnerArguments.class=com.xueqing.app.durability.ObservationReferenceProviderE2ETest \
+            -Pandroid.testInstrumentationRunnerArguments.xueqingRpcBaseUrl=http://10.0.2.2:54321 \
+            -Pandroid.testInstrumentationRunnerArguments.xueqingPublishableKey="$REFERENCE_ANON_KEY" \
+            -Pandroid.testInstrumentationRunnerArguments.xueqingAccessToken="$REFERENCE_ACCESS_TOKEN"
+
+      - name: Verify E2E instrumentation executed exactly once
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import glob
+          import xml.etree.ElementTree as ET
+
+          files = glob.glob('apps/android/app/build/outputs/androidTest-results/connected/debug/**/TEST-*.xml', recursive=True)
+          total = failures = errors = skipped = 0
+          for path in files:
+              root = ET.parse(path).getroot()
+              total += int(root.attrib.get('tests', '0'))
+              failures += int(root.attrib.get('failures', '0'))
+              errors += int(root.attrib.get('errors', '0'))
+              skipped += int(root.attrib.get('skipped', '0'))
+          print(f'Reference-provider E2E: tests={total}, failures={failures}, errors={errors}, skipped={skipped}')
+          if (total, failures, errors, skipped) != (1, 0, 0, 0):
+              raise SystemExit('Expected exactly one successful, non-skipped reference-provider E2E test.')
+          PY
+
+      - name: Verify one authoritative Observation and receipt
+        shell: bash
+        run: |
+          set -euo pipefail
+          operation_id='70000000-0000-0000-0000-000000000001'
+          expected_actor='10000000-0000-0000-0000-000000000001'
+          db_container="$(docker ps --filter 'name=supabase_db_' --format '{{.Names}}' | head -n 1)"
+          test -n "$db_container"
+
+          observation_count="$(docker exec -i "$db_container" psql -U postgres -d postgres -Atc "select count(*) from public.observations where operation_id = '$operation_id'::uuid")"
+          receipt_count="$(docker exec -i "$db_container" psql -U postgres -d postgres -Atc "select count(*) from public.operation_receipts where operation_id = '$operation_id'::uuid")"
+          actor_id="$(docker exec -i "$db_container" psql -U postgres -d postgres -Atc "select actor_app_user_id from public.observations where operation_id = '$operation_id'::uuid")"
+          if [ "$observation_count" != '1' ] || [ "$receipt_count" != '1' ] || [ "$actor_id" != "$expected_actor" ]; then
+            echo "Reference-provider mismatch: observations=$observation_count receipts=$receipt_count actor=$actor_id" >&2
+            exit 1
+          fi
+
+      - name: Upload E2E diagnostics
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: android-observation-reference-provider-e2e
+          path: |
+            apps/android/app/build/outputs/androidTest-results/connected/debug
+            apps/android/app/build/reports/androidTests/connected/debug
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Print local diagnostics on failure
+        if: failure()
+        shell: bash
+        run: |
+          supabase status --workdir backend || true
+          docker ps -a || true
+          cat "$RUNNER_TEMP/xueqing-reference-emulator.log" || true
+
+      - name: Stop local Supabase stack
+        if: always()
+        shell: bash
+        run: supabase stop --workdir backend || true
