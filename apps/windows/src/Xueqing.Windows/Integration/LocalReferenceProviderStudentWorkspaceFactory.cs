@@ -32,7 +32,7 @@ internal static class LocalReferenceProviderStudentWorkspaceFactory
 
         if (!Uri.TryCreate(providerUrl, UriKind.Absolute, out var projectUri) ||
             !projectUri.IsLoopback ||
-            projectUri.Scheme is not (Uri.UriSchemeHttp or Uri.UriSchemeHttps))
+            (projectUri.Scheme != Uri.UriSchemeHttp && projectUri.Scheme != Uri.UriSchemeHttps))
         {
             throw new InvalidOperationException(
                 "Local reference-provider mode is restricted to an explicit loopback URL and cannot connect to remote environments.");
