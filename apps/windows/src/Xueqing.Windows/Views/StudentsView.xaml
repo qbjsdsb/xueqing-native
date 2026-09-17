@@ -23,9 +23,11 @@
             </StackPanel>
 
             <TextBox
+                x:Name="SearchBox"
                 Grid.Row="1"
                 AutomationProperties.Name="搜索学生"
-                PlaceholderText="搜索学生" />
+                PlaceholderText="搜索姓名、学号或学科"
+                TextChanged="SearchBox_TextChanged" />
 
             <ListView
                 x:Name="StudentList"
