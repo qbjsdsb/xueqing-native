@@ -29,6 +29,10 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
+    sourceSets {
+        getByName("androidTest").assets.srcDir("$projectDir/schemas")
+    }
+
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
@@ -52,6 +56,7 @@ dependencies {
     // from this stable API 36 bootstrap.
     val composeBom = platform("androidx.compose:compose-bom:2026.06.00")
     val roomVersion = "2.8.5"
+    val workVersion = "2.11.2"
     // Lifecycle 2.11 Compose artifacts require API 37 / newer AGP. Keep the
     // accepted API-36 bootstrap on the last compatible stable Lifecycle line.
     val lifecycleVersion = "2.10.0"
@@ -70,6 +75,8 @@ dependencies {
     implementation("androidx.room:room-ktx:$roomVersion")
     ksp("androidx.room:room-compiler:$roomVersion")
 
+    implementation("androidx.work:work-runtime-ktx:$workVersion")
+
     // SQLCipher 4.18+ raises its Android compileSdk floor to API 37. Keep the
     // accepted API 36 / AGP 8.13 baseline on the latest compatible 4.17 line.
     implementation("net.zetetic:sqlcipher-android:4.17.0@aar")
@@ -87,6 +94,7 @@ dependencies {
     androidTestImplementation("androidx.test:runner:1.7.0")
     androidTestImplementation("androidx.test:core-ktx:1.7.0")
     androidTestImplementation("androidx.room:room-testing:$roomVersion")
+    androidTestImplementation("androidx.work:work-testing:$workVersion")
     androidTestImplementation("androidx.compose.ui:ui-test-junit4")
     androidTestImplementation("androidx.lifecycle:lifecycle-runtime-compose:$lifecycleVersion") {
         version { strictly(lifecycleVersion) }

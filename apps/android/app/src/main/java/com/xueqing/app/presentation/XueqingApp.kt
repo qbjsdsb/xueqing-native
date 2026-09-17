@@ -60,6 +60,7 @@ internal fun XueqingApp(
                 onTextChanged = quickCaptureViewModel::onTextChanged,
                 onClose = { showingQuickCapture = false },
                 onDiscard = quickCaptureViewModel::discard,
+                onSubmit = quickCaptureViewModel::submit,
             )
         } else {
             Scaffold(

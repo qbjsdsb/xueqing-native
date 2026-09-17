@@ -34,23 +34,39 @@ fun interface RpcTransport {
  * Deliberately tiny Supabase/PostgREST transport. It owns provider HTTP details;
  * application/domain code never sees provider SDK or HTTP response types.
  *
- * This transport is blocking by design. The later Outbox worker/repository layer
- * must run network work off the UI thread. WorkManager is intentionally outside
- * this adapter-conformance change.
+ * Plain HTTP is rejected by default. The one exception is an explicit
+ * development/test switch for loopback aliases used by the local Supabase stack
+ * from an Android emulator. Release composition must keep the default false.
+ *
+ * This transport is blocking by design. Outbox workers call it off the UI
+ * thread; network waits never occur inside a Room transaction.
  */
 class HttpRpcTransport(
     baseUrl: String,
     private val publishableKey: String,
     private val connectTimeoutMillis: Int = 15_000,
     private val readTimeoutMillis: Int = 20_000,
+    allowInsecureLoopbackForDevelopment: Boolean = false,
 ) : RpcTransport {
     private val normalizedBaseUrl = baseUrl.trimEnd('/')
 
     init {
         require(publishableKey.isNotBlank()) { "Supabase publishable key must not be blank." }
         val uri = runCatching { URI.create(normalizedBaseUrl) }.getOrNull()
-        require(uri?.scheme == "https" && !uri.host.isNullOrBlank()) {
-            "RPC base URL must be an HTTPS origin."
+        val host = uri?.host?.lowercase()
+        val secureOrigin = uri?.scheme == "https" && !host.isNullOrBlank()
+        val explicitDevelopmentLoopback =
+            allowInsecureLoopbackForDevelopment &&
+                uri?.scheme == "http" &&
+                host != null &&
+                host in DEVELOPMENT_LOOPBACK_HOSTS
+        require(secureOrigin || explicitDevelopmentLoopback) {
+            "RPC base URL must be HTTPS, except explicit development loopback origins."
+        }
+        require(uri?.rawUserInfo == null) { "RPC base URL must not contain user info." }
+        require(uri?.rawPath.isNullOrEmpty()) { "RPC base URL must not contain a path." }
+        require(uri?.rawQuery == null && uri?.rawFragment == null) {
+            "RPC base URL must be an origin without query or fragment."
         }
         require(connectTimeoutMillis > 0) { "Connect timeout must be positive." }
         require(readTimeoutMillis > 0) { "Read timeout must be positive." }
@@ -89,5 +105,9 @@ class HttpRpcTransport(
         } finally {
             connection.disconnect()
         }
+    }
+
+    private companion object {
+        val DEVELOPMENT_LOOPBACK_HOSTS = setOf("127.0.0.1", "localhost", "10.0.2.2")
     }
 }

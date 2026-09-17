@@ -1,0 +1,223 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 2,
+    "identityHash": "548e8b5eefa902481e7cc30990d5412f",
+    "entities": [
+      {
+        "tableName": "drafts",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`scope_key` TEXT NOT NULL, `epoch` INTEGER NOT NULL, `text` TEXT NOT NULL, `updated_at_epoch_millis` INTEGER NOT NULL, PRIMARY KEY(`scope_key`))",
+        "fields": [
+          {
+            "fieldPath": "scopeKey",
+            "columnName": "scope_key",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "epoch",
+            "columnName": "epoch",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "text",
+            "columnName": "text",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updatedAtEpochMillis",
+            "columnName": "updated_at_epoch_millis",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "scope_key"
+          ]
+        }
+      },
+      {
+        "tableName": "draft_scope_state",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`scope_key` TEXT NOT NULL, `epoch` INTEGER NOT NULL, PRIMARY KEY(`scope_key`))",
+        "fields": [
+          {
+            "fieldPath": "scopeKey",
+            "columnName": "scope_key",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "epoch",
+            "columnName": "epoch",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "scope_key"
+          ]
+        }
+      },
+      {
+        "tableName": "observation_outbox",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`local_sequence` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `operation_id` TEXT NOT NULL, `command_type` TEXT NOT NULL, `scope_key` TEXT NOT NULL, `environment_id` TEXT NOT NULL, `app_user_id` TEXT NOT NULL, `organization_id` TEXT NOT NULL, `payload_json` TEXT NOT NULL, `queue_status` TEXT NOT NULL, `attempt_count` INTEGER NOT NULL, `last_error_class` TEXT, `next_attempt_at_epoch_millis` INTEGER NOT NULL, `lease_id` TEXT, `lease_expires_at_epoch_millis` INTEGER, `acknowledged_at_epoch_millis` INTEGER, `server_receipt_json` TEXT, `created_at_epoch_millis` INTEGER NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "localSequence",
+            "columnName": "local_sequence",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "operationId",
+            "columnName": "operation_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "commandType",
+            "columnName": "command_type",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "scopeKey",
+            "columnName": "scope_key",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "environmentId",
+            "columnName": "environment_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "appUserId",
+            "columnName": "app_user_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "organizationId",
+            "columnName": "organization_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "payloadJson",
+            "columnName": "payload_json",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "queueStatus",
+            "columnName": "queue_status",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "attemptCount",
+            "columnName": "attempt_count",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lastErrorClass",
+            "columnName": "last_error_class",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "nextAttemptAtEpochMillis",
+            "columnName": "next_attempt_at_epoch_millis",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "leaseId",
+            "columnName": "lease_id",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "leaseExpiresAtEpochMillis",
+            "columnName": "lease_expires_at_epoch_millis",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "acknowledgedAtEpochMillis",
+            "columnName": "acknowledged_at_epoch_millis",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "serverReceiptJson",
+            "columnName": "server_receipt_json",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "createdAtEpochMillis",
+            "columnName": "created_at_epoch_millis",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "local_sequence"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_observation_outbox_operation_id",
+            "unique": true,
+            "columnNames": [
+              "operation_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_observation_outbox_operation_id` ON `${TABLE_NAME}` (`operation_id`)"
+          },
+          {
+            "name": "index_observation_outbox_queue_status_next_attempt_at_epoch_millis",
+            "unique": false,
+            "columnNames": [
+              "queue_status",
+              "next_attempt_at_epoch_millis"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_observation_outbox_queue_status_next_attempt_at_epoch_millis` ON `${TABLE_NAME}` (`queue_status`, `next_attempt_at_epoch_millis`)"
+          },
+          {
+            "name": "index_observation_outbox_environment_id_app_user_id_local_sequence",
+            "unique": false,
+            "columnNames": [
+              "environment_id",
+              "app_user_id",
+              "local_sequence"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_observation_outbox_environment_id_app_user_id_local_sequence` ON `${TABLE_NAME}` (`environment_id`, `app_user_id`, `local_sequence`)"
+          },
+          {
+            "name": "index_observation_outbox_scope_key",
+            "unique": false,
+            "columnNames": [
+              "scope_key"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_observation_outbox_scope_key` ON `${TABLE_NAME}` (`scope_key`)"
+          }
+        ]
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '548e8b5eefa902481e7cc30990d5412f')"
+    ]
+  }
+}
