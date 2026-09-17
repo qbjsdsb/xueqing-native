@@ -75,6 +75,10 @@ dependencies {
     implementation("net.zetetic:sqlcipher-android:4.17.0@aar")
     implementation("androidx.sqlite:sqlite:2.7.0")
 
+    // Runtime JSON only: no serialization compiler plugin or generated DTOs are
+    // needed for the narrow provider-adapter boundary.
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0")
+
     debugImplementation("androidx.compose.ui:ui-tooling")
 
     testImplementation("junit:junit:4.13.2")
