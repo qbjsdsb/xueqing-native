@@ -199,7 +199,7 @@ $studentItem = Wait-Until -FailureMessage 'Unique S000777 search did not converg
     if ($null -eq $liveList) {
         return $null
     }
-    $items = Find-ListItems -List $liveList
+    $items = @(Find-ListItems -List $liveList)
     if ($items.Count -ne 1) {
         return $null
     }
