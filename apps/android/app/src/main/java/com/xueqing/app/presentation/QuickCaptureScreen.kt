@@ -8,8 +8,8 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.weight
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
@@ -75,7 +75,7 @@ internal fun QuickCaptureScreen(
             enabled = state.status != LocalDraftStatus.Loading,
             modifier = Modifier
                 .fillMaxWidth()
-                .height(220.dp)
+                .heightIn(min = 220.dp)
                 .padding(top = 10.dp)
                 .testTag("quick-capture-input"),
             placeholder = { Text("例如：概括题仍然容易照抄原句，不能主动压缩信息。") },
@@ -99,7 +99,6 @@ internal fun QuickCaptureScreen(
                 .testTag("quick-capture-draft-status"),
         )
 
-        Spacer(Modifier.weight(1f, fill = false))
         Button(
             onClick = onClose,
             enabled = state.status != LocalDraftStatus.Loading,
