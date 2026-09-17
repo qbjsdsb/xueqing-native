@@ -32,6 +32,15 @@ public static class XueqingWindowNativeMethods
         public IntPtr lpszDefaultScheme;
     }
 
+    [StructLayout(LayoutKind.Sequential)]
+    public struct RECT
+    {
+        public int Left;
+        public int Top;
+        public int Right;
+        public int Bottom;
+    }
+
     [DllImport("user32.dll", SetLastError = true)]
     public static extern bool SetWindowPos(
         IntPtr hWnd,
@@ -41,6 +50,9 @@ public static class XueqingWindowNativeMethods
         int cx,
         int cy,
         uint uFlags);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern bool GetClientRect(IntPtr hWnd, out RECT lpRect);
 
     [DllImport("user32.dll")]
     public static extern uint GetDpiForWindow(IntPtr hWnd);
@@ -61,6 +73,17 @@ public static class XueqingWindowNativeMethods
         uint fuFlags,
         uint uTimeout,
         out IntPtr lpdwResult);
+
+    public static Tuple<int, int> GetClientSize(IntPtr hWnd)
+    {
+        RECT rect;
+        if (!GetClientRect(hWnd, out rect))
+        {
+            throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
+        }
+
+        return Tuple.Create(rect.Right - rect.Left, rect.Bottom - rect.Top);
+    }
 
     public static Tuple<uint, string> GetHighContrastState()
     {
@@ -340,19 +363,42 @@ function Set-WindowDips {
 
     $targetWidthPixels = [int][Math]::Round($Width * $script:dpi / 96.0)
     $targetHeightPixels = [int][Math]::Round($Height * $script:dpi / 96.0)
+    $outerWidthPixels = $targetWidthPixels
+    $outerHeightPixels = $targetHeightPixels
     $SWP_NOMOVE = 0x0002
-    if (-not [XueqingWindowNativeMethods]::SetWindowPos(
-        $script:windowHandle,
-        [IntPtr]::Zero,
-        0,
-        0,
-        $targetWidthPixels,
-        $targetHeightPixels,
-        $SWP_NOMOVE)) {
-        throw "SetWindowPos failed with Win32 error $([Runtime.InteropServices.Marshal]::GetLastWin32Error())."
+
+    for ($attempt = 0; $attempt -lt 3; $attempt++) {
+        if (-not [XueqingWindowNativeMethods]::SetWindowPos(
+            $script:windowHandle,
+            [IntPtr]::Zero,
+            0,
+            0,
+            $outerWidthPixels,
+            $outerHeightPixels,
+            $SWP_NOMOVE)) {
+            throw "SetWindowPos failed with Win32 error $([Runtime.InteropServices.Marshal]::GetLastWin32Error())."
+        }
+
+        Start-Sleep -Milliseconds 150
+        $clientSize = [XueqingWindowNativeMethods]::GetClientSize($script:windowHandle)
+        $widthDelta = $targetWidthPixels - $clientSize.Item1
+        $heightDelta = $targetHeightPixels - $clientSize.Item2
+        if ([Math]::Abs($widthDelta) -le 1 -and [Math]::Abs($heightDelta) -le 1) {
+            break
+        }
+
+        $outerWidthPixels += $widthDelta
+        $outerHeightPixels += $heightDelta
     }
-    Write-Host "[ux-matrix] Window ${Width}x${Height} DIP at $($script:dpi) DPI (${targetWidthPixels}x${targetHeightPixels} px)."
-    Start-Sleep -Milliseconds 450
+
+    $clientSize = [XueqingWindowNativeMethods]::GetClientSize($script:windowHandle)
+    if ([Math]::Abs($clientSize.Item1 - $targetWidthPixels) -gt 1 -or
+        [Math]::Abs($clientSize.Item2 - $targetHeightPixels) -gt 1) {
+        throw "Client area did not converge to ${Width}x${Height} DIP: expected ${targetWidthPixels}x${targetHeightPixels} px, got $($clientSize.Item1)x$($clientSize.Item2) px."
+    }
+
+    Write-Host "[ux-matrix] Client ${Width}x${Height} DIP at $($script:dpi) DPI ($($clientSize.Item1)x$($clientSize.Item2) px client; ${outerWidthPixels}x${outerHeightPixels} px outer)."
+    Start-Sleep -Milliseconds 300
 }
 
 function Navigate-ToSurface {
