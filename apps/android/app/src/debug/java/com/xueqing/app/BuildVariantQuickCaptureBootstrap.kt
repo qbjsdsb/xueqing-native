@@ -14,6 +14,8 @@ import java.util.UUID
  * No credentials or real data are present. Release builds do not receive it.
  */
 object BuildVariantQuickCaptureBootstrap {
+    const val ENVIRONMENT_ID = "development-reference"
+
     fun remote(): PersonalBootstrapRemote = PersonalBootstrapRemote {
         PersonalBootstrapResult.Loaded(
             PersonalBootstrap(
