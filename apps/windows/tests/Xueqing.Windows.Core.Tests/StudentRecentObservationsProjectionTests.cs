@@ -112,11 +112,18 @@ public sealed class StudentRecentObservationsProjectionTests
     [TestMethod]
     public void Reader_rejects_plain_http_for_non_loopback_provider()
     {
-        Assert.ThrowsException<ArgumentException>(() => new PostgrestStudentRecentObservationsReader(
-            new HttpClient(new StubHandler(HttpStatusCode.OK, ValidEnvelope())),
-            new Uri("http://example.test/"),
-            "publishable-key",
-            _ => ValueTask.FromResult<string?>("token")));
+        try
+        {
+            _ = new PostgrestStudentRecentObservationsReader(
+                new HttpClient(new StubHandler(HttpStatusCode.OK, ValidEnvelope())),
+                new Uri("http://example.test/"),
+                "publishable-key",
+                _ => ValueTask.FromResult<string?>("token"));
+            Assert.Fail("A non-loopback HTTP provider must be rejected.");
+        }
+        catch (ArgumentException)
+        {
+        }
     }
 
     private static PostgrestStudentRecentObservationsReader CreateReader(StubHandler handler) =>
