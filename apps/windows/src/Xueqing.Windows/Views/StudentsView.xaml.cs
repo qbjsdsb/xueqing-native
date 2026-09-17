@@ -1,6 +1,7 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Xueqing.Windows.Core.Layout;
+using Xueqing.Windows.Core.Models;
 using Xueqing.Windows.ViewModels;
 
 namespace Xueqing.Windows.Views;
@@ -8,6 +9,7 @@ namespace Xueqing.Windows.Views;
 public sealed partial class StudentsView : UserControl
 {
     private WindowLayoutMode _layoutMode = WindowLayoutMode.Compact;
+    private bool _isFiltering;
 
     public StudentsView()
     {
@@ -37,15 +39,42 @@ public sealed partial class StudentsView : UserControl
 
     private void SearchBox_TextChanged(object sender, TextChangedEventArgs e)
     {
-        if (DataContext is MainWindowViewModel viewModel)
+        if (DataContext is not MainWindowViewModel viewModel)
+        {
+            return;
+        }
+
+        // ObservableCollection and SelectedItem changes are synchronous on the
+        // UI thread. Suppress compact list->detail navigation while filtering
+        // rebuilds the collection; typing a query must never count as explicit
+        // activation of a Student row.
+        _isFiltering = true;
+        try
         {
             viewModel.FilterStudents(SearchBox.Text);
+        }
+        finally
+        {
+            _isFiltering = false;
         }
     }
 
     private void StudentList_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (_layoutMode != WindowLayoutMode.Expanded && StudentList.SelectedItem is not null)
+        if (!_isFiltering && _layoutMode != WindowLayoutMode.Expanded && StudentList.SelectedItem is not null)
+        {
+            ShowDetailOnly();
+        }
+    }
+
+    private void StudentList_ItemClick(object sender, ItemClickEventArgs e)
+    {
+        if (e.ClickedItem is StudentSummary student && DataContext is MainWindowViewModel viewModel)
+        {
+            viewModel.SelectedStudent = student;
+        }
+
+        if (_layoutMode != WindowLayoutMode.Expanded && e.ClickedItem is not null)
         {
             ShowDetailOnly();
         }
