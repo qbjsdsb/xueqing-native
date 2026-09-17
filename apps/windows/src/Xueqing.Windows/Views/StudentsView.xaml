@@ -15,8 +15,7 @@
 
         <Grid
             x:Name="ListPane"
-            RowSpacing="12"
-            AutomationProperties.AutomationId="StudentListPane">
+            RowSpacing="12">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
@@ -77,7 +76,6 @@
         <Grid
             x:Name="DetailPane"
             Grid.Column="1"
-            AutomationProperties.AutomationId="StudentDetailPane"
             Visibility="Collapsed">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
