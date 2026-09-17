@@ -39,7 +39,7 @@
                 Grid.Row="1"
                 AutomationProperties.AutomationId="StudentSearchBox"
                 AutomationProperties.Name="搜索学生"
-                PlaceholderText="搜索姓名、学号或学科"
+                PlaceholderText="{Binding SearchPlaceholderText}"
                 TextChanged="SearchBox_TextChanged" />
 
             <ListView
@@ -51,6 +51,7 @@
                 ItemsSource="{Binding Students}"
                 KeyDown="StudentList_KeyDown"
                 SelectedItem="{Binding SelectedStudent, Mode=TwoWay}"
+                SelectionChanged="StudentList_SelectionChanged"
                 SelectionMode="Single">
                 <ListView.ItemTemplate>
                     <DataTemplate>
@@ -61,11 +62,11 @@
                             </Grid.ColumnDefinitions>
                             <StackPanel Spacing="2">
                                 <TextBlock FontWeight="SemiBold" Text="{Binding DisplayName}" TextTrimming="CharacterEllipsis" />
-                                <TextBlock FontSize="12" Opacity="0.62" Text="{Binding StudentCode}" />
+                                <TextBlock FontSize="12" Opacity="0.62" Text="{Binding SecondaryLabel}" />
                             </StackPanel>
                             <StackPanel Grid.Column="1" Margin="16,0,0,0" HorizontalAlignment="Right" Spacing="2">
                                 <TextBlock HorizontalAlignment="Right" Text="{Binding PrimarySubject}" />
-                                <TextBlock FontSize="12" Opacity="0.62" HorizontalAlignment="Right" Text="{Binding ActiveCaseCount}" />
+                                <TextBlock FontSize="12" Opacity="0.62" HorizontalAlignment="Right" Text="{Binding ActiveCaseCountLabel}" />
                             </StackPanel>
                         </Grid>
                     </DataTemplate>
@@ -100,22 +101,69 @@
                             FontWeight="SemiBold"
                             Text="{Binding SelectedStudent.DisplayName}"
                             TextWrapping="Wrap" />
-                        <TextBlock Opacity="0.68" Text="{Binding SelectedStudent.StudentCode}" />
+                        <TextBlock Opacity="0.68" Text="{Binding SelectedStudent.SecondaryLabel}" />
                     </StackPanel>
 
-                    <StackPanel Spacing="6">
-                        <TextBlock FontSize="18" FontWeight="SemiBold" Text="当前" />
-                        <TextBlock Text="阅读材料的信息关系组织仍需验证" TextWrapping="Wrap" />
-                        <TextBlock Opacity="0.72" Text="下一步：使用新的陌生材料验证迁移，不重复展示历史归档。" TextWrapping="Wrap" />
+                    <StackPanel Spacing="18" Visibility="{Binding PrototypeStudentDetailVisibility}">
+                        <StackPanel Spacing="6">
+                            <TextBlock FontSize="18" FontWeight="SemiBold" Text="当前" />
+                            <TextBlock Text="阅读材料的信息关系组织仍需验证" TextWrapping="Wrap" />
+                            <TextBlock Opacity="0.72" Text="下一步：使用新的陌生材料验证迁移，不重复展示历史归档。" TextWrapping="Wrap" />
+                        </StackPanel>
+
+                        <StackPanel Spacing="6">
+                            <TextBlock FontSize="18" FontWeight="SemiBold" Text="最近记录" />
+                            <TextBlock Opacity="0.65" Text="UX 原型数据 · 非云端学情" />
+                            <TextBlock Text="课堂观察 · 能主动定位限制条件，但因果关系组织仍需要提示。" TextWrapping="Wrap" />
+                            <TextBlock Text="验证记录 · 相同策略在短文本中已能独立使用。" TextWrapping="Wrap" />
+                        </StackPanel>
+
+                        <Button HorizontalAlignment="Left" Content="查看全部学情记录" />
                     </StackPanel>
 
-                    <StackPanel Spacing="6">
-                        <TextBlock FontSize="18" FontWeight="SemiBold" Text="最近记录" />
-                        <TextBlock Text="课堂观察 · 能主动定位限制条件，但因果关系组织仍需要提示。" TextWrapping="Wrap" />
-                        <TextBlock Text="验证记录 · 相同策略在短文本中已能独立使用。" TextWrapping="Wrap" />
-                    </StackPanel>
+                    <StackPanel Spacing="10" Visibility="{Binding AuthoritativeStudentDetailVisibility}">
+                        <Grid ColumnSpacing="12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock FontSize="18" FontWeight="SemiBold" Text="最近课堂观察" />
+                            <Button
+                                Grid.Column="1"
+                                AutomationProperties.Name="刷新任教学员与最近记录"
+                                Click="RefreshAuthoritativeStudents_Click"
+                                Content="刷新" />
+                        </Grid>
 
-                    <Button HorizontalAlignment="Left" Content="查看全部学情记录" />
+                        <ComboBox
+                            x:Name="SubjectContextBox"
+                            AutomationProperties.AutomationId="StudentSubjectContext"
+                            AutomationProperties.Name="选择任教学科"
+                            DisplayMemberPath="DisplayName"
+                            ItemsSource="{Binding SelectedTeachingContexts}"
+                            PlaceholderText="选择学科"
+                            SelectedItem="{Binding SelectedTeachingContext, Mode=TwoWay}"
+                            SelectionChanged="SubjectContextBox_SelectionChanged" />
+
+                        <TextBlock
+                            AutomationProperties.AutomationId="RecentObservationStatus"
+                            Opacity="0.72"
+                            Text="{Binding RecentObservationsStatusText}"
+                            TextWrapping="Wrap" />
+
+                        <ItemsControl ItemsSource="{Binding RecentObservations}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <StackPanel Padding="0,8,0,10" Spacing="4">
+                                        <TextBlock Text="{Binding RawText}" TextWrapping="Wrap" />
+                                        <TextBlock FontSize="12" Opacity="0.62" Text="{Binding CreatedAtServer}" />
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
+                        <TextBlock Opacity="0.62" Text="{Binding RecentHistoryMoreText}" TextWrapping="Wrap" />
+                    </StackPanel>
                 </StackPanel>
             </ScrollViewer>
         </Grid>

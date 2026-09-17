@@ -7,18 +7,25 @@ namespace Xueqing.Windows;
 
 public sealed partial class MainWindow : Window
 {
-    public MainWindowViewModel ViewModel { get; } = new();
+    public MainWindowViewModel ViewModel { get; }
 
     public MainWindow()
+        : this(new MainWindowViewModel())
     {
+    }
+
+    public MainWindow(MainWindowViewModel viewModel)
+    {
+        ViewModel = viewModel ?? throw new ArgumentNullException(nameof(viewModel));
         InitializeComponent();
         Title = "学情 Native";
         RootGrid.DataContext = ViewModel;
     }
 
-    private void RootGrid_Loaded(object sender, RoutedEventArgs e)
+    private async void RootGrid_Loaded(object sender, RoutedEventArgs e)
     {
         ApplyLayout(RootGrid.ActualWidth);
+        await ViewModel.InitializeAsync();
     }
 
     private void RootGrid_SizeChanged(object sender, SizeChangedEventArgs e)
