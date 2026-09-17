@@ -7,8 +7,7 @@
     <Grid
         x:Name="WorkspaceGrid"
         Padding="28,20,28,24"
-        ColumnSpacing="24"
-        AutomationProperties.AutomationId="StudentsSurface">
+        ColumnSpacing="24">
         <Grid.ColumnDefinitions>
             <ColumnDefinition x:Name="ListColumn" Width="*" />
             <ColumnDefinition x:Name="DetailColumn" Width="0" />
@@ -30,7 +29,10 @@
                     FontSize="28"
                     FontWeight="SemiBold"
                     Text="学生" />
-                <TextBlock Opacity="0.68" Text="快速找到学生，并保持列表位置与选择上下文" />
+                <TextBlock
+                    AutomationProperties.AutomationId="StudentsSurface"
+                    Opacity="0.68"
+                    Text="快速找到学生，并保持列表位置与选择上下文" />
             </StackPanel>
 
             <TextBox
