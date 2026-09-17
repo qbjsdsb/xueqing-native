@@ -22,11 +22,11 @@ class DraftDatabaseMigrationInstrumentedTest {
         helper.createDatabase(TEST_DB, 1).apply {
             execSQL(
                 "INSERT INTO draft_scope_state(scope_key, epoch) VALUES(?, ?)",
-                arrayOf(SCOPE_KEY, 7L),
+                arrayOf<Any>(SCOPE_KEY, 7L),
             )
             execSQL(
                 "INSERT INTO drafts(scope_key, epoch, text, updated_at_epoch_millis) VALUES(?, ?, ?, ?)",
-                arrayOf(SCOPE_KEY, 7L, SENTINEL, 1_789_632_000_000L),
+                arrayOf<Any>(SCOPE_KEY, 7L, SENTINEL, 1_789_632_000_000L),
             )
             close()
         }
@@ -38,7 +38,7 @@ class DraftDatabaseMigrationInstrumentedTest {
             DraftDatabase.MIGRATION_1_2,
         )
 
-        migrated.query("SELECT epoch, text FROM drafts WHERE scope_key = ?", arrayOf(SCOPE_KEY)).use { cursor ->
+        migrated.query("SELECT epoch, text FROM drafts WHERE scope_key = ?", arrayOf<Any>(SCOPE_KEY)).use { cursor ->
             assertTrue(cursor.moveToFirst())
             assertEquals(7L, cursor.getLong(0))
             assertEquals(SENTINEL, cursor.getString(1))
