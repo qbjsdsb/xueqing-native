@@ -185,7 +185,7 @@ public sealed class PostgrestStudentRecentObservationsReader : IStudentRecentObs
             throw new ArgumentException("Reference-provider URI must use HTTPS; loopback HTTP is allowed for development tests.", nameof(projectUri));
         }
 
-        var normalized = projectUri.AbsoluteUri.EndsWith('/', StringComparison.Ordinal)
+        var normalized = projectUri.AbsoluteUri.EndsWith("/", StringComparison.Ordinal)
             ? projectUri
             : new Uri(projectUri.AbsoluteUri + "/", UriKind.Absolute);
         return new Uri(normalized, RpcPath);
