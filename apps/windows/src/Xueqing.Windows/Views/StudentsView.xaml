@@ -6,7 +6,7 @@
 
     <Grid
         x:Name="WorkspaceGrid"
-        Padding="28,20,28,24"
+        Padding="20,16,24,20"
         ColumnSpacing="24">
         <Grid.ColumnDefinitions>
             <ColumnDefinition x:Name="ListColumn" Width="*" />
@@ -15,24 +15,29 @@
 
         <Grid
             x:Name="ListPane"
-            RowSpacing="12">
+            RowSpacing="10">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
             </Grid.RowDefinitions>
 
-            <StackPanel Spacing="4">
+            <Grid ColumnSpacing="8">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
                 <TextBlock
                     AutomationProperties.AutomationId="StudentHeading"
-                    FontSize="28"
+                    FontSize="24"
                     FontWeight="SemiBold"
                     Text="学生" />
                 <TextBlock
-                    AutomationProperties.AutomationId="StudentsSurface"
-                    Opacity="0.68"
-                    Text="快速找到学生，并保持列表位置与选择上下文" />
-            </StackPanel>
+                    Grid.Column="1"
+                    Margin="0,6,4,0"
+                    Opacity="0.58"
+                    Text="{Binding Students.Count}" />
+            </Grid>
 
             <TextBox
                 x:Name="SearchBox"
@@ -55,23 +60,52 @@
                 SelectionMode="Single">
                 <ListView.ItemTemplate>
                     <DataTemplate>
-                        <Grid Padding="4,9,8,10" MinHeight="56">
+                        <Grid Padding="6,8,8,9" MinHeight="52">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
+
                             <StackPanel Spacing="2">
-                                <TextBlock FontWeight="SemiBold" Text="{Binding DisplayName}" TextTrimming="CharacterEllipsis" />
-                                <TextBlock FontSize="12" Opacity="0.62" Text="{Binding SecondaryLabel}" />
+                                <TextBlock
+                                    FontWeight="SemiBold"
+                                    Text="{Binding DisplayName}"
+                                    TextTrimming="CharacterEllipsis" />
+                                <TextBlock
+                                    FontSize="12"
+                                    Opacity="0.62"
+                                    Text="{Binding SecondaryLabel}"
+                                    TextTrimming="CharacterEllipsis" />
                             </StackPanel>
-                            <StackPanel Grid.Column="1" Margin="16,0,0,0" HorizontalAlignment="Right" Spacing="2">
-                                <TextBlock HorizontalAlignment="Right" Text="{Binding PrimarySubject}" />
-                                <TextBlock FontSize="12" Opacity="0.62" HorizontalAlignment="Right" Text="{Binding ActiveCaseCountLabel}" />
+
+                            <StackPanel
+                                Grid.Column="1"
+                                Margin="14,0,0,0"
+                                HorizontalAlignment="Right"
+                                Spacing="2">
+                                <TextBlock
+                                    HorizontalAlignment="Right"
+                                    Opacity="0.82"
+                                    Text="{Binding PrimarySubject}" />
+                                <TextBlock
+                                    FontSize="12"
+                                    HorizontalAlignment="Right"
+                                    Opacity="0.54"
+                                    Text="{Binding ActiveCaseCountLabel}" />
                             </StackPanel>
                         </Grid>
                     </DataTemplate>
                 </ListView.ItemTemplate>
             </ListView>
+
+            <!-- Keep a stable visible surface marker for UIA even as the visual
+                 heading becomes more compact in the v2 reference layout. -->
+            <TextBlock
+                Grid.Row="0"
+                AutomationProperties.AutomationId="StudentsSurface"
+                IsHitTestVisible="False"
+                Opacity="0"
+                Text="学生工作区" />
         </Grid>
 
         <Grid
@@ -93,47 +127,209 @@
                 Visibility="Collapsed" />
 
             <ScrollViewer Grid.Row="1">
-                <StackPanel MaxWidth="760" HorizontalAlignment="Left" Spacing="18">
-                    <StackPanel Spacing="4">
-                        <TextBlock
-                            AutomationProperties.AutomationId="StudentDetailHeading"
-                            FontSize="28"
-                            FontWeight="SemiBold"
-                            Text="{Binding SelectedStudent.DisplayName}"
-                            TextWrapping="Wrap" />
-                        <TextBlock Opacity="0.68" Text="{Binding SelectedStudent.SecondaryLabel}" />
-                    </StackPanel>
+                <StackPanel
+                    MaxWidth="820"
+                    HorizontalAlignment="Left"
+                    Spacing="20">
 
-                    <StackPanel Spacing="18" Visibility="{Binding PrototypeStudentDetailVisibility}">
-                        <StackPanel Spacing="6">
-                            <TextBlock FontSize="18" FontWeight="SemiBold" Text="当前" />
-                            <TextBlock Text="阅读材料的信息关系组织仍需验证" TextWrapping="Wrap" />
-                            <TextBlock Opacity="0.72" Text="下一步：使用新的陌生材料验证迁移，不重复展示历史归档。" TextWrapping="Wrap" />
+                    <Grid ColumnSpacing="12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Spacing="3">
+                            <TextBlock
+                                AutomationProperties.AutomationId="StudentDetailHeading"
+                                FontSize="24"
+                                FontWeight="SemiBold"
+                                Text="{Binding SelectedStudent.DisplayName}"
+                                TextWrapping="Wrap" />
+                            <TextBlock
+                                Opacity="0.66"
+                                Text="{Binding SelectedStudent.PrimarySubject}" />
+                        </StackPanel>
+                        <Button
+                            Grid.Column="1"
+                            VerticalAlignment="Top"
+                            AutomationProperties.Name="刷新任教学员与最近记录"
+                            Click="RefreshAuthoritativeStudents_Click"
+                            Content="刷新"
+                            Visibility="{Binding AuthoritativeStudentDetailVisibility}" />
+                    </Grid>
+
+                    <StackPanel
+                        Spacing="20"
+                        Visibility="{Binding PrototypeStudentDetailVisibility}">
+
+                        <StackPanel Spacing="10">
+                            <TextBlock FontSize="16" FontWeight="SemiBold" Text="正在关注" />
+
+                            <Grid Padding="0,4,0,8" ColumnSpacing="16">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Spacing="3">
+                                    <TextBlock
+                                        FontWeight="SemiBold"
+                                        Text="阅读材料的信息关系组织仍需验证"
+                                        TextWrapping="Wrap" />
+                                    <TextBlock
+                                        Opacity="0.65"
+                                        Text="最近观察中，限制条件能够定位，但因果关系仍需要提示。"
+                                        TextWrapping="Wrap" />
+                                </StackPanel>
+                                <TextBlock
+                                    Grid.Column="1"
+                                    Margin="8,0,0,0"
+                                    Opacity="0.68"
+                                    Text="待验证" />
+                            </Grid>
+
+                            <Border
+                                Height="1"
+                                Background="{ThemeResource SystemControlForegroundBaseLowBrush}" />
+
+                            <Grid Padding="0,4,0,2" ColumnSpacing="16">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Spacing="3">
+                                    <TextBlock
+                                        FontWeight="SemiBold"
+                                        Text="相同策略在短文本中能够独立使用"
+                                        TextWrapping="Wrap" />
+                                    <TextBlock
+                                        Opacity="0.65"
+                                        Text="迁移到更长的陌生材料时仍需继续观察。"
+                                        TextWrapping="Wrap" />
+                                </StackPanel>
+                                <TextBlock
+                                    Grid.Column="1"
+                                    Margin="8,0,0,0"
+                                    Opacity="0.68"
+                                    Text="跟进中" />
+                            </Grid>
                         </StackPanel>
 
-                        <StackPanel Spacing="6">
-                            <TextBlock FontSize="18" FontWeight="SemiBold" Text="最近记录" />
-                            <TextBlock Opacity="0.65" Text="UX 原型数据 · 非云端学情" />
-                            <TextBlock Text="课堂观察 · 能主动定位限制条件，但因果关系组织仍需要提示。" TextWrapping="Wrap" />
-                            <TextBlock Text="验证记录 · 相同策略在短文本中已能独立使用。" TextWrapping="Wrap" />
+                        <StackPanel Spacing="8">
+                            <TextBlock FontSize="16" FontWeight="SemiBold" Text="下一步" />
+                            <Grid Padding="0,5,0,6" ColumnSpacing="12">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock
+                                    Margin="2,0,0,0"
+                                    VerticalAlignment="Top"
+                                    FontSize="18"
+                                    Opacity="0.72"
+                                    Text="○" />
+                                <StackPanel Grid.Column="1" Spacing="3">
+                                    <TextBlock
+                                        FontWeight="SemiBold"
+                                        Text="使用新的陌生材料验证迁移"
+                                        TextWrapping="Wrap" />
+                                    <TextBlock
+                                        Opacity="0.62"
+                                        Text="验证是否能够在新的阅读材料中独立组织信息关系。"
+                                        TextWrapping="Wrap" />
+                                </StackPanel>
+                                <TextBlock
+                                    Grid.Column="2"
+                                    Margin="12,1,0,0"
+                                    Opacity="0.62"
+                                    Text="待安排" />
+                            </Grid>
                         </StackPanel>
 
-                        <Button HorizontalAlignment="Left" Content="查看全部学情记录" />
+                        <StackPanel Spacing="10">
+                            <Grid ColumnSpacing="12">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock FontSize="16" FontWeight="SemiBold" Text="教学脉络" />
+                                <TextBlock
+                                    Grid.Column="1"
+                                    Opacity="0.55"
+                                    Text="UX 原型数据" />
+                            </Grid>
+
+                            <Grid ColumnSpacing="12">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="72" />
+                                    <ColumnDefinition Width="20" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Opacity="0.58" Text="9 月 17 日" />
+                                <TextBlock
+                                    Grid.Column="1"
+                                    HorizontalAlignment="Center"
+                                    FontSize="12"
+                                    Opacity="0.76"
+                                    Text="●" />
+                                <StackPanel Grid.Column="2" Spacing="3">
+                                    <TextBlock FontWeight="SemiBold" Text="课堂观察" />
+                                    <TextBlock
+                                        Opacity="0.68"
+                                        Text="能主动定位限制条件，但因果关系组织仍需要提示。"
+                                        TextWrapping="Wrap" />
+                                </StackPanel>
+                            </Grid>
+
+                            <Grid ColumnSpacing="12">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="72" />
+                                    <ColumnDefinition Width="20" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Opacity="0.58" Text="9 月 14 日" />
+                                <TextBlock
+                                    Grid.Column="1"
+                                    HorizontalAlignment="Center"
+                                    FontSize="12"
+                                    Opacity="0.62"
+                                    Text="●" />
+                                <StackPanel Grid.Column="2" Spacing="3">
+                                    <TextBlock FontWeight="SemiBold" Text="干预" />
+                                    <TextBlock
+                                        Opacity="0.68"
+                                        Text="重新示范信息之间的因果连接方式，并使用短文本练习。"
+                                        TextWrapping="Wrap" />
+                                </StackPanel>
+                            </Grid>
+
+                            <Grid ColumnSpacing="12">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="72" />
+                                    <ColumnDefinition Width="20" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Opacity="0.58" Text="9 月 10 日" />
+                                <TextBlock
+                                    Grid.Column="1"
+                                    HorizontalAlignment="Center"
+                                    FontSize="12"
+                                    Opacity="0.48"
+                                    Text="●" />
+                                <StackPanel Grid.Column="2" Spacing="3">
+                                    <TextBlock FontWeight="SemiBold" Text="验证" />
+                                    <TextBlock
+                                        Opacity="0.68"
+                                        Text="相同策略在短文本中已经能够独立使用。"
+                                        TextWrapping="Wrap" />
+                                </StackPanel>
+                            </Grid>
+                        </StackPanel>
                     </StackPanel>
 
-                    <StackPanel Spacing="10" Visibility="{Binding AuthoritativeStudentDetailVisibility}">
-                        <Grid ColumnSpacing="12">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="Auto" />
-                            </Grid.ColumnDefinitions>
-                            <TextBlock FontSize="18" FontWeight="SemiBold" Text="最近课堂观察" />
-                            <Button
-                                Grid.Column="1"
-                                AutomationProperties.Name="刷新任教学员与最近记录"
-                                Click="RefreshAuthoritativeStudents_Click"
-                                Content="刷新" />
-                        </Grid>
+                    <StackPanel
+                        Spacing="12"
+                        Visibility="{Binding AuthoritativeStudentDetailVisibility}">
+                        <TextBlock FontSize="16" FontWeight="SemiBold" Text="教学脉络" />
 
                         <ComboBox
                             x:Name="SubjectContextBox"
@@ -147,22 +343,44 @@
 
                         <TextBlock
                             AutomationProperties.AutomationId="RecentObservationStatus"
-                            Opacity="0.72"
+                            Opacity="0.66"
                             Text="{Binding RecentObservationsStatusText}"
                             TextWrapping="Wrap" />
 
                         <ItemsControl ItemsSource="{Binding RecentObservations}">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
-                                    <StackPanel Padding="0,8,0,10" Spacing="4">
-                                        <TextBlock Text="{Binding RawText}" TextWrapping="Wrap" />
-                                        <TextBlock FontSize="12" Opacity="0.62" Text="{Binding CreatedAtServer}" />
-                                    </StackPanel>
+                                    <Grid Padding="0,7,0,9" ColumnSpacing="12">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="20" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock
+                                            HorizontalAlignment="Center"
+                                            FontSize="12"
+                                            Opacity="0.66"
+                                            Text="●" />
+                                        <StackPanel Grid.Column="1" Spacing="3">
+                                            <TextBlock
+                                                FontWeight="SemiBold"
+                                                Text="课堂观察" />
+                                            <TextBlock
+                                                Text="{Binding RawText}"
+                                                TextWrapping="Wrap" />
+                                            <TextBlock
+                                                FontSize="12"
+                                                Opacity="0.58"
+                                                Text="{Binding CreatedAtServer}" />
+                                        </StackPanel>
+                                    </Grid>
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
 
-                        <TextBlock Opacity="0.62" Text="{Binding RecentHistoryMoreText}" TextWrapping="Wrap" />
+                        <TextBlock
+                            Opacity="0.58"
+                            Text="{Binding RecentHistoryMoreText}"
+                            TextWrapping="Wrap" />
                     </StackPanel>
                 </StackPanel>
             </ScrollViewer>
