@@ -30,9 +30,9 @@ completed_gates:
   - personal-bootstrap-v1
   - text-quick-capture-observation-vertical-slice
   - windows-student-recent-observation-v1
+  - provider-session-auth-conformance
 
 open_gates:
-  - provider-session-auth-conformance
   - provider-adapter-conformance-spike
   - offline-access-lease-duration-and-clock-rollback-spike
   - production-provider-region-data-residency-gate
@@ -42,9 +42,9 @@ open_gates:
 next_execution:
   parallel_limit: 1
   lines:
-    - provider-session-auth-conformance
-  after_current_green:
     - provider-adapter-conformance-spike
+  after_current_green:
+    - offline-access-lease-duration-and-clock-rollback-spike
 
 later:
   - provider-projection-conformance
