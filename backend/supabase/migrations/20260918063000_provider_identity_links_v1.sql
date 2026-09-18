@@ -46,9 +46,9 @@ set search_path = ''
 as $$
     select
         'supabase'::text,
-        pg_catalog.nullif(auth.jwt() ->> 'iss', ''),
-        pg_catalog.nullif(auth.jwt() ->> 'sub', '')
-    where pg_catalog.nullif(auth.jwt() ->> 'sub', '') is not null;
+        nullif(auth.jwt() ->> 'iss', ''),
+        nullif(auth.jwt() ->> 'sub', '')
+    where nullif(auth.jwt() ->> 'sub', '') is not null;
 $$;
 
 revoke all on function xq_internal.current_external_identity_v1() from public;
