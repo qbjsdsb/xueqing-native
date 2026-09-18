@@ -60,7 +60,7 @@ Encryption does not prove that cached student data is still authorized while a d
 The active Phase 1 gate is the bounded Offline Access Lease contract:
 
 - candidate maximum duration: 72 hours;
-- exact environment / AppUser / organization scope binding;
+- exact environment / AppUser / organization / installation scope binding;
 - monotonic-time expiry during one validated boot session;
 - wall-clock rollback detection;
 - boot-session change fails closed and requires online revalidation;
