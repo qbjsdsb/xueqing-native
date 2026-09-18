@@ -25,7 +25,7 @@ public sealed partial class StudentsView : UserControl
         {
             Grid.SetColumn(ListPane, 0);
             Grid.SetColumn(DetailPane, 1);
-            ListColumn.Width = new GridLength(360);
+            ListColumn.Width = new GridLength(320);
             DetailColumn.Width = new GridLength(1, GridUnitType.Star);
             ListPane.Visibility = Visibility.Visible;
             DetailPane.Visibility = Visibility.Visible;
