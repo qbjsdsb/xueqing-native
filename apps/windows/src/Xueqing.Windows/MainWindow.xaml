@@ -27,7 +27,7 @@
                 <Button
                     x:Name="WorkspaceSwitcherButton"
                     Margin="4,8,4,8"
-                    HorizontalAlignment="Stretch"
+                    HorizontalAlignment="Left"
                     HorizontalContentAlignment="Left"
                     AutomationProperties.AutomationId="WorkspaceSwitcher"
                     AutomationProperties.Name="切换工作空间"
