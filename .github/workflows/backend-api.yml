@@ -70,6 +70,12 @@ jobs:
           set -euo pipefail
           bash backend/supabase/tests/provider_session_auth_conformance.sh
 
+      - name: Prove provider identities resolve through application-owned IdentityLink
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash backend/supabase/tests/provider_adapter_conformance.sh
+
       - name: Print safe local-stack diagnostics on failure
         if: failure()
         shell: bash
