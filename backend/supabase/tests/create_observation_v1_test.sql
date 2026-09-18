@@ -90,7 +90,7 @@ where namespace.nspname = 'public' and command.proname = 'create_observation';
 -- Teacher A: valid operation.
 select set_config('request.jwt.claim.sub', 'a0000000-0000-0000-0000-000000000001', true);
 select set_config('request.jwt.claim.role', 'authenticated', true);
-select set_config('request.jwt.claims', '{"sub":"a0000000-0000-0000-0000-000000000001","role":"authenticated"}', true);
+select set_config('request.jwt.claims', '{"sub":"a0000000-0000-0000-0000-000000000001","role":"authenticated","iss":"supabase-demo"}', true);
 set local role authenticated;
 select lives_ok(
     $$
@@ -191,7 +191,7 @@ reset role;
 
 -- Teacher B is an active teaching-capable member but has no assignment.
 select set_config('request.jwt.claim.sub', 'a0000000-0000-0000-0000-000000000002', true);
-select set_config('request.jwt.claims', '{"sub":"a0000000-0000-0000-0000-000000000002","role":"authenticated"}', true);
+select set_config('request.jwt.claims', '{"sub":"a0000000-0000-0000-0000-000000000002","role":"authenticated","iss":"supabase-demo"}', true);
 set local role authenticated;
 select throws_ok(
     $$
@@ -212,7 +212,7 @@ reset role;
 
 -- Teacher A + a Student with no active subject profile.
 select set_config('request.jwt.claim.sub', 'a0000000-0000-0000-0000-000000000001', true);
-select set_config('request.jwt.claims', '{"sub":"a0000000-0000-0000-0000-000000000001","role":"authenticated"}', true);
+select set_config('request.jwt.claims', '{"sub":"a0000000-0000-0000-0000-000000000001","role":"authenticated","iss":"supabase-demo"}', true);
 set local role authenticated;
 select throws_ok(
     $$
@@ -233,7 +233,7 @@ reset role;
 
 -- Disabled membership fails before assignment authority can be borrowed.
 select set_config('request.jwt.claim.sub', 'a0000000-0000-0000-0000-000000000003', true);
-select set_config('request.jwt.claims', '{"sub":"a0000000-0000-0000-0000-000000000003","role":"authenticated"}', true);
+select set_config('request.jwt.claims', '{"sub":"a0000000-0000-0000-0000-000000000003","role":"authenticated","iss":"supabase-demo"}', true);
 set local role authenticated;
 select throws_ok(
     $$
@@ -270,7 +270,7 @@ when (new.operation_id = '90000000-0000-0000-0000-000000000005'::uuid)
 execute function pg_temp.fail_test_receipt();
 
 select set_config('request.jwt.claim.sub', 'a0000000-0000-0000-0000-000000000001', true);
-select set_config('request.jwt.claims', '{"sub":"a0000000-0000-0000-0000-000000000001","role":"authenticated"}', true);
+select set_config('request.jwt.claims', '{"sub":"a0000000-0000-0000-0000-000000000001","role":"authenticated","iss":"supabase-demo"}', true);
 set local role authenticated;
 select throws_ok(
     $$

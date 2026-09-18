@@ -5,6 +5,17 @@ insert into public.app_users (id, auth_subject, display_name, enabled) values
     ('10000000-0000-0000-0000-000000000002', 'a0000000-0000-0000-0000-000000000002', '虚构教师乙', true),
     ('10000000-0000-0000-0000-000000000003', 'a0000000-0000-0000-0000-000000000003', '虚构停用教师', true);
 
+insert into public.identity_links (
+    app_user_id,
+    provider_key,
+    issuer,
+    external_subject,
+    active
+) values
+    ('10000000-0000-0000-0000-000000000001', 'supabase', 'supabase-demo', 'a0000000-0000-0000-0000-000000000001', true),
+    ('10000000-0000-0000-0000-000000000002', 'supabase', 'supabase-demo', 'a0000000-0000-0000-0000-000000000002', true),
+    ('10000000-0000-0000-0000-000000000003', 'supabase', 'supabase-demo', 'a0000000-0000-0000-0000-000000000003', true);
+
 insert into public.organizations (id, name) values
     ('20000000-0000-0000-0000-000000000001', '虚构机构甲'),
     ('20000000-0000-0000-0000-000000000002', '虚构机构乙');

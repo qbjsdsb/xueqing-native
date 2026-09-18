@@ -37,7 +37,7 @@ where namespace.nspname = 'public' and bootstrap.proname = 'get_personal_bootstr
 
 select set_config('request.jwt.claim.sub', 'a0000000-0000-0000-0000-000000000001', true);
 select set_config('request.jwt.claim.role', 'authenticated', true);
-select set_config('request.jwt.claims', '{"sub":"a0000000-0000-0000-0000-000000000001","role":"authenticated"}', true);
+select set_config('request.jwt.claims', '{"sub":"a0000000-0000-0000-0000-000000000001","role":"authenticated","iss":"supabase-demo"}', true);
 set local role authenticated;
 
 select is(
@@ -78,7 +78,7 @@ select is(
 reset role;
 
 select set_config('request.jwt.claim.sub', 'a0000000-0000-0000-0000-000000000002', true);
-select set_config('request.jwt.claims', '{"sub":"a0000000-0000-0000-0000-000000000002","role":"authenticated"}', true);
+select set_config('request.jwt.claims', '{"sub":"a0000000-0000-0000-0000-000000000002","role":"authenticated","iss":"supabase-demo"}', true);
 set local role authenticated;
 select is(
     pg_catalog.jsonb_array_length(public.get_personal_bootstrap_v1() -> 'teaching_contexts'),
@@ -91,7 +91,7 @@ update public.app_users
 set enabled = false
 where id = '10000000-0000-0000-0000-000000000003';
 select set_config('request.jwt.claim.sub', 'a0000000-0000-0000-0000-000000000003', true);
-select set_config('request.jwt.claims', '{"sub":"a0000000-0000-0000-0000-000000000003","role":"authenticated"}', true);
+select set_config('request.jwt.claims', '{"sub":"a0000000-0000-0000-0000-000000000003","role":"authenticated","iss":"supabase-demo"}', true);
 set local role authenticated;
 select throws_ok(
     $$ select public.get_personal_bootstrap_v1() $$,
@@ -102,7 +102,7 @@ select throws_ok(
 reset role;
 
 select set_config('request.jwt.claim.sub', 'ffffffff-ffff-ffff-ffff-ffffffffffff', true);
-select set_config('request.jwt.claims', '{"sub":"ffffffff-ffff-ffff-ffff-ffffffffffff","role":"authenticated"}', true);
+select set_config('request.jwt.claims', '{"sub":"ffffffff-ffff-ffff-ffff-ffffffffffff","role":"authenticated","iss":"supabase-demo"}', true);
 set local role authenticated;
 select throws_ok(
     $$ select public.get_personal_bootstrap_v1() $$,

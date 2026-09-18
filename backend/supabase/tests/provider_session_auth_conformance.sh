@@ -2,7 +2,6 @@
 set -euo pipefail
 
 actor_id='10000000-0000-0000-0000-000000000001'
-original_auth_subject='a0000000-0000-0000-0000-000000000001'
 organization_id='20000000-0000-0000-0000-000000000001'
 student_id='30000000-0000-0000-0000-000000000001'
 profile_id='40000000-0000-0000-0000-000000000001'
@@ -57,6 +56,21 @@ elif current is None:
 else:
     print(current)
 ' "$expression"
+}
+
+jwt_claim() {
+  local token="$1" claim="$2"
+  python3 -c '
+import base64
+import json
+import sys
+token, claim = sys.argv[1], sys.argv[2]
+payload = token.split(".")[1]
+payload += "=" * (-len(payload) % 4)
+claims = json.loads(base64.urlsafe_b64decode(payload.encode()).decode())
+value = claims.get(claim)
+print("" if value is None else value)
+' "$token" "$claim"
 }
 
 assert_json() {
@@ -121,7 +135,11 @@ delete from public.observations where operation_id in (
 update public.student_teacher_assignments set active = true where id = '$assignment_id'::uuid;
 update public.memberships set status = 'active', can_teach = true
  where organization_id = '$organization_id'::uuid and app_user_id = '$actor_id'::uuid;
-update public.app_users set enabled = true, auth_subject = '$original_auth_subject'::uuid
+delete from public.identity_links
+ where provider_key = 'supabase'
+   and external_subject = '$created_auth_user_id'
+   and app_user_id = '$actor_id'::uuid;
+update public.app_users set enabled = true
  where id = '$actor_id'::uuid;
 SQL
   if [[ -n "$created_auth_user_id" ]]; then
@@ -140,7 +158,7 @@ admin_user_response="$(curl -fsS -X POST "$api_url/auth/v1/admin/users" \
 created_auth_user_id="$(printf '%s' "$admin_user_response" | json_get 'id')"
 [[ -n "$created_auth_user_id" ]] || { echo 'Auth admin create-user returned no id.' >&2; exit 1; }
 
-psql_db -Atc "update public.app_users set auth_subject = '$created_auth_user_id'::uuid, enabled = true where id = '$actor_id'::uuid" >/dev/null
+psql_db -Atc "update public.app_users set enabled = true where id = '$actor_id'::uuid" >/dev/null
 
 session_response="$(curl -fsS -X POST "$api_url/auth/v1/token?grant_type=password" \
   -H "apikey: $ANON_KEY" -H 'Content-Type: application/json' \
@@ -150,6 +168,31 @@ refresh_token="$(printf '%s' "$session_response" | json_get 'refresh_token')"
 [[ -n "$access_token" && -n "$refresh_token" ]] || { echo 'Auth password grant returned an incomplete session.' >&2; exit 1; }
 echo "::add-mask::$access_token"
 echo "::add-mask::$refresh_token"
+
+provider_issuer="$(jwt_claim "$access_token" 'iss')"
+provider_subject="$(jwt_claim "$access_token" 'sub')"
+[[ -n "$provider_issuer" && -n "$provider_subject" ]] || {
+  echo 'Provider-issued access token is missing issuer or subject.' >&2
+  exit 1
+}
+if [[ "$provider_subject" != "$created_auth_user_id" ]]; then
+  echo "Provider token subject '$provider_subject' did not match created Auth user '$created_auth_user_id'." >&2
+  exit 1
+fi
+
+psql_db >/dev/null <<SQL
+insert into public.identity_links (
+  app_user_id, provider_key, issuer, external_subject, active
+) values (
+  '$actor_id'::uuid,
+  'supabase',
+  '$provider_issuer',
+  '$provider_subject',
+  true
+)
+on conflict (provider_key, issuer, external_subject)
+do update set app_user_id = excluded.app_user_id, active = true;
+SQL
 
 call_rpc "$access_token" 'get_personal_bootstrap_v1' '{}'
 expect_success 'PersonalBootstrap with live provider session'
