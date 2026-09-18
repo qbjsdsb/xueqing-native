@@ -2,6 +2,8 @@ package com.xueqing.app.presentation
 
 import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onAllNodesWithTag
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -21,7 +23,7 @@ class StudentReferenceInstrumentedTest {
         composeRule.onNodeWithText("学生").performClick()
 
         composeRule.waitUntil(timeoutMillis = 5_000) {
-            composeRule.onNodeWithText("虚构学生甲")
+            composeRule.onAllNodesWithText("虚构学生甲")
                 .fetchSemanticsNodes(atLeastOneRootRequired = false)
                 .isNotEmpty()
         }
@@ -35,7 +37,7 @@ class StudentReferenceInstrumentedTest {
         ).performClick()
 
         composeRule.waitUntil(timeoutMillis = 5_000) {
-            composeRule.onNodeWithTag("quick-capture-teaching-context")
+            composeRule.onAllNodesWithTag("quick-capture-teaching-context")
                 .fetchSemanticsNodes(atLeastOneRootRequired = false)
                 .isNotEmpty()
         }
