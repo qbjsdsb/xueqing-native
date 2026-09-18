@@ -7,33 +7,44 @@ import androidx.activity.enableEdgeToEdge
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import com.xueqing.app.presentation.QuickCaptureViewModel
+import com.xueqing.app.presentation.StudentDirectoryViewModel
 import com.xueqing.app.presentation.XueqingApp
 
 class MainActivity : ComponentActivity() {
     private lateinit var quickCaptureViewModel: QuickCaptureViewModel
+    private lateinit var studentDirectoryViewModel: StudentDirectoryViewModel
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
-        quickCaptureViewModel = ViewModelProvider(
-            this,
-            object : ViewModelProvider.Factory {
-                override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                    require(modelClass == QuickCaptureViewModel::class.java)
-                    @Suppress("UNCHECKED_CAST")
-                    return QuickCaptureViewModel.create(
-                        context = applicationContext,
-                        bootstrapRemote = BuildVariantQuickCaptureBootstrap.remote(),
-                        environmentId = BuildVariantQuickCaptureBootstrap.ENVIRONMENT_ID,
-                    ) as T
+        val bootstrapRemote = BuildVariantQuickCaptureBootstrap.remote()
+        val factory = object : ViewModelProvider.Factory {
+            override fun <T : ViewModel> create(modelClass: Class<T>): T {
+                @Suppress("UNCHECKED_CAST")
+                return when (modelClass) {
+                    QuickCaptureViewModel::class.java ->
+                        QuickCaptureViewModel.create(
+                            context = applicationContext,
+                            bootstrapRemote = bootstrapRemote,
+                            environmentId = BuildVariantQuickCaptureBootstrap.ENVIRONMENT_ID,
+                        ) as T
+
+                    StudentDirectoryViewModel::class.java ->
+                        StudentDirectoryViewModel(bootstrapRemote) as T
+
+                    else -> error("Unsupported ViewModel: ${modelClass.name}")
                 }
-            },
-        )[QuickCaptureViewModel::class.java]
+            }
+        }
+
+        quickCaptureViewModel = ViewModelProvider(this, factory)[QuickCaptureViewModel::class.java]
+        studentDirectoryViewModel = ViewModelProvider(this, factory)[StudentDirectoryViewModel::class.java]
 
         setContent {
             XueqingApp(
                 quickCaptureViewModel = quickCaptureViewModel,
+                studentDirectoryViewModel = studentDirectoryViewModel,
                 startInQuickCapture = intent.getBooleanExtra(EXTRA_OPEN_QUICK_CAPTURE, false),
             )
         }
