@@ -1,6 +1,6 @@
 # Xueqing UX Documentation Index
 
-This directory separates durable platform principles from the current **Native UX & Visual Foundation v1 Candidate**.
+This directory separates durable platform principles, the existing **Native UX & Visual Foundation v1 Candidate**, and the new **v2 Native Reference RFC** that is being explored through executable native prototypes.
 
 ## Durable platform principles
 
@@ -11,7 +11,7 @@ These remain the short platform principle documents.
 
 ## Native UX & Visual Foundation v1 Candidate
 
-The current detailed candidate is intentionally split by responsibility:
+The current detailed candidate is split by responsibility:
 
 1. `NATIVE_UX_FOUNDATION.md`
    - cross-platform semantic/visual contract;
@@ -30,24 +30,44 @@ The current detailed candidate is intentionally split by responsibility:
    - context preservation and failure/conflict presentation.
 
 3. `INTERACTION_STATE_CONTRACT.md`
-   - four operation classes: protected local draft, queueable low-risk intent, authoritative online command, projection refresh/rebuild;
+   - protected local draft, queueable low-risk intent, authoritative online command, projection refresh/rebuild;
    - user-visible distinctions between editing, locally safe, waiting to sync, committed, unknown-result, conflict, rejection and permission/scope changes;
-   - Back/navigation, account/organization switch and attachment-state rules;
-   - semantic fixtures that every native write prototype must prove;
-   - boundaries that stay open until Offline Lease / attachment / authorization-recovery protocols are accepted.
+   - Back/navigation, account/organization switch and attachment-state rules.
 
 4. `PROTOTYPE_ACCEPTANCE_MATRIX.md`
-   - executable WinUI/Compose evidence required before v1 acceptance;
+   - executable WinUI/Compose evidence required before visual/layout values are accepted;
    - Windows width/DPI/text/theme/keyboard/focus matrix;
    - Android phone/adaptive/IME/predictive-back/process-death/accessibility matrix;
-   - hostile deterministic fictional fixtures;
-   - explicit pass/fail conditions.
+   - hostile deterministic fictional fixtures and explicit pass/fail conditions.
+
+## Native UX Foundation v2 — Reference RFC
+
+- `NATIVE_UX_FOUNDATION_V2_RFC.md`
+
+This RFC is the current redesign proposal. It does **not** change domain/security/sync contracts and it does **not** supersede the v1 candidate merely because a mockup looks better.
+
+Its main direction is:
+
+- one domain, two native applications;
+- Windows **Teaching Desk**: native shell + compact navigation + Roster + Chronicle + optional Inspector;
+- Android **Teaching Pocket**: Agenda + Roster + Chronicle + Capture;
+- account, workspace and destination remain separate concepts;
+- Evidence Thread is the main product-specific visual language;
+- platform conventions take precedence over cross-platform pixel consistency;
+- OS-level native capabilities such as Windows taskbar integration or Android shortcuts/widgets are follow-up productivity layers, not first-prototype blockers.
+
+The RFC requires two executable reference prototypes before broader rollout:
+
+1. Windows Students / Chronicle;
+2. Android Student / Quick Capture.
 
 ## Status
 
-The detailed native foundation is **Candidate — Prototype Required**.
+The v1 detailed native foundation remains **Candidate — Prototype Required**.
 
-Do not freeze final breakpoint values, pane widths, Case reading width, management column-collapse thresholds, accent values, Offline Access Lease UX, unauthorized-draft recovery behavior or other prototype/protocol-sensitive constants from documentation alone.
+The v2 document is **RFC — executable native reference prototypes required**.
+
+Do not freeze final breakpoint values, pane widths, Chronicle reading width, management column-collapse thresholds, accent values, Offline Access Lease UX, unauthorized-draft recovery behavior or other prototype/protocol-sensitive constants from documentation or generated images alone.
 
 Acceptance requires exact-head executable prototype evidence as defined in `PROTOTYPE_ACCEPTANCE_MATRIX.md` and semantic-state evidence from `INTERACTION_STATE_CONTRACT.md`.
 
