@@ -126,9 +126,13 @@
                 Content="返回学生列表"
                 Visibility="Collapsed" />
 
-            <ScrollViewer Grid.Row="1">
+            <ScrollViewer
+                x:Name="DetailScrollViewer"
+                Grid.Row="1"
+                HorizontalScrollBarVisibility="Disabled">
                 <StackPanel
-                    MaxWidth="820"
+                    Width="{Binding ViewportWidth, ElementName=DetailScrollViewer}"
+                    MaxWidth="860"
                     HorizontalAlignment="Left"
                     Spacing="20">
 
