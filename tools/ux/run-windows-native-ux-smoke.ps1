@@ -547,6 +547,7 @@ function Assert-ChineseUnicodeSearch {
 
 function Assert-CompactStudentKeyboardJourney {
     Set-WindowDips -Width 800 -Height 640
+    Switch-ToWorkspace -Workspace personal
     Navigate-ToSurface -NavigationId 'StudentsNavigation' -SurfaceId 'StudentsSurface' | Out-Null
 
     Set-SearchValue -Value 'S000777'
