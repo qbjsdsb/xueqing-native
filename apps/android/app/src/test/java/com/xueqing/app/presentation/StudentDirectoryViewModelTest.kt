@@ -38,10 +38,19 @@ class StudentDirectoryViewModelTest {
         val roster = buildStudentDirectory(bootstrap)
 
         assertEquals(3, roster.size)
-        assertEquals(listOf("语文 · 数学"), listOf(roster.first().subjectSummary))
-        assertEquals(organizationOne, roster.first().contexts.first().organizationId)
-        assertEquals(organizationTwo, roster[1].contexts.single().organizationId)
-        assertEquals(studentTwo, roster[2].contexts.single().studentId)
+        val twoSubjectStudent = roster.single { it.contexts.size == 2 }
+        assertEquals("语文 · 数学", twoSubjectStudent.subjectSummary)
+        assertEquals(organizationOne, twoSubjectStudent.contexts.first().organizationId)
+
+        val organizationTwoStudent = roster.single {
+            it.contexts.singleOrNull()?.organizationId == organizationTwo
+        }
+        assertEquals(studentOne, organizationTwoStudent.contexts.single().studentId)
+
+        val secondStudent = roster.single {
+            it.contexts.singleOrNull()?.studentId == studentTwo
+        }
+        assertEquals("英语", secondStudent.subjectSummary)
     }
 
     private fun context(
