@@ -14,6 +14,7 @@ class OfflineAccessLeaseTest {
         environmentId = "development",
         appUserId = "app-user-a",
         organizationId = "org-a",
+        installationId = "install-a",
     )
 
     private fun lease(
@@ -88,6 +89,16 @@ class OfflineAccessLeaseTest {
         assertEquals(
             OfflineAccessLeaseDecision.Denied(OfflineAccessLeaseDenial.ScopeMismatch),
             evaluateOfflineAccessLease(lease(), otherOrganization, now(hour)),
+        )
+    }
+
+    @Test
+    fun installation_scope_mismatch_never_falls_back() {
+        val otherInstallation = scope.copy(installationId = "install-b")
+
+        assertEquals(
+            OfflineAccessLeaseDecision.Denied(OfflineAccessLeaseDenial.ScopeMismatch),
+            evaluateOfflineAccessLease(lease(), otherInstallation, now(hour)),
         )
     }
 
