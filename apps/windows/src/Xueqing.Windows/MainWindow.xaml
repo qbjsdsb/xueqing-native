@@ -16,17 +16,82 @@
             x:Name="Shell"
             AutomationProperties.AutomationId="ShellNavigation"
             IsBackButtonVisible="Collapsed"
+            IsPaneToggleButtonVisible="True"
             IsSettingsVisible="False"
-            PaneDisplayMode="Left"
+            OpenPaneLength="196"
+            PaneDisplayMode="LeftCompact"
+            CompactPaneLength="52"
             SelectionChanged="Shell_SelectionChanged">
 
+            <NavigationView.PaneHeader>
+                <Button
+                    x:Name="WorkspaceSwitcherButton"
+                    Margin="4,8,4,8"
+                    HorizontalAlignment="Stretch"
+                    HorizontalContentAlignment="Left"
+                    AutomationProperties.AutomationId="WorkspaceSwitcher"
+                    AutomationProperties.Name="切换工作空间"
+                    Content="个人教学">
+                    <Button.Flyout>
+                        <MenuFlyout Placement="RightEdgeAlignedTop">
+                            <MenuFlyoutItem
+                                x:Name="PersonalWorkspaceMenuItem"
+                                AutomationProperties.AutomationId="PersonalWorkspaceMenuItem"
+                                Click="PersonalWorkspace_Click"
+                                Text="个人教学" />
+                            <MenuFlyoutSeparator />
+                            <MenuFlyoutItem
+                                x:Name="OrganizationWorkspaceMenuItem"
+                                AutomationProperties.AutomationId="OrganizationWorkspaceMenuItem"
+                                Click="OrganizationWorkspace_Click"
+                                Text="机构工作区" />
+                        </MenuFlyout>
+                    </Button.Flyout>
+                </Button>
+            </NavigationView.PaneHeader>
+
             <NavigationView.MenuItems>
-                <NavigationViewItem x:Name="TodayNav" AutomationProperties.AutomationId="TodayNavigation" Content="今日" IsSelected="True" Tag="today" />
-                <NavigationViewItem AutomationProperties.AutomationId="StudentsNavigation" Content="学生" Tag="students" />
-                <NavigationViewItem AutomationProperties.AutomationId="LearningNavigation" Content="学情" Tag="learning" />
-                <NavigationViewItemSeparator />
-                <NavigationViewItemHeader Content="机构工作区" />
-                <NavigationViewItem AutomationProperties.AutomationId="OrganizationManagementNavigation" Content="机构管理" Tag="organization-management" />
+                <NavigationViewItem
+                    x:Name="TodayNav"
+                    AutomationProperties.AutomationId="TodayNavigation"
+                    Content="今日"
+                    IsSelected="True"
+                    Tag="today">
+                    <NavigationViewItem.Icon>
+                        <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE787;" />
+                    </NavigationViewItem.Icon>
+                </NavigationViewItem>
+
+                <NavigationViewItem
+                    x:Name="StudentsNav"
+                    AutomationProperties.AutomationId="StudentsNavigation"
+                    Content="学生"
+                    Tag="students">
+                    <NavigationViewItem.Icon>
+                        <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE77B;" />
+                    </NavigationViewItem.Icon>
+                </NavigationViewItem>
+
+                <NavigationViewItem
+                    x:Name="LearningNav"
+                    AutomationProperties.AutomationId="LearningNavigation"
+                    Content="学情"
+                    Tag="learning">
+                    <NavigationViewItem.Icon>
+                        <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE8A5;" />
+                    </NavigationViewItem.Icon>
+                </NavigationViewItem>
+
+                <NavigationViewItem
+                    x:Name="OrganizationManagementNav"
+                    AutomationProperties.AutomationId="OrganizationManagementNavigation"
+                    Content="成员与权限"
+                    Tag="organization-management"
+                    Visibility="Collapsed">
+                    <NavigationViewItem.Icon>
+                        <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE716;" />
+                    </NavigationViewItem.Icon>
+                </NavigationViewItem>
             </NavigationView.MenuItems>
 
             <Grid>
