@@ -106,7 +106,7 @@ Windows 的架构、加密 LocalState/MSIX 与 **Native UX Gate** 已完成，�
 
 Android 已完成稳定 API 36 的 Kotlin + Compose 基线、Room Draft Engine、process-death recovery、SQLCipher + Android Keystore Durable Intent 加密，以及第一条真实 **Quick Capture → encrypted Durable Outbox → WorkManager → reference provider → authoritative Observation** 产品写入链。服务端已具备 CreateObservation、PersonalBootstrap 和 recent Observation projection；Windows 已完成 recent Observation 真实读取链。
 
-Provider Session/Auth 与 Provider Adapter conformance 已完成。应用业务身份现在由 application-owned `AppUser` 持有，外部 provider 的 `(provider, issuer, subject)` 通过 IdentityLink 解析，业务命令/投影不再直接把 Supabase Auth subject 当作业务用户主键。
+Provider Session/Auth 与 **IdentityLink 身份映射这一层** conformance 已完成。应用业务身份现在由 application-owned `AppUser` 持有，外部 provider 的 `(provider, issuer, subject)` 通过 IdentityLink 解析，当前 CreateObservation / PersonalBootstrap / recent Observation 路径不再直接把 Supabase Auth subject 当作业务用户主键。更广的 Provider Adapter conformance 仍按能力分层推进，Projection / Storage conformance 不在此处提前宣称完成。
 
 当前唯一执行线是 **Android Student + Quick Capture Native Reference**：把已证明可靠的 Android 状态、草稿和 Observation 链包装成真正的 Teaching Pocket 原生体验，而不是继续扩张 bootstrap/demo UI。该参考完成后进入 **Offline Access Lease duration + clock rollback** Gate，再继续下一条真实业务 Vertical Slice。
 
