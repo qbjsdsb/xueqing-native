@@ -1,5 +1,9 @@
 package com.xueqing.app.presentation
 
+import com.xueqing.app.application.bootstrap.PersonalTeachingContext
+
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -11,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
@@ -24,11 +29,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.ui.Alignment
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 
 internal enum class PrimaryDestination(
@@ -43,24 +48,45 @@ internal enum class PrimaryDestination(
 @Composable
 internal fun XueqingApp(
     quickCaptureViewModel: QuickCaptureViewModel,
+    studentDirectoryViewModel: StudentDirectoryViewModel,
     startInQuickCapture: Boolean = false,
 ) {
     val colorScheme = if (isSystemInDarkTheme()) darkColorScheme() else lightColorScheme()
     val quickCaptureState by quickCaptureViewModel.uiState.collectAsState()
+    val directoryState by studentDirectoryViewModel.uiState.collectAsState()
 
     MaterialTheme(colorScheme = colorScheme) {
         var selectedName by rememberSaveable { mutableStateOf(PrimaryDestination.Today.name) }
+        var selectedStudentKey by rememberSaveable { mutableStateOf<String?>(null) }
         var showingQuickCapture by rememberSaveable { mutableStateOf(startInQuickCapture) }
         val selected = PrimaryDestination.entries.firstOrNull { it.name == selectedName }
             ?: PrimaryDestination.Today
+        val selectedStudent = directoryState.students.firstOrNull { it.key == selectedStudentKey }
 
         if (showingQuickCapture) {
             QuickCaptureScreen(
                 state = quickCaptureState,
                 onTextChanged = quickCaptureViewModel::onTextChanged,
-                onClose = { showingQuickCapture = false },
+                onClose = {
+                    quickCaptureViewModel.flushNow()
+                    showingQuickCapture = false
+                },
+                onChooseStudent = {
+                    showingQuickCapture = false
+                    selectedName = PrimaryDestination.Students.name
+                    selectedStudentKey = null
+                },
                 onDiscard = quickCaptureViewModel::discard,
                 onSubmit = quickCaptureViewModel::submit,
+            )
+        } else if (selectedStudent != null) {
+            StudentDetailScreen(
+                student = selectedStudent,
+                onBack = { selectedStudentKey = null },
+                onQuickCapture = { context ->
+                    quickCaptureViewModel.selectTeachingContext(context)
+                    showingQuickCapture = true
+                },
             )
         } else {
             Scaffold(
@@ -69,11 +95,13 @@ internal fun XueqingApp(
                         PrimaryDestination.entries.forEach { destination ->
                             NavigationBarItem(
                                 selected = selected == destination,
-                                onClick = { selectedName = destination.name },
+                                onClick = {
+                                    selectedName = destination.name
+                                    selectedStudentKey = null
+                                },
                                 icon = {
                                     Text(
                                         text = destination.bootstrapGlyph,
-                                        modifier = Modifier.clearAndSetSemantics { },
                                         style = MaterialTheme.typography.labelMedium,
                                     )
                                 },
@@ -86,10 +114,30 @@ internal fun XueqingApp(
                 when (selected) {
                     PrimaryDestination.Today -> TodayScreen(
                         innerPadding = innerPadding,
-                        onQuickCapture = { showingQuickCapture = true },
+                        students = directoryState.students,
+                        directoryStatus = directoryState.status,
+                        onQuickCapture = {
+                            quickCaptureViewModel.prepareForUnscopedCapture()
+                            showingQuickCapture = true
+                        },
+                        onOpenStudent = { key ->
+                            selectedName = PrimaryDestination.Students.name
+                            selectedStudentKey = key
+                        },
                     )
-                    PrimaryDestination.Students -> StudentsScreen(innerPadding)
-                    PrimaryDestination.Learning -> LearningScreen(innerPadding)
+
+                    PrimaryDestination.Students -> StudentsScreen(
+                        innerPadding = innerPadding,
+                        state = directoryState,
+                        onOpenStudent = { selectedStudentKey = it },
+                    )
+
+                    PrimaryDestination.Learning -> LearningScreen(
+                        innerPadding = innerPadding,
+                        onOpenStudents = {
+                            selectedName = PrimaryDestination.Students.name
+                        },
+                    )
                 }
             }
         }
@@ -99,68 +147,85 @@ internal fun XueqingApp(
 @Composable
 private fun TodayScreen(
     innerPadding: PaddingValues,
+    students: List<StudentDirectoryItem>,
+    directoryStatus: StudentDirectoryStatus,
     onQuickCapture: () -> Unit,
+    onOpenStudent: (String) -> Unit,
 ) {
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
             .padding(innerPadding),
         contentPadding = PaddingValues(horizontal = 20.dp, vertical = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(0.dp),
     ) {
         item {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(
-                    text = "今日",
-                    style = MaterialTheme.typography.headlineSmall,
-                )
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("今日", style = MaterialTheme.typography.headlineSmall)
+                    Text(
+                        text = "先把课堂中的判断记下来，再在学情里继续整理。",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 6.dp),
+                    )
+                }
                 TextButton(onClick = onQuickCapture) {
                     Text("记录")
                 }
             }
         }
         item {
-            Text(
-                text = "个人教学行动",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(bottom = 24.dp),
-            )
-        }
-        item { SectionTitle("已逾期") }
-        item { ActionRow("林晨", "作文迁移检查", "昨天到期") }
-        item { ActionRow("王宇", "文言实词复查", "9 月 15 日") }
-        item {
             SectionTitle(
-                text = "今天",
-                modifier = Modifier.padding(top = 24.dp),
+                text = "我的学生",
+                modifier = Modifier.padding(top = 28.dp),
             )
         }
-        item { ActionRow("李欣", "检查病句辨析", "今天") }
-        item {
-            SectionTitle(
-                text = "待安排",
-                modifier = Modifier.padding(top = 24.dp),
-            )
-        }
-        item { ActionRow("陈佳", "古诗文背诵抽查", "未安排日期") }
-        item {
-            Text(
-                text = "未来 8",
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 28.dp, bottom = 12.dp),
-            )
+        when (directoryStatus) {
+            StudentDirectoryStatus.Loading -> item {
+                Text(
+                    "正在读取学生…",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(vertical = 16.dp),
+                )
+            }
+
+            StudentDirectoryStatus.AuthenticationRequired -> item {
+                EmptyMessage("请登录后查看学生。")
+            }
+
+            StudentDirectoryStatus.Unavailable -> item {
+                EmptyMessage("暂时无法读取学生列表，请稍后再试。")
+            }
+
+            StudentDirectoryStatus.Ready -> {
+                if (students.isEmpty()) {
+                    item { EmptyMessage("还没有可用的教学学生。") }
+                } else {
+                    items(
+                        items = students.take(6),
+                        key = { it.key },
+                    ) { student ->
+                        StudentRow(
+                            student = student,
+                            onClick = { onOpenStudent(student.key) },
+                            testTag = "today-student-row-${student.key}",
+                        )
+                    }
+                }
+            }
         }
     }
 }
 
 @Composable
-private fun StudentsScreen(innerPadding: PaddingValues) {
+private fun StudentsScreen(
+    innerPadding: PaddingValues,
+    state: StudentDirectoryUiState,
+    onOpenStudent: (String) -> Unit,
+) {
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
@@ -171,18 +236,135 @@ private fun StudentsScreen(innerPadding: PaddingValues) {
             Text(
                 text = "学生",
                 style = MaterialTheme.typography.headlineSmall,
-                modifier = Modifier.padding(bottom = 16.dp),
+                modifier = Modifier.padding(bottom = 8.dp),
+            )
+            Text(
+                text = "按当前个人教学范围查看学生与学科档案。",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(bottom = 20.dp),
             )
         }
-        item { StudentRow("林晨", "九年级 · 语文", "待验证 1") }
-        item { StudentRow("王宇", "八年级 · 语文", "跟进中 2") }
-        item { StudentRow("李欣", "七年级 · 语文", "") }
-        item { StudentRow("陈佳", "九年级 · 语文", "下一步 · 周四") }
+        when (state.status) {
+            StudentDirectoryStatus.Loading -> item {
+                Text(
+                    "正在读取学生…",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(vertical = 16.dp),
+                )
+            }
+
+            StudentDirectoryStatus.AuthenticationRequired -> item {
+                EmptyMessage("请登录后查看学生。")
+            }
+
+            StudentDirectoryStatus.Unavailable -> item {
+                EmptyMessage("暂时无法读取学生列表，请稍后再试。")
+            }
+
+            StudentDirectoryStatus.Ready -> {
+                if (state.students.isEmpty()) {
+                    item { EmptyMessage("还没有可用的教学学生。") }
+                } else {
+                    items(state.students, key = { it.key }) { student ->
+                        StudentRow(
+                            student = student,
+                            onClick = { onOpenStudent(student.key) },
+                            testTag = "student-row-${student.key}",
+                        )
+                    }
+                }
+            }
+        }
     }
 }
 
 @Composable
-private fun LearningScreen(innerPadding: PaddingValues) {
+private fun StudentDetailScreen(
+    student: StudentDirectoryItem,
+    onBack: () -> Unit,
+    onQuickCapture: (PersonalTeachingContext) -> Unit,
+) {
+    BackHandler(onBack = onBack)
+
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 16.dp),
+    ) {
+        item {
+            TextButton(onClick = onBack) {
+                Text("返回学生")
+            }
+            Text(
+                text = "学生详情",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 8.dp),
+            )
+            Text(
+                text = student.studentDisplayName,
+                style = MaterialTheme.typography.headlineSmall,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+            Text(
+                text = student.organizationName,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 4.dp, bottom = 28.dp),
+            )
+        }
+        item { SectionTitle("学科档案") }
+        items(
+            items = student.contexts,
+            key = { it.subjectProfileId.toString() },
+        ) { context ->
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(
+                        role = Role.Button,
+                        onClick = { onQuickCapture(context) },
+                    )
+                    .testTag("student-subject-record-${context.subjectProfileId}")
+                    .padding(vertical = 16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = subjectLabelForKey(context.subjectKey),
+                        style = MaterialTheme.typography.titleMedium,
+                    )
+                    Text(
+                        text = "进入快速记录",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 4.dp),
+                    )
+                }
+                Text(
+                    text = "记录",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            }
+            HorizontalDivider()
+        }
+        item {
+            Text(
+                text = "记录提交时仍会由服务端重新检查当前任课关系。",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 20.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun LearningScreen(
+    innerPadding: PaddingValues,
+    onOpenStudents: () -> Unit,
+) {
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
@@ -193,13 +375,27 @@ private fun LearningScreen(innerPadding: PaddingValues) {
             Text(
                 text = "学情",
                 style = MaterialTheme.typography.headlineSmall,
-                modifier = Modifier.padding(bottom = 24.dp),
+            )
+            Text(
+                text = "这里会承载后续的记录整理与判断闭环。",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 8.dp),
             )
         }
-        item { SectionTitle("当前") }
-        item { LearningRow("林晨", "作文论据仍然空泛", "待验证 · 昨天") }
-        item { LearningRow("王宇", "文言实词辨析不稳定", "下一步 · 周四") }
-        item { LearningRow("陈佳", "阅读概括遗漏限制条件", "正在跟进") }
+        item {
+            Text(
+                text = "先从学生开始，进入具体学科档案后记录课堂观察。",
+                style = MaterialTheme.typography.bodyLarge,
+                modifier = Modifier.padding(top = 28.dp),
+            )
+            TextButton(
+                onClick = onOpenStudents,
+                modifier = Modifier.padding(top = 8.dp),
+            ) {
+                Text("查看学生")
+            }
+        }
     }
 }
 
@@ -216,82 +412,45 @@ private fun SectionTitle(
 }
 
 @Composable
-private fun ActionRow(
-    student: String,
-    title: String,
-    metadata: String,
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 12.dp),
-    ) {
-        Text(text = student, style = MaterialTheme.typography.labelLarge)
-        Text(
-            text = title,
-            style = MaterialTheme.typography.bodyLarge,
-            modifier = Modifier.padding(top = 2.dp),
-        )
-        Text(
-            text = metadata,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(top = 4.dp),
-        )
-    }
-    HorizontalDivider()
+private fun EmptyMessage(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.bodyLarge,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(vertical = 16.dp),
+    )
 }
 
 @Composable
 private fun StudentRow(
-    name: String,
-    context: String,
-    state: String,
+    student: StudentDirectoryItem,
+    onClick: () -> Unit,
+    testTag: String,
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .clickable(
+                role = Role.Button,
+                onClick = onClick,
+            )
+            .testTag(testTag)
             .padding(vertical = 14.dp),
-        verticalAlignment = Alignment.CenterVertically,
+        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
     ) {
         Column(modifier = Modifier.weight(1f)) {
-            Text(text = name, style = MaterialTheme.typography.titleMedium)
+            Text(text = student.studentDisplayName, style = MaterialTheme.typography.titleMedium)
             Text(
-                text = context,
+                text = "${student.organizationName} · ${student.subjectSummary}",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 2.dp),
+                modifier = Modifier.padding(top = 4.dp),
             )
         }
-        if (state.isNotEmpty()) {
-            Spacer(Modifier.width(16.dp))
-            Text(
-                text = state,
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-    }
-    HorizontalDivider()
-}
-
-@Composable
-private fun LearningRow(
-    student: String,
-    title: String,
-    state: String,
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 14.dp),
-    ) {
-        Text(text = "$student · $title", style = MaterialTheme.typography.bodyLarge)
         Text(
-            text = state,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(top = 4.dp),
+            text = "查看",
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.primary,
         )
     }
     HorizontalDivider()

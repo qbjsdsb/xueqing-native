@@ -18,6 +18,7 @@ import com.xueqing.app.durability.ObservationOutboxStatus
 import java.time.Instant
 import java.util.UUID
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -79,12 +80,72 @@ class QuickCaptureViewModel(
     private var scope: DraftScope? = null
     private var teachingContext: PersonalTeachingContext? = null
     private var actorAppUserId: UUID? = null
+    private var availableTeachingContexts: List<PersonalTeachingContext> = emptyList()
+    private var pendingSelection: PersonalTeachingContext? = null
+    private var bootstrapLoaded = false
+    private var submissionObservationJob: Job? = null
+    private var selectionGeneration: Long = 0
     private var revision: Long = 0
 
     val uiState: StateFlow<QuickCaptureUiState> = _uiState.asStateFlow()
 
     init {
         loadTeachingContextAndDraft()
+    }
+
+    /**
+     * Opens the only available teaching context for an unscoped Record action.
+     * If there is more than one context, the UI must send the teacher to an
+     * explicit Student/subject selection instead of guessing.
+     */
+    fun prepareForUnscopedCapture() {
+        pendingSelection = null
+        if (!bootstrapLoaded) {
+            return
+        }
+
+        // Preserve login/unavailable states: an empty roster cannot be selected.
+        if (availableTeachingContexts.isEmpty()) {
+            return
+        }
+        val onlyContext = availableTeachingContexts.singleOrNull()
+        if (onlyContext == null) {
+            showSelectionRequired()
+        } else {
+            selectTeachingContext(onlyContext)
+        }
+    }
+
+    /**
+     * The selected context originated from the personal bootstrap, but this
+     * ViewModel re-checks it against its own live bootstrap before opening the
+     * draft/outbox scope. UI selection is never authorization.
+     */
+    fun selectTeachingContext(requested: PersonalTeachingContext) {
+        pendingSelection = requested
+        selectionGeneration = Math.addExact(selectionGeneration, 1)
+        val generation = selectionGeneration
+        if (!bootstrapLoaded) {
+            return
+        }
+
+        val verified = resolveCaptureContext(requested, availableTeachingContexts)
+        if (verified == null) {
+            pendingSelection = null
+            showSelectionRequired()
+            return
+        }
+
+        // Disable editing synchronously, before a prior save/submit releases
+        // the mutex. Keep the old text intact until its queued save completes.
+        _uiState.update { it.copy(teachingContextStatus = TeachingContextStatus.Loading) }
+        viewModelScope.launch {
+            saveMutex.withLock {
+                if (generation == selectionGeneration) {
+                    openContextLocked(verified, generation)
+                }
+            }
+        }
     }
 
     fun onTextChanged(text: String) {
@@ -131,13 +192,17 @@ class QuickCaptureViewModel(
                 val currentSession = session ?: return@withLock
                 val currentScope = scope ?: return@withLock
                 try {
-                    val nextEpoch = store.discard(currentSession)
+                    val nextEpoch = withContext(Dispatchers.IO) {
+                        store.discard(currentSession)
+                    }
                     if (nextEpoch == null) {
                         _uiState.update { it.copy(draftStatus = LocalDraftStatus.PersistenceFailed) }
                         return@withLock
                     }
 
-                    session = store.open(currentScope)
+                    session = withContext(Dispatchers.IO) {
+                        store.open(currentScope)
+                    }
                     revision = Math.addExact(revision, 1)
                     _uiState.update {
                         it.copy(
@@ -205,19 +270,23 @@ class QuickCaptureViewModel(
                 )
 
                 try {
-                    val nextEpoch = durableIntentDao.submitObservation(
-                        scopeKey = currentScope.storageKey,
-                        expectedEpoch = currentSession.epoch,
-                        finalText = finalText,
-                        updatedAtEpochMillis = capturedAtEpochMillis,
-                        outbox = outbox,
-                    )
+                    val nextEpoch = withContext(Dispatchers.IO) {
+                        durableIntentDao.submitObservation(
+                            scopeKey = currentScope.storageKey,
+                            expectedEpoch = currentSession.epoch,
+                            finalText = finalText,
+                            updatedAtEpochMillis = capturedAtEpochMillis,
+                            outbox = outbox,
+                        )
+                    }
                     if (nextEpoch == null) {
                         _uiState.update { it.copy(draftStatus = LocalDraftStatus.PersistenceFailed) }
                         return@withLock
                     }
 
-                    session = store.open(currentScope)
+                    session = withContext(Dispatchers.IO) {
+                        store.open(currentScope)
+                    }
                     _uiState.update {
                         it.copy(
                             text = "",
@@ -237,63 +306,37 @@ class QuickCaptureViewModel(
 
     private fun loadTeachingContextAndDraft() {
         viewModelScope.launch {
-            val bootstrap = withContext(Dispatchers.IO) { bootstrapRemote.fetch() }
+            val bootstrap = withContext(Dispatchers.IO) {
+                runCatching { bootstrapRemote.fetch() }.getOrNull()
+            }
             when (bootstrap) {
                 is PersonalBootstrapResult.Loaded -> {
-                    val contexts = bootstrap.bootstrap.teachingContexts
-                    val context = when (contexts.size) {
-                        0 -> {
-                            _uiState.update { it.copy(teachingContextStatus = TeachingContextStatus.Unavailable) }
-                            return@launch
-                        }
+                    availableTeachingContexts = bootstrap.bootstrap.teachingContexts
+                    actorAppUserId = bootstrap.bootstrap.actor.appUserId
+                    bootstrapLoaded = true
 
-                        1 -> contexts.single()
-
-                        else -> {
-                            // Quick Capture must never guess which student/subject
-                            // receives a teaching fact. A later selected-context
-                            // navigation flow can provide an explicit target.
-                            _uiState.update { it.copy(teachingContextStatus = TeachingContextStatus.SelectionRequired) }
-                            return@launch
-                        }
-                    }
-                    val draftScope = DraftScope(
-                        environmentId = environmentId,
-                        appUserId = bootstrap.bootstrap.actor.appUserId.toString(),
-                        organizationId = context.organizationId.toString(),
-                        studentId = context.studentId.toString(),
-                        subjectId = context.subjectProfileId.toString(),
-                        contextId = QUICK_CAPTURE_CONTEXT_ID,
+                    val target = resolveCaptureContext(
+                        requested = pendingSelection,
+                        available = availableTeachingContexts,
                     )
 
-                    try {
-                        val opened = store.open(draftScope)
-                        actorAppUserId = bootstrap.bootstrap.actor.appUserId
-                        teachingContext = context
-                        scope = draftScope
-                        session = opened
-                        _uiState.value = QuickCaptureUiState(
-                            text = opened.recovered?.text.orEmpty(),
-                            teachingContextStatus = TeachingContextStatus.Ready,
-                            studentDisplayName = context.studentDisplayName,
-                            subjectLabel = subjectLabel(context.subjectKey),
-                            draftStatus = LocalDraftStatus.SafeOnDevice,
-                            recoveredFromDisk = opened.recovered != null,
-                        )
-                        observeSubmission(draftScope)
-                    } catch (_: Throwable) {
-                        _uiState.update {
-                            it.copy(
-                                teachingContextStatus = TeachingContextStatus.Ready,
-                                studentDisplayName = context.studentDisplayName,
-                                subjectLabel = subjectLabel(context.subjectKey),
-                                draftStatus = LocalDraftStatus.PersistenceFailed,
-                            )
+                    if (target == null) {
+                        if (availableTeachingContexts.isEmpty()) {
+                            _uiState.update {
+                                it.copy(teachingContextStatus = TeachingContextStatus.Unavailable)
+                            }
+                        } else {
+                            showSelectionRequired()
+                        }
+                    } else {
+                        saveMutex.withLock {
+                            openContextLocked(target, selectionGeneration)
                         }
                     }
                 }
 
                 PersonalBootstrapResult.AuthenticationRequired -> {
+                    bootstrapLoaded = true
                     _uiState.update {
                         it.copy(teachingContextStatus = TeachingContextStatus.AuthenticationRequired)
                     }
@@ -302,15 +345,85 @@ class QuickCaptureViewModel(
                 is PersonalBootstrapResult.AccessUnavailable,
                 is PersonalBootstrapResult.UnknownResult,
                 is PersonalBootstrapResult.ProtocolFailure,
+                null,
                 -> {
+                    bootstrapLoaded = true
                     _uiState.update { it.copy(teachingContextStatus = TeachingContextStatus.Unavailable) }
                 }
             }
         }
     }
 
+    private suspend fun openContextLocked(
+        context: PersonalTeachingContext,
+        generation: Long,
+    ) {
+        val actor = actorAppUserId ?: run {
+            _uiState.update { it.copy(teachingContextStatus = TeachingContextStatus.AuthenticationRequired) }
+            return
+        }
+
+        submissionObservationJob?.cancel()
+        session = null
+        scope = null
+        teachingContext = context
+        pendingSelection = context
+        val draftScope = DraftScope(
+            environmentId = environmentId,
+            appUserId = actor.toString(),
+            organizationId = context.organizationId.toString(),
+            studentId = context.studentId.toString(),
+            subjectId = context.subjectProfileId.toString(),
+            contextId = QUICK_CAPTURE_CONTEXT_ID,
+        )
+        scope = draftScope
+        _uiState.value = QuickCaptureUiState(
+            teachingContextStatus = TeachingContextStatus.Loading,
+            studentDisplayName = context.studentDisplayName,
+            subjectLabel = subjectLabel(context.subjectKey),
+        )
+
+        try {
+            val opened = withContext(Dispatchers.IO) {
+                store.open(draftScope)
+            }
+            // Another selection may arrive while Room opens this draft.
+            if (generation != selectionGeneration) return
+            session = opened
+            _uiState.value = QuickCaptureUiState(
+                text = opened.recovered?.text.orEmpty(),
+                teachingContextStatus = TeachingContextStatus.Ready,
+                studentDisplayName = context.studentDisplayName,
+                subjectLabel = subjectLabel(context.subjectKey),
+                draftStatus = LocalDraftStatus.SafeOnDevice,
+                recoveredFromDisk = opened.recovered != null,
+            )
+            observeSubmission(draftScope)
+        } catch (_: Throwable) {
+            if (generation != selectionGeneration) return
+            _uiState.value = QuickCaptureUiState(
+                teachingContextStatus = TeachingContextStatus.Ready,
+                studentDisplayName = context.studentDisplayName,
+                subjectLabel = subjectLabel(context.subjectKey),
+                draftStatus = LocalDraftStatus.PersistenceFailed,
+            )
+        }
+    }
+
+    private fun showSelectionRequired() {
+        selectionGeneration = Math.addExact(selectionGeneration, 1)
+        submissionObservationJob?.cancel()
+        session = null
+        scope = null
+        teachingContext = null
+        _uiState.value = QuickCaptureUiState(
+            teachingContextStatus = TeachingContextStatus.SelectionRequired,
+        )
+    }
+
     private fun observeSubmission(draftScope: DraftScope) {
-        viewModelScope.launch {
+        submissionObservationJob?.cancel()
+        submissionObservationJob = viewModelScope.launch {
             durableIntentDao.observeLatestForScope(draftScope.storageKey).collectLatest { row ->
                 val status = when (row?.queueStatus) {
                     null -> ObservationSubmissionStatus.None
@@ -355,7 +468,9 @@ class QuickCaptureViewModel(
                 }
 
                 try {
-                    val accepted = store.save(currentSession, text)
+                    val accepted = withContext(Dispatchers.IO) {
+                        store.save(currentSession, text)
+                    }
                     if (targetRevision == revision) {
                         _uiState.update {
                             it.copy(
@@ -376,10 +491,7 @@ class QuickCaptureViewModel(
         }
     }
 
-    private fun subjectLabel(subjectKey: String): String = when (subjectKey) {
-        "chinese" -> "语文"
-        else -> subjectKey
-    }
+    private fun subjectLabel(subjectKey: String): String = subjectLabelForKey(subjectKey)
 
     companion object {
         const val QUICK_CAPTURE_CONTEXT_ID = "quick-capture"

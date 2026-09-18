@@ -315,6 +315,13 @@ jobs:
           for attempt in $(seq 1 30); do
             "$adb" shell uiautomator dump /sdcard/xueqing-window.xml >/dev/null 2>&1 || true
             "$adb" exec-out cat /sdcard/xueqing-window.xml > "$RUNNER_TEMP/xueqing-window.xml" || true
+            if grep -Fq "Pixel Launcher isn't responding" "$RUNNER_TEMP/xueqing-window.xml"; then
+              # The Ubuntu emulator can surface a system Launcher ANR over the app.
+              # Dismiss it without weakening the app-specific recovery assertion.
+              "$adb" shell input tap 540 1359 || true
+              sleep 1
+              continue
+            fi
             if grep -Fq "$sentinel" "$RUNNER_TEMP/xueqing-window.xml"; then
               grep -Fq '已恢复本机草稿' "$RUNNER_TEMP/xueqing-window.xml"
               echo 'Process-death recovery proved: encrypted persisted draft is visible after force-stop and relaunch.'

@@ -27,6 +27,7 @@ internal fun QuickCaptureScreen(
     state: QuickCaptureUiState,
     onTextChanged: (String) -> Unit,
     onClose: () -> Unit,
+    onChooseStudent: () -> Unit,
     onDiscard: () -> Unit,
     onSubmit: () -> Unit,
 ) {
@@ -77,24 +78,43 @@ internal fun QuickCaptureScreen(
                 .testTag("quick-capture-teaching-context"),
         )
 
-        Spacer(Modifier.height(24.dp))
-        Text(
-            text = "你刚才观察到了什么？",
-            style = MaterialTheme.typography.titleMedium,
-        )
-        OutlinedTextField(
-            value = state.text,
-            onValueChange = onTextChanged,
-            enabled = contextReady && draftLoaded,
-            modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(min = 220.dp)
-                .padding(top = 10.dp)
-                .testTag("quick-capture-input"),
-            placeholder = { Text("例如：概括题仍然容易照抄原句，不能主动压缩信息。") },
-        )
+        if (state.teachingContextStatus == TeachingContextStatus.SelectionRequired) {
+            Text(
+                text = "为了避免把课堂记录写到错误的学生名下，这次记录需要先从学生列表进入。",
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.padding(top = 28.dp),
+            )
+            TextButton(
+                onClick = onChooseStudent,
+                modifier = Modifier.padding(top = 8.dp),
+            ) {
+                Text("去选择学生")
+            }
+        } else if (!contextReady) {
+            Text(
+                text = "当前输入框会在教学上下文准备好后开放。",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 28.dp),
+            )
+        } else {
+            Spacer(Modifier.height(24.dp))
+            Text(
+                text = "你刚才观察到了什么？",
+                style = MaterialTheme.typography.titleMedium,
+            )
+            OutlinedTextField(
+                value = state.text,
+                onValueChange = onTextChanged,
+                enabled = draftLoaded,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 220.dp)
+                    .padding(top = 10.dp)
+                    .testTag("quick-capture-input"),
+                placeholder = { Text("例如：概括题仍然容易照抄原句，不能主动压缩信息。") },
+            )
 
-        if (contextReady) {
             Text(
                 text = when (state.draftStatus) {
                     LocalDraftStatus.Loading -> "正在读取本机草稿…"
@@ -112,34 +132,34 @@ internal fun QuickCaptureScreen(
                     .padding(top = 12.dp)
                     .testTag("quick-capture-draft-status"),
             )
-        }
 
-        submissionMessage(state)?.let { message ->
+            submissionMessage(state)?.let { message ->
+                Text(
+                    text = message,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier
+                        .padding(top = 8.dp)
+                        .testTag("quick-capture-submission-status"),
+                )
+            }
+
+            Button(
+                onClick = onSubmit,
+                enabled = draftLoaded && draftWritable && state.text.isNotBlank(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 28.dp),
+            ) {
+                Text("提交记录")
+            }
             Text(
-                text = message,
+                text = "提交后会先安全写入本机队列；服务端仍会重新检查当前任课权限。",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier
-                    .padding(top = 8.dp)
-                    .testTag("quick-capture-submission-status"),
+                modifier = Modifier.padding(top = 8.dp, bottom = 16.dp),
             )
         }
-
-        Button(
-            onClick = onSubmit,
-            enabled = contextReady && draftLoaded && draftWritable && state.text.isNotBlank(),
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 28.dp),
-        ) {
-            Text("提交记录")
-        }
-        Text(
-            text = "提交后会先安全写入本机队列；服务端仍会重新检查当前任课权限。",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(top = 8.dp, bottom = 16.dp),
-        )
     }
 }
 
