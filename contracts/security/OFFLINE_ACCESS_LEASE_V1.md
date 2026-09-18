@@ -95,6 +95,18 @@ Lease denial is a **read-authority/cache** decision. It is not permission to des
 
 Account/environment/organization switching may require scope-specific lock/purge policy, but encrypted Durable Intent must follow an explicit non-destructive recovery rule and must never silently cross scopes.
 
+## Android reference clock source
+
+The Android reference adapter uses:
+
+- `SystemClock.elapsedRealtime()` for the monotonic elapsed-time base;
+- read-only `Settings.Global.BOOT_COUNT` as the boot-session discriminator;
+- `System.currentTimeMillis()` only for rollback detection / diagnostics, never as the sole source of lease elapsed time.
+
+If the boot count cannot be read, the adapter emits an untrusted blank boot-session id and the evaluator fails closed.
+
+This platform adapter is intentionally thin. The lease evaluator itself remains provider-neutral and Android-type-free.
+
 ## Acceptance evidence
 
 Before this gate is accepted, executable tests must prove at minimum:
