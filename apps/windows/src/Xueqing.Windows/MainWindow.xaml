@@ -23,7 +23,7 @@
             CompactPaneLength="52"
             SelectionChanged="Shell_SelectionChanged">
 
-            <NavigationView.PaneHeader>
+            <NavigationView.Header>
                 <Button
                     x:Name="WorkspaceSwitcherButton"
                     Margin="4,8,4,8"
@@ -48,7 +48,7 @@
                         </MenuFlyout>
                     </Button.Flyout>
                 </Button>
-            </NavigationView.PaneHeader>
+            </NavigationView.Header>
 
             <NavigationView.MenuItems>
                 <NavigationViewItem
