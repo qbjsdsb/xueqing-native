@@ -98,15 +98,17 @@ Teaching Evidence、Intervention、Assessment、Quick Capture 等教学事实必
 
 Local-first 引入新的本地数据安全风险，因此离线授权期限、本地缓存范围、加密方式、退出/停用清理和附件留存策略必须先通过安全 Gate 冻结。
 
-## 当前阶段：Android Security + Backend Contracts
+## 当前阶段：First Observation Product Slice + Native UX Reference
 
 Phase 0 已完成并接受 **Architecture Baseline v1**。广泛架构研究已经停止；后续方向变化必须由新的实验/生产证据和 superseding ADR 驱动。
 
-Windows 的架构、加密 LocalState/MSIX 与 **Native UX Gate** 已经完成。真实 WinUI App 已在云端完成 locked restore、构建、MSIX 签名/安装、SQLite3MC + DPAPI 加密 Durable Intent、重启、v1 → v2 原位升级，以及 800 / 960 / 1024 / 1280 / 1600 DIP、800×480、键盘/焦点、Light/Dark、系统 High Contrast 和 100 / 150 / 200 / 225% text scale 的真实 UIA 验证。Issue #11 中真实中文 IME composition 与物理 mouse hover 仍保留为设备/人工证据项；Windows Prototype 线不再继续扩张。
+Windows 的架构、加密 LocalState/MSIX 与 **Native UX Gate** 已完成，并已经进入 UX Foundation v2 的可执行参考阶段。当前 WinUI 主线采用 **Personal / Organization Workspace 分离 + compact NavigationView + Roster / Chronicle**，继续保留既有 800 / 960 / 1024 / 1280 / 1600 DIP、800×480、键盘/焦点、Light/Dark、系统 High Contrast 和 100 / 150 / 200 / 225% text scale 的真实 UIA 证据。真实中文 IME composition 与物理 mouse hover 仍属于设备/人工证据项。
 
-Android 已完成稳定 API 36 的 Kotlin + Compose bootstrap，并完成 **Room + Draft Engine + process-death recovery** Gate。PR #18 已证明草稿按 environment / app-user / organization / Student / subject / context 隔离，事务 epoch barrier 可阻止显式丢弃后旧 autosave 复活，并通过 Activity 重建、前后台切换、真实 `force-stop` 后 UI 恢复和 Room schema drift 的云端设备验证。该结论只代表 Draft Durability 已完成；完整 Android Issue #12 仍未完成，本地加密/Keystore、IME/TalkBack、Outbox/WorkManager、附件与其他真实产品路径继续由后续 Gate/Vertical Slice 证明。
+Android 已完成稳定 API 36 的 Kotlin + Compose 基线、Room Draft Engine、process-death recovery、SQLCipher + Android Keystore Durable Intent 加密，以及第一条真实 **Quick Capture → encrypted Durable Outbox → WorkManager → reference provider → authoritative Observation** 产品写入链。服务端已具备 CreateObservation、PersonalBootstrap 和 recent Observation projection；Windows 已完成 recent Observation 真实读取链。
 
-下一阶段只允许两条 feature 主线并行：**Android encrypted-storage baseline** 与 **Backend CreateObservation contract/API**。两条线都绿后进入 Provider Adapter conformance，然后立即建设第一条文本 Quick Capture → Observation Vertical Slice；不再为了“完成 Issue”继续铺独立 Demo。
+Provider Session/Auth 与 **IdentityLink 身份映射这一层** conformance 已完成。应用业务身份现在由 application-owned `AppUser` 持有，外部 provider 的 `(provider, issuer, subject)` 通过 IdentityLink 解析，当前 CreateObservation / PersonalBootstrap / recent Observation 路径不再直接把 Supabase Auth subject 当作业务用户主键。更广的 Provider Adapter conformance 仍按能力分层推进，Projection / Storage conformance 不在此处提前宣称完成。
+
+当前唯一执行线是 **Android Student + Quick Capture Native Reference**：把已证明可靠的 Android 状态、草稿和 Observation 链包装成真正的 Teaching Pocket 原生体验，而不是继续扩张 bootstrap/demo UI。该参考完成后进入 **Offline Access Lease duration + clock rollback** Gate，再继续下一条真实业务 Vertical Slice。
 
 动态工程状态以 `docs/project/PROJECT_STATE.yaml` 为准。
 
