@@ -84,6 +84,7 @@ class QuickCaptureViewModel(
     private var pendingSelection: PersonalTeachingContext? = null
     private var bootstrapLoaded = false
     private var submissionObservationJob: Job? = null
+    private var selectionGeneration: Long = 0
     private var revision: Long = 0
 
     val uiState: StateFlow<QuickCaptureUiState> = _uiState.asStateFlow()
@@ -103,6 +104,10 @@ class QuickCaptureViewModel(
             return
         }
 
+        // Preserve login/unavailable states: an empty roster cannot be selected.
+        if (availableTeachingContexts.isEmpty()) {
+            return
+        }
         val onlyContext = availableTeachingContexts.singleOrNull()
         if (onlyContext == null) {
             showSelectionRequired()
@@ -118,20 +123,27 @@ class QuickCaptureViewModel(
      */
     fun selectTeachingContext(requested: PersonalTeachingContext) {
         pendingSelection = requested
+        selectionGeneration = Math.addExact(selectionGeneration, 1)
+        val generation = selectionGeneration
         if (!bootstrapLoaded) {
             return
         }
 
-        val verified = availableTeachingContexts.firstOrNull { it.sameTeachingContextAs(requested) }
+        val verified = resolveCaptureContext(requested, availableTeachingContexts)
         if (verified == null) {
             pendingSelection = null
             showSelectionRequired()
             return
         }
 
+        // Disable editing synchronously, before a prior save/submit releases
+        // the mutex. Keep the old text intact until its queued save completes.
+        _uiState.update { it.copy(teachingContextStatus = TeachingContextStatus.Loading) }
         viewModelScope.launch {
             saveMutex.withLock {
-                openContextLocked(verified)
+                if (generation == selectionGeneration) {
+                    openContextLocked(verified, generation)
+                }
             }
         }
     }
@@ -303,9 +315,10 @@ class QuickCaptureViewModel(
                     actorAppUserId = bootstrap.bootstrap.actor.appUserId
                     bootstrapLoaded = true
 
-                    val target = pendingSelection?.let { requested ->
-                        availableTeachingContexts.firstOrNull { it.sameTeachingContextAs(requested) }
-                    } ?: availableTeachingContexts.singleOrNull()
+                    val target = resolveCaptureContext(
+                        requested = pendingSelection,
+                        available = availableTeachingContexts,
+                    )
 
                     if (target == null) {
                         if (availableTeachingContexts.isEmpty()) {
@@ -317,7 +330,7 @@ class QuickCaptureViewModel(
                         }
                     } else {
                         saveMutex.withLock {
-                            openContextLocked(target)
+                            openContextLocked(target, selectionGeneration)
                         }
                     }
                 }
@@ -341,7 +354,10 @@ class QuickCaptureViewModel(
         }
     }
 
-    private suspend fun openContextLocked(context: PersonalTeachingContext) {
+    private suspend fun openContextLocked(
+        context: PersonalTeachingContext,
+        generation: Long,
+    ) {
         val actor = actorAppUserId ?: run {
             _uiState.update { it.copy(teachingContextStatus = TeachingContextStatus.AuthenticationRequired) }
             return
@@ -371,6 +387,8 @@ class QuickCaptureViewModel(
             val opened = withContext(Dispatchers.IO) {
                 store.open(draftScope)
             }
+            // Another selection may arrive while Room opens this draft.
+            if (generation != selectionGeneration) return
             session = opened
             _uiState.value = QuickCaptureUiState(
                 text = opened.recovered?.text.orEmpty(),
@@ -382,6 +400,7 @@ class QuickCaptureViewModel(
             )
             observeSubmission(draftScope)
         } catch (_: Throwable) {
+            if (generation != selectionGeneration) return
             _uiState.value = QuickCaptureUiState(
                 teachingContextStatus = TeachingContextStatus.Ready,
                 studentDisplayName = context.studentDisplayName,
@@ -392,6 +411,7 @@ class QuickCaptureViewModel(
     }
 
     private fun showSelectionRequired() {
+        selectionGeneration = Math.addExact(selectionGeneration, 1)
         submissionObservationJob?.cancel()
         session = null
         scope = null
@@ -472,15 +492,6 @@ class QuickCaptureViewModel(
     }
 
     private fun subjectLabel(subjectKey: String): String = subjectLabelForKey(subjectKey)
-
-    private fun PersonalTeachingContext.sameTeachingContextAs(
-        other: PersonalTeachingContext,
-    ): Boolean =
-        organizationId == other.organizationId &&
-            studentId == other.studentId &&
-            subjectProfileId == other.subjectProfileId &&
-            assignmentId == other.assignmentId &&
-            subjectKey == other.subjectKey
 
     companion object {
         const val QUICK_CAPTURE_CONTEXT_ID = "quick-capture"
