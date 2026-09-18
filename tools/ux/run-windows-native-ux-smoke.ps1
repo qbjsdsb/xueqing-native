@@ -449,6 +449,43 @@ function Navigate-ToSurface {
     }
 }
 
+function Switch-ToWorkspace {
+    param(
+        [Parameter(Mandatory = $true)]
+        [ValidateSet('personal', 'organization')]
+        [string]$Workspace
+    )
+
+    $switcher = Wait-Until -FailureMessage 'Workspace switcher is unavailable.' -Condition {
+        Find-ByAutomationId -Root $script:root -AutomationId 'WorkspaceSwitcher'
+    }
+    Invoke-Element -Element $switcher
+
+    $menuId = if ($Workspace -eq 'organization') {
+        'OrganizationWorkspaceMenuItem'
+    }
+    else {
+        'PersonalWorkspaceMenuItem'
+    }
+
+    $menuItem = Wait-Until -FailureMessage "Workspace menu item '$menuId' is unavailable." -Condition {
+        Find-VisibleByAutomationId -Root ([System.Windows.Automation.AutomationElement]::RootElement) -AutomationId $menuId
+    }
+    Invoke-Element -Element $menuItem
+    Start-Sleep -Milliseconds 200
+
+    if ($Workspace -eq 'organization') {
+        Wait-Until -FailureMessage 'Organization workspace navigation did not become visible.' -Condition {
+            Find-VisibleByAutomationId -Root $script:root -AutomationId 'OrganizationManagementNavigation'
+        } | Out-Null
+    }
+    else {
+        Wait-Until -FailureMessage 'Personal teaching navigation did not become visible.' -Condition {
+            Find-VisibleByAutomationId -Root $script:root -AutomationId 'TodayNavigation'
+        } | Out-Null
+    }
+}
+
 function Set-SearchValue {
     param([Parameter(Mandatory = $true)][AllowEmptyString()][string]$Value)
 
@@ -478,6 +515,7 @@ function Get-UniqueFilteredStudentItem {
 
 function Assert-ChineseUnicodeSearch {
     Set-WindowDips -Width 800 -Height 640
+    Switch-ToWorkspace -Workspace personal
     Navigate-ToSurface -NavigationId 'StudentsNavigation' -SurfaceId 'StudentsSurface' | Out-Null
     Set-SearchValue -Value '虚构学生0777'
 
@@ -575,6 +613,7 @@ function Assert-CompactStudentKeyboardJourney {
 function Assert-WidthMatrix {
     foreach ($width in @(800, 960, 1024, 1280, 1600)) {
         Set-WindowDips -Width $width -Height 640
+        Switch-ToWorkspace -Workspace personal
 
         Navigate-ToSurface -NavigationId 'TodayNavigation' -SurfaceId 'TodaySurface' | Out-Null
         if ($null -eq (Find-VisibleByAutomationId -Root $script:root -AutomationId 'TodayActionList')) {
@@ -598,6 +637,7 @@ function Assert-WidthMatrix {
             throw "Learning Case timeline is unusable at ${width} DIP."
         }
 
+        Switch-ToWorkspace -Workspace organization
         Navigate-ToSurface -NavigationId 'OrganizationManagementNavigation' -SurfaceId 'OrganizationManagementSurface' | Out-Null
         $wideVisible = $null -ne (Find-VisibleByAutomationId -Root $script:root -AutomationId 'OrganizationWideList')
         $compactVisible = $null -ne (Find-VisibleByAutomationId -Root $script:root -AutomationId 'OrganizationCompactList')
@@ -612,6 +652,7 @@ function Assert-WidthMatrix {
     }
 
     Set-WindowDips -Width 800 -Height 480
+    Switch-ToWorkspace -Workspace personal
     Navigate-ToSurface -NavigationId 'TodayNavigation' -SurfaceId 'TodaySurface' | Out-Null
     if ($null -eq (Find-VisibleByAutomationId -Root $script:root -AutomationId 'TodayActionList')) {
         throw 'Today Action list is unavailable at the 800x480 DIP short-window pressure case.'
@@ -627,14 +668,17 @@ function Assert-WidthMatrix {
 
 function Assert-RepresentativeSurfaces {
     Set-WindowDips -Width 1280 -Height 640
+    Switch-ToWorkspace -Workspace personal
     Navigate-ToSurface -NavigationId 'TodayNavigation' -SurfaceId 'TodaySurface' | Out-Null
     Navigate-ToSurface -NavigationId 'StudentsNavigation' -SurfaceId 'StudentsSurface' | Out-Null
     Navigate-ToSurface -NavigationId 'LearningNavigation' -SurfaceId 'LearningSurface' | Out-Null
+    Switch-ToWorkspace -Workspace organization
     Navigate-ToSurface -NavigationId 'OrganizationManagementNavigation' -SurfaceId 'OrganizationManagementSurface' | Out-Null
 }
 
 function Capture-BaseRepresentativeEvidence {
     Set-WindowDips -Width 800 -Height 640
+    Switch-ToWorkspace -Workspace personal
     Navigate-ToSurface -NavigationId 'StudentsNavigation' -SurfaceId 'StudentsSurface' | Out-Null
     Save-WindowScreenshot -Name '800-compact-students'
 
