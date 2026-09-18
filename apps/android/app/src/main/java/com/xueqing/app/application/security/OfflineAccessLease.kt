@@ -4,6 +4,7 @@ data class OfflineAccessScope(
     val environmentId: String,
     val appUserId: String,
     val organizationId: String,
+    val installationId: String,
 )
 
 data class OfflineAccessLease(
@@ -80,6 +81,7 @@ fun evaluateOfflineAccessLease(
         lease.scope.environmentId.isBlank() ||
         lease.scope.appUserId.isBlank() ||
         lease.scope.organizationId.isBlank() ||
+        lease.scope.installationId.isBlank() ||
         lease.bootSessionId.isBlank() ||
         now.bootSessionId.isBlank() ||
         lease.issuedAtServerEpochMillis <= 0 ||
