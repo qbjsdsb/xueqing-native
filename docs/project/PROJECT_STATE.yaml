@@ -31,10 +31,9 @@ completed_gates:
   - text-quick-capture-observation-vertical-slice
   - windows-student-recent-observation-v1
   - provider-session-auth-conformance
-  - provider-identity-link-conformance
+  - provider-adapter-conformance-spike
 
 open_gates:
-  - provider-adapter-conformance-spike
   - android-student-quick-capture-native-reference
   - offline-access-lease-duration-and-clock-rollback-spike
   - production-provider-region-data-residency-gate
