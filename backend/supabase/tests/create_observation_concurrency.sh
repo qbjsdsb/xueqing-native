@@ -8,6 +8,7 @@ profile_id='40000000-0000-0000-0000-000000000001'
 assignment_id='50000000-0000-0000-0000-000000000001'
 actor_id='10000000-0000-0000-0000-000000000001'
 auth_subject='a0000000-0000-0000-0000-000000000001'
+auth_issuer='https://reference-provider.invalid/auth/v1'
 lock_key=42424217
 holder_app='xueqing_concurrency_lock_holder'
 writer_app='xueqing_concurrency_create_observation'
@@ -101,7 +102,7 @@ psql_db > /tmp/xueqing-create-observation.log 2>&1 <<SQL &
 set application_name = '$writer_app';
 select pg_catalog.set_config('request.jwt.claim.sub', '$auth_subject', false);
 select pg_catalog.set_config('request.jwt.claim.role', 'authenticated', false);
-select pg_catalog.set_config('request.jwt.claims', '{"sub":"$auth_subject","role":"authenticated"}', false);
+select pg_catalog.set_config('request.jwt.claims', '{"sub":"$auth_subject","role":"authenticated","iss":"$auth_issuer"}', false);
 set role authenticated;
 select public.create_observation(
   '$operation_id'::uuid,
