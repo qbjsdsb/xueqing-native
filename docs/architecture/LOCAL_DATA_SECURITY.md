@@ -21,7 +21,7 @@ Projection Cache is disposable and may be purged/rebuilt. Durable Intent contain
 
 ## Windows Durable Intent database encryption
 
-The Windows production-shaped Durable Intent SQLite boundary is accepted when PR #8's exact-head gates pass:
+The Windows production-shaped Durable Intent SQLite boundary is accepted:
 
 - `Microsoft.Data.Sqlite.Core` + `SQLite3MC.PCLRaw.bundle` 2.4.0;
 - whole-database encryption with a random 256-bit master key;
@@ -34,15 +34,51 @@ The Windows production-shaped Durable Intent SQLite boundary is accepted when PR
 
 This closes the Windows **Durable Intent database encryption provider** decision. It does not authorize real data by itself and does not imply that Projection Cache, attachments, offline authorization, backup/restore or account-switch lifecycle policies are complete.
 
-## Android encryption
+## Android Durable Intent encryption
 
-Android still requires its own maintained Room-compatible encryption + Android Keystore Spike and lifecycle/recovery evidence. Windows acceptance must not be copied mechanically because the OS key-management and packaging boundaries differ.
+The Android encrypted Durable Intent baseline is accepted:
+
+- Room 2.8.5;
+- SQLCipher for Android Community 4.17.0;
+- a random 32-byte SQLCipher database password;
+- Android Keystore non-exportable AES-256 key wrapping that password through AES-GCM;
+- wrapped envelope in `noBackupFilesDir`;
+- no plaintext fallback;
+- missing/corrupt envelope or missing Keystore key fails closed;
+- explicit purge removes DB sidecars, wrapped envelope and Keystore alias;
+- backup/device-transfer exclusion remains active until the dedicated backup/restore gate.
+
+API 36 device evidence covers encrypted reopen, marker scans, purge and force-stop/relaunch draft recovery. Encryption acceptance still does not authorize cached projection reads indefinitely while offline.
 
 ## Offline Access Lease
 
-Cached sensitive data is usable only while a finite authorization lease can be trusted. The lease binds at minimum user, organization, environment/issuer, installation/device scope and expiry/validity evidence. When expired or trust is lost, encrypted unsynced intent may be preserved according to policy but the cached student workspace is locked until reauthorization.
+Cached sensitive projection data is usable only while a finite authorization lease can be trusted. The active Phase 1 spike is specified in `contracts/security/OFFLINE_ACCESS_LEASE_V1.md`.
 
-A server-side permission reduction cannot remotely erase an offline device instantly; document this limitation and reduce exposure through finite leases, encryption, minimal cache scope and mandatory purge/lockout after validation.
+The lease binds at minimum:
+
+- environment / provider trust domain;
+- application-owned user;
+- organization;
+- installation / validated boot session;
+- server-issued time and expiry evidence.
+
+Phase 1 candidate policy:
+
+- maximum lease duration: 72 hours;
+- tolerate at most five minutes of small backward wall-clock correction;
+- derive elapsed lease time from a monotonic clock during the validated boot session;
+- boot-session change or monotonic reset while offline fails closed and requires online revalidation.
+
+A server-side permission reduction cannot remotely erase an offline device instantly. The finite lease bounds exposure while encryption and minimum cache scope reduce the impact.
+
+When lease trust is lost:
+
+- cached student/organization projection surfaces are locked until reauthorization;
+- the client must not disguise authorization loss as a harmless empty state;
+- Projection Cache may be invalidated or rebuilt;
+- encrypted unsynced Durable Intent is preserved according to its own scope/recovery policy.
+
+The lease is never a server credential. CreateObservation and future domain commands still re-run live authorization and command-specific invariants.
 
 ## Scope and lifecycle
 
