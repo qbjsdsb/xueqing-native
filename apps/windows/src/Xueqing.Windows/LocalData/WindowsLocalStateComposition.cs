@@ -12,17 +12,31 @@ internal sealed record WindowsLocalDataScope(
 {
     private const string InstallationIdSetting = "xueqing.local-state.installation-id.v1";
 
-    public static WindowsLocalDataScope CreateFictionalIntegrationScope(ApplicationData applicationData)
+    public static WindowsLocalDataScope Create(
+        ApplicationData applicationData,
+        string environmentId,
+        string appUserId,
+        string organizationId)
     {
         ArgumentNullException.ThrowIfNull(applicationData);
+        ArgumentException.ThrowIfNullOrWhiteSpace(environmentId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(appUserId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(organizationId);
 
-        var installationId = LoadOrCreateInstallationId(applicationData.LocalSettings);
         return new WindowsLocalDataScope(
+            environmentId,
+            appUserId,
+            organizationId,
+            LoadOrCreateInstallationId(applicationData.LocalSettings));
+    }
+
+    public static WindowsLocalDataScope CreateFictionalIntegrationScope(
+        ApplicationData applicationData) =>
+        Create(
+            applicationData,
             "integration",
             "user-fictional-001",
-            "org-fictional-001",
-            installationId);
-    }
+            "org-fictional-001");
 
     private static Guid LoadOrCreateInstallationId(ApplicationDataContainer localSettings)
     {
@@ -44,10 +58,22 @@ internal static class WindowsLocalStatePaths
 {
     public static string GetDurableIntentDatabasePath(
         StorageFolder localFolder,
-        WindowsLocalDataScope scope)
+        WindowsLocalDataScope scope) =>
+        GetScopedDatabasePath(localFolder, scope, "durable-intent.db");
+
+    public static string GetOnlineCommandRecoveryDatabasePath(
+        StorageFolder localFolder,
+        WindowsLocalDataScope scope) =>
+        GetScopedDatabasePath(localFolder, scope, "online-command-recovery.db");
+
+    private static string GetScopedDatabasePath(
+        StorageFolder localFolder,
+        WindowsLocalDataScope scope,
+        string fileName)
     {
         ArgumentNullException.ThrowIfNull(localFolder);
         ArgumentNullException.ThrowIfNull(scope);
+        ArgumentException.ThrowIfNullOrWhiteSpace(fileName);
         ValidateScope(scope);
 
         var scopeDirectory = Path.Combine(
@@ -58,7 +84,7 @@ internal static class WindowsLocalStatePaths
             scope.InstallationId.ToString("N"));
 
         Directory.CreateDirectory(scopeDirectory);
-        return Path.Combine(scopeDirectory, "durable-intent.db");
+        return Path.Combine(scopeDirectory, fileName);
     }
 
     private static void ValidateScope(WindowsLocalDataScope scope)
