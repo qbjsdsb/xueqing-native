@@ -278,19 +278,31 @@ public sealed class LearningReadProjectionTests
     [TestMethod]
     public void Learning_readers_reject_non_loopback_plain_http()
     {
-        Assert.ThrowsException<ArgumentException>(() =>
-            new PostgrestStudentLearningFocusReader(
+        try
+        {
+            _ = new PostgrestStudentLearningFocusReader(
                 new HttpClient(new StubHandler(HttpStatusCode.OK, FocusEnvelope())),
                 new Uri("http://example.test/"),
                 "publishable-key",
-                _ => ValueTask.FromResult<string?>("token")));
+                _ => ValueTask.FromResult<string?>("token"));
+            Assert.Fail("Student Learning Focus must reject non-loopback plain HTTP.");
+        }
+        catch (ArgumentException)
+        {
+        }
 
-        Assert.ThrowsException<ArgumentException>(() =>
-            new PostgrestPersonalTodayActionsReader(
+        try
+        {
+            _ = new PostgrestPersonalTodayActionsReader(
                 new HttpClient(new StubHandler(HttpStatusCode.OK, TodayEnvelope("[]"))),
                 new Uri("http://example.test/"),
                 "publishable-key",
-                _ => ValueTask.FromResult<string?>("token")));
+                _ => ValueTask.FromResult<string?>("token"));
+            Assert.Fail("Personal Today must reject non-loopback plain HTTP.");
+        }
+        catch (ArgumentException)
+        {
+        }
     }
 
     private static PostgrestStudentLearningFocusReader CreateFocusReader(StubHandler handler) =>
