@@ -1,7 +1,7 @@
 schema_version: 1
 project: xueqing-native
 phase: phase-1
-milestone: windows-learning-read-model-adapters
+milestone: windows-observation-to-learning-case-ux
 status: active
 architecture_baseline: v1-accepted
 
@@ -38,10 +38,11 @@ completed_gates:
   - offline-access-lease-duration-and-clock-rollback-spike
   - learning-case-primary-action-vertical-slice
   - learning-case-current-focus-and-today-action-projections
+  - windows-learning-read-model-adapters
 
 open_gates:
   - provider-adapter-conformance-spike
-  - windows-learning-read-model-adapters
+  - windows-observation-to-learning-case-ux
   - production-provider-region-data-residency-gate
   - signing-and-recovery-gate
   - backup-storage-restore-gate
@@ -49,12 +50,11 @@ open_gates:
 next_execution:
   parallel_limit: 1
   lines:
-    - windows-learning-read-model-adapters
-  after_current_green:
     - windows-observation-to-learning-case-ux
+  after_current_green:
+    - action-reschedule-and-verification-next-action
 
 later:
-  - action-reschedule-and-verification-next-action
   - android-current-focus-lightweight-read
   - case-lifecycle-and-verification
   - evidence-attachment-staging
