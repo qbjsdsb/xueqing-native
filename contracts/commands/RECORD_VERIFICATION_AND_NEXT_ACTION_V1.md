@@ -77,6 +77,8 @@ At minimum:
 
 - command = `record_verification_and_next_action_v1`;
 - operation_id;
+- responsible_teacher_app_user_id;
+- owner_assignment_id;
 - case_id;
 - case_state;
 - case_version;
@@ -84,8 +86,11 @@ At minimum:
 - completed_action_version;
 - verification_id;
 - verification_outcome;
+- verification_summary;
 - next_primary_action_id;
 - next_action_version = 1;
+- next_action_text;
+- next_action_due_on;
 - case_event_id;
 - server_committed_at.
 
