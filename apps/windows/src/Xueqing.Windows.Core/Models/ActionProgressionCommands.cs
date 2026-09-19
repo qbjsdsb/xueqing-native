@@ -44,6 +44,7 @@ public enum ActionProgressionFailureKind
     VersionConflict,
     Validation,
     OperationConflict,
+    LocalDurabilityFailure,
     ResultUnknown,
     Transient,
     InvalidResponse,
@@ -94,7 +95,11 @@ public sealed record ActionProgressionResult<TReceipt>(TReceipt? Receipt, Action
     where TReceipt : class
 {
     public bool IsSuccess => Receipt is not null && Failure is null;
-    public bool MustRetrySameOperation => Failure?.Kind == ActionProgressionFailureKind.ResultUnknown;
+    public bool MustRetrySameOperation =>
+        Failure?.Kind is
+            ActionProgressionFailureKind.ResultUnknown or
+            ActionProgressionFailureKind.Transient or
+            ActionProgressionFailureKind.InvalidResponse;
 
     public static ActionProgressionResult<TReceipt> Success(TReceipt receipt) =>
         new(receipt ?? throw new ArgumentNullException(nameof(receipt)), null);
