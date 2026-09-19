@@ -1,7 +1,7 @@
 begin;
 set local search_path = public, extensions;
 
-select plan(43);
+select plan(49);
 
 select has_table(
     'public',
