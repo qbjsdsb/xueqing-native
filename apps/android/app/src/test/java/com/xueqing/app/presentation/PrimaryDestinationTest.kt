@@ -1,5 +1,6 @@
 package com.xueqing.app.presentation
 
+import com.xueqing.app.presentation.shell.PrimaryDestination
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Test
