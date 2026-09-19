@@ -116,7 +116,7 @@ public sealed class CreateLearningCaseRecoveryStoreTests
             new[] { request.OrganizationId },
             (await candidate.InspectStoredOrganizationIdsAsync()).ToArray());
 
-        await Assert.ThrowsExceptionAsync<System.Text.Json.JsonException>(
+        await Assert.ThrowsExactlyAsync<System.Text.Json.JsonException>(
             () => candidate.ListPendingAsync(request.OrganizationId));
     }
 
