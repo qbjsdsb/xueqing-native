@@ -22,6 +22,10 @@
                 AutomationProperties.AutomationId="TodaySurface"
                 Opacity="0.68"
                 Text="明确的待办教学行动，而不是未关闭问题的统计面板" />
+            <TextBlock
+                Opacity="0.62"
+                Text="{Binding TodayStatusText}"
+                TextWrapping="Wrap" />
         </StackPanel>
 
         <ListView
