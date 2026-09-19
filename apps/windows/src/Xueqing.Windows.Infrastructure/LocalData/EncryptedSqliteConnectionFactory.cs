@@ -54,7 +54,26 @@ internal sealed class EncryptedSqliteConnectionFactory
         _loadKeyAsync = _ => Task.FromResult(retainedTestKey.ToArray());
     }
 
-    public async Task<SqliteConnection> OpenAsync(CancellationToken cancellationToken = default)
+    public Task<SqliteConnection> OpenAsync(
+        CancellationToken cancellationToken = default) =>
+        OpenWithModeAsync(SqliteOpenMode.ReadWriteCreate, cancellationToken);
+
+    public Task<SqliteConnection> OpenReadOnlyAsync(
+        CancellationToken cancellationToken = default)
+    {
+        if (!File.Exists(_databasePath))
+        {
+            throw new FileNotFoundException(
+                "Read-only encrypted SQLite database does not exist.",
+                _databasePath);
+        }
+
+        return OpenWithModeAsync(SqliteOpenMode.ReadOnly, cancellationToken);
+    }
+
+    private async Task<SqliteConnection> OpenWithModeAsync(
+        SqliteOpenMode mode,
+        CancellationToken cancellationToken)
     {
         _ = RuntimeInitialization.Value;
 
@@ -78,7 +97,7 @@ internal sealed class EncryptedSqliteConnectionFactory
         var connectionString = new SqliteConnectionStringBuilder
         {
             DataSource = _databasePath,
-            Mode = SqliteOpenMode.ReadWriteCreate,
+            Mode = mode,
             Pooling = false,
             Password = password,
         }.ToString();
