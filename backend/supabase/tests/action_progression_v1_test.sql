@@ -261,7 +261,7 @@ select is(
 set local role authenticated;
 
 select lives_ok(
-    $
+    $$
     select public.reschedule_primary_action(
         '95000000-0000-0000-0000-000000000002',
         '20000000-0000-0000-0000-000000000001',
@@ -279,7 +279,7 @@ select lives_ok(
 );
 
 select throws_ok(
-    $
+    $$
     select public.reschedule_primary_action(
         '95000000-0000-0000-0000-000000000002',
         '20000000-0000-0000-0000-000000000001',
@@ -576,7 +576,7 @@ select is(
 set local role authenticated;
 
 select lives_ok(
-    $
+    $$
     select public.record_verification_and_next_action(
         '95000000-0000-0000-0000-000000000006',
         '20000000-0000-0000-0000-000000000001',
@@ -597,7 +597,7 @@ select lives_ok(
 );
 
 select throws_ok(
-    $
+    $$
     select public.record_verification_and_next_action(
         '95000000-0000-0000-0000-000000000006',
         '20000000-0000-0000-0000-000000000001',
@@ -797,7 +797,7 @@ select set_config(
 set local role authenticated;
 
 select throws_ok(
-    $
+    $$
     select public.reschedule_primary_action(
         '95000000-0000-0000-0000-000000000020',
         '20000000-0000-0000-0000-000000000001',
@@ -817,7 +817,7 @@ select throws_ok(
 );
 
 select throws_ok(
-    $
+    $$
     select public.record_verification_and_next_action(
         '95000000-0000-0000-0000-000000000021',
         '20000000-0000-0000-0000-000000000001',
