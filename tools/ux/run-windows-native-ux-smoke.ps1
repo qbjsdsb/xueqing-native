@@ -587,15 +587,26 @@ function Assert-CompactStudentKeyboardJourney {
     } | Out-Null
 
     Set-SearchValue -Value ''
-    $list = Wait-Until -FailureMessage 'Student list did not repopulate after clearing search.' -Condition {
+    Wait-Until -FailureMessage 'Student list did not repopulate after clearing search.' -Condition {
         Find-VisibleByAutomationId -Root $script:root -AutomationId 'StudentList'
+    } | Out-Null
+    $firstVisible = Wait-Until -FailureMessage 'Student list did not expose a selectable native ListItem after clearing search.' -Condition {
+        # Clearing the search rebuilds/virtualizes ListView items. Reacquire the
+        # live List and first ListItem on every attempt so a transient stale UIA
+        # SelectionItemPattern cannot fail an otherwise valid keyboard journey.
+        $liveList = Find-VisibleByAutomationId -Root $script:root -AutomationId 'StudentList'
+        if ($null -eq $liveList) {
+            return $null
+        }
+
+        $items = @(Find-ListItems -List $liveList)
+        if ($items.Count -eq 0) {
+            return $null
+        }
+
+        Invoke-Element -Element $items[0]
+        return $items[0]
     }
-    $firstVisible = Wait-Until -FailureMessage 'Student list has no native ListItem after clearing search.' -Condition {
-        $items = @(Find-ListItems -List $list)
-        if ($items.Count -gt 0) { return $items[0] }
-        return $null
-    }
-    Invoke-Element -Element $firstVisible
     $firstVisible.SetFocus()
     [System.Windows.Forms.SendKeys]::SendWait('{DOWN}{DOWN}{DOWN}')
     Start-Sleep -Milliseconds 300
