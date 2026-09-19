@@ -1,7 +1,7 @@
 schema_version: 1
 project: xueqing-native
 phase: phase-1
-milestone: current-focus-today-projections
+milestone: windows-learning-read-model-adapters
 status: active
 architecture_baseline: v1-accepted
 
@@ -37,10 +37,11 @@ completed_gates:
   - android-student-quick-capture-native-reference
   - offline-access-lease-duration-and-clock-rollback-spike
   - learning-case-primary-action-vertical-slice
+  - learning-case-current-focus-and-today-action-projections
 
 open_gates:
   - provider-adapter-conformance-spike
-  - learning-case-current-focus-and-today-action-projections
+  - windows-learning-read-model-adapters
   - production-provider-region-data-residency-gate
   - signing-and-recovery-gate
   - backup-storage-restore-gate
@@ -48,12 +49,11 @@ open_gates:
 next_execution:
   parallel_limit: 1
   lines:
-    - learning-case-current-focus-and-today-action-projections
-  after_current_green:
     - windows-learning-read-model-adapters
+  after_current_green:
+    - windows-observation-to-learning-case-ux
 
 later:
-  - windows-observation-to-learning-case-ux
   - action-reschedule-and-verification-next-action
   - android-current-focus-lightweight-read
   - case-lifecycle-and-verification
