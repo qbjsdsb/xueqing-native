@@ -95,6 +95,15 @@ where namespace.nspname = 'public'
   and command.proname = 'get_personal_today_actions_v1';
 
 select ok(
+    command.proconfig @> array['search_path=""']::text[],
+    'PersonalTodayActions pins an empty search_path'
+)
+from pg_catalog.pg_proc as command
+join pg_catalog.pg_namespace as namespace on namespace.oid = command.pronamespace
+where namespace.nspname = 'public'
+  and command.proname = 'get_personal_today_actions_v1';
+
+select ok(
     not pg_catalog.has_function_privilege('anon', command.oid, 'EXECUTE'),
     'anon cannot execute PersonalTodayActions'
 )
