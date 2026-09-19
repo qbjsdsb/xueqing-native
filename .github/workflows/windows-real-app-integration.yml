@@ -10,7 +10,6 @@ on:
       - 'tools/packaging/run-windows-real-app-integration.ps1'
       - 'tools/ux/**'
       - 'docs/architecture/WINDOWS_REAL_APP_LOCALSTATE_MSIX.md'
-      - 'docs/project/PROJECT_STATE.yaml'
       - 'Directory.Packages.props'
       - '.github/workflows/windows-real-app-integration.yml'
 

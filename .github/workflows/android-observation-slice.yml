@@ -3,8 +3,32 @@ name: android-observation-slice
 on:
   pull_request:
     paths:
-      - 'apps/android/**'
+      # Provider/schema E2E should follow provider, persistence and shared
+      # contract boundaries. Pure Compose/ViewModel presentation refactors are
+      # covered by android-spike and must not start a Supabase stack by themselves.
+      - 'apps/android/build.gradle.kts'
+      - 'apps/android/settings.gradle.kts'
+      - 'apps/android/gradle.properties'
+      - 'apps/android/gradle/**'
+      - 'apps/android/app/build.gradle.kts'
+      - 'apps/android/app/schemas/**'
+      - 'apps/android/app/src/main/java/com/xueqing/app/XueqingApplication.kt'
+      - 'apps/android/app/src/main/java/com/xueqing/app/application/**'
+      - 'apps/android/app/src/main/java/com/xueqing/app/durability/**'
+      - 'apps/android/app/src/main/java/com/xueqing/app/infrastructure/**'
+      - 'apps/android/app/src/debug/java/com/xueqing/app/BuildVariantLearningReadBootstrap.kt'
+      - 'apps/android/app/src/debug/java/com/xueqing/app/BuildVariantQuickCaptureBootstrap.kt'
+      - 'apps/android/app/src/release/java/com/xueqing/app/BuildVariantLearningReadBootstrap.kt'
+      - 'apps/android/app/src/release/java/com/xueqing/app/BuildVariantQuickCaptureBootstrap.kt'
+      - 'apps/android/app/src/androidTest/java/com/xueqing/app/durability/ObservationReferenceProviderE2ETest.kt'
+      - 'apps/android/app/src/androidTest/java/com/xueqing/app/infrastructure/remote/LearningReadReferenceProviderE2ETest.kt'
       - 'backend/supabase/**'
+      - 'contracts/commands/CREATE_OBSERVATION_V1.md'
+      - 'contracts/commands/CREATE_LEARNING_CASE_V1.md'
+      - 'contracts/errors/CREATE_OBSERVATION_ERRORS.md'
+      - 'contracts/projections/PERSONAL_BOOTSTRAP_V1.md'
+      - 'contracts/projections/PERSONAL_TODAY_ACTIONS_V1.md'
+      - 'contracts/projections/STUDENT_LEARNING_FOCUS_V1.md'
       - '.github/workflows/android-observation-slice.yml'
   workflow_dispatch:
 
