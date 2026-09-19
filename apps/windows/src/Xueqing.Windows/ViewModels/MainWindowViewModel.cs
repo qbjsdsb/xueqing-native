@@ -525,8 +525,8 @@ public sealed class MainWindowViewModel : ObservableObject
 
         try
         {
-            foreach (var organizationId in bootstrap.TeachingContexts
-                         .Select(context => context.OrganizationId)
+            foreach (var organizationId in bootstrap.Organizations
+                         .Select(organization => organization.OrganizationId)
                          .Distinct())
             {
                 var pending = await _createLearningCaseRecovery.ListPendingAsync(
