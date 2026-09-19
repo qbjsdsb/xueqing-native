@@ -227,17 +227,17 @@ jobs:
           "$adb" shell input keyevent 82 || true
           "$adb" devices -l
 
-      - name: Run Android Outbox to Supabase reference-provider E2E
+      - name: Run Android Observation and Learning read reference-provider E2E
         shell: bash
         run: |
           set -euo pipefail
           gradle -p apps/android :app:connectedDebugAndroidTest --no-daemon --stacktrace \
-            -Pandroid.testInstrumentationRunnerArguments.class=com.xueqing.app.durability.ObservationReferenceProviderE2ETest \
+            -Pandroid.testInstrumentationRunnerArguments.class=com.xueqing.app.durability.ObservationReferenceProviderE2ETest,com.xueqing.app.infrastructure.remote.LearningReadReferenceProviderE2ETest \
             -Pandroid.testInstrumentationRunnerArguments.xueqingRpcBaseUrl=http://10.0.2.2:54321 \
             -Pandroid.testInstrumentationRunnerArguments.xueqingPublishableKey="$REFERENCE_ANON_KEY" \
             -Pandroid.testInstrumentationRunnerArguments.xueqingAccessToken="$REFERENCE_ACCESS_TOKEN"
 
-      - name: Verify E2E instrumentation executed exactly once
+      - name: Verify both E2E instrumentation tests executed exactly once
         shell: bash
         run: |
           set -euo pipefail
@@ -254,8 +254,8 @@ jobs:
               errors += int(root.attrib.get('errors', '0'))
               skipped += int(root.attrib.get('skipped', '0'))
           print(f'Reference-provider E2E: tests={total}, failures={failures}, errors={errors}, skipped={skipped}')
-          if (total, failures, errors, skipped) != (1, 0, 0, 0):
-              raise SystemExit('Expected exactly one successful, non-skipped reference-provider E2E test.')
+          if (total, failures, errors, skipped) != (2, 0, 0, 0):
+              raise SystemExit('Expected exactly two successful, non-skipped reference-provider E2E tests.')
           PY
 
       - name: Verify one authoritative Observation and receipt
@@ -272,6 +272,15 @@ jobs:
           actor_id="$(docker exec -i "$db_container" psql -U postgres -d postgres -Atc "select actor_app_user_id from public.observations where operation_id = '$operation_id'::uuid")"
           if [ "$observation_count" != '1' ] || [ "$receipt_count" != '1' ] || [ "$actor_id" != "$expected_actor" ]; then
             echo "Reference-provider mismatch: observations=$observation_count receipts=$receipt_count actor=$actor_id" >&2
+            exit 1
+          fi
+
+          learning_operation_id='78000000-0000-0000-0000-000000000001'
+          learning_receipt_count="$(docker exec -i "$db_container" psql -U postgres -d postgres -Atc "select count(*) from public.operation_receipts where operation_id = '$learning_operation_id'::uuid")"
+          learning_case_count="$(docker exec -i "$db_container" psql -U postgres -d postgres -Atc "select count(*) from public.learning_cases where id = (select (result_payload ->> 'case_id')::uuid from public.operation_receipts where operation_id = '$learning_operation_id'::uuid)")"
+          learning_action_count="$(docker exec -i "$db_container" psql -U postgres -d postgres -Atc "select count(*) from public.learning_case_actions where case_id = (select (result_payload ->> 'case_id')::uuid from public.operation_receipts where operation_id = '$learning_operation_id'::uuid) and action_role = 'primary' and status = 'pending'")"
+          if [ "$learning_receipt_count" != '1' ] || [ "$learning_case_count" != '1' ] || [ "$learning_action_count" != '1' ]; then
+            echo "Learning-read fixture mismatch: receipts=$learning_receipt_count cases=$learning_case_count pending_primary_actions=$learning_action_count" >&2
             exit 1
           fi
 

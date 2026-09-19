@@ -44,4 +44,39 @@ class StudentReferenceInstrumentedTest {
         composeRule.onNodeWithTag("quick-capture-teaching-context")
             .assertTextContains("虚构学生甲 · 语文")
     }
+    @Test
+    fun todayAndCurrentFocusExposeAuthoritativeReadState() {
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            composeRule.onAllNodesWithTag(
+                "today-action-70000000-0000-0000-0000-000000000001",
+            ).fetchSemanticsNodes(atLeastOneRootRequired = false).isNotEmpty()
+        }
+        composeRule.onNodeWithTag(
+            "today-action-70000000-0000-0000-0000-000000000001",
+        ).assertTextContains("复核陌生材料中的限制条件")
+
+        composeRule.onNodeWithText("学生").performClick()
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            composeRule.onAllNodesWithTag(
+                "student-row-20000000-0000-0000-0000-000000000001:30000000-0000-0000-0000-000000000001",
+            ).fetchSemanticsNodes(atLeastOneRootRequired = false).isNotEmpty()
+        }
+        composeRule.onNodeWithTag(
+            "student-row-20000000-0000-0000-0000-000000000001:30000000-0000-0000-0000-000000000001",
+        ).performClick()
+        composeRule.onNodeWithTag(
+            "student-subject-focus-40000000-0000-0000-0000-000000000001",
+        ).performClick()
+
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            composeRule.onAllNodesWithTag(
+                "current-focus-60000000-0000-0000-0000-000000000001",
+            ).fetchSemanticsNodes(atLeastOneRootRequired = false).isNotEmpty()
+        }
+        composeRule.onNodeWithTag(
+            "current-focus-60000000-0000-0000-0000-000000000001",
+        ).assertTextContains("跨段概括仍会漏掉限制条件")
+            .assertTextContains("复核陌生材料中的限制条件")
+    }
+
 }
