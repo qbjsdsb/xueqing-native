@@ -17,12 +17,17 @@ public sealed record LearningFocusDisplayItem(
     string NextAction,
     string DueLabel);
 
+public sealed record LearningCaseRecoveryLookup(
+    bool IsAvailable,
+    CreateLearningCaseRequest? Request);
+
 public sealed class MainWindowViewModel : ObservableObject
 {
     private readonly PersonalStudentWorkspaceCoordinator? _personalWorkspace;
     private readonly StudentLearningFocusCoordinator? _learningFocus;
     private readonly PersonalTodayActionsCoordinator? _today;
     private readonly ICreateLearningCaseCommand? _createLearningCase;
+    private readonly ICreateLearningCaseRecoveryStore? _createLearningCaseRecovery;
     private readonly List<StudentSummary> _allStudents;
     private readonly Dictionary<string, PersonalStudentWorkspaceItem> _authoritativeStudents = new(StringComparer.Ordinal);
     private StudentSummary? _selectedStudent;
@@ -44,6 +49,7 @@ public sealed class MainWindowViewModel : ObservableObject
         _learningFocus = teachingWorkspace?.LearningFocus;
         _today = teachingWorkspace?.Today;
         _createLearningCase = teachingWorkspace?.CreateLearningCase;
+        _createLearningCaseRecovery = teachingWorkspace?.CreateLearningCaseRecovery;
         _allStudents = _personalWorkspace is null
             ? SyntheticDataFactory.CreateStudents(1_000).ToList()
             : new List<StudentSummary>();
@@ -286,6 +292,52 @@ public sealed class MainWindowViewModel : ObservableObject
         }
     }
 
+    public async Task<LearningCaseRecoveryLookup> FindPendingLearningCaseForObservationAsync(
+        StudentRecentObservation observation,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(observation);
+
+        if (_personalWorkspace is null ||
+            _createLearningCaseRecovery is null ||
+            SelectedTeachingContext is null)
+        {
+            return new LearningCaseRecoveryLookup(false, null);
+        }
+
+        var selected = SelectedTeachingContext;
+        var workspaceState = _personalWorkspace.Current;
+        var bootstrap = workspaceState.Status == PersonalStudentWorkspaceStatus.Ready
+            ? workspaceState.Bootstrap
+            : null;
+        if (bootstrap is null ||
+            !ContainsExactContext(bootstrap, selected.Context) ||
+            !RecentSnapshotContains(selected.Context, observation.ObservationId))
+        {
+            return new LearningCaseRecoveryLookup(false, null);
+        }
+
+        try
+        {
+            var pending = await _createLearningCaseRecovery.FindBySourceObservationAsync(
+                bootstrap.ActorAppUserId,
+                selected.Context.OrganizationId,
+                selected.Context.StudentId,
+                selected.Context.SubjectProfileId,
+                observation.ObservationId,
+                cancellationToken);
+            return new LearningCaseRecoveryLookup(true, pending);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch
+        {
+            return new LearningCaseRecoveryLookup(false, null);
+        }
+    }
+
     public async Task<CreateLearningCaseResult> CreateLearningCaseFromObservationAsync(
         StudentRecentObservation observation,
         string title,
@@ -300,6 +352,7 @@ public sealed class MainWindowViewModel : ObservableObject
             _learningFocus is null ||
             _today is null ||
             _createLearningCase is null ||
+            _createLearningCaseRecovery is null ||
             SelectedTeachingContext is null)
         {
             return CreateLearningCaseResult.Failed(
@@ -332,10 +385,54 @@ public sealed class MainWindowViewModel : ObservableObject
             dueOn,
             observation.ObservationId);
 
+        try
+        {
+            await _createLearningCaseRecovery.SaveAsync(
+                bootstrap.ActorAppUserId,
+                request,
+                cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch
+        {
+            return CreateLearningCaseResult.Failed(
+                CreateLearningCaseFailureKind.LocalDurabilityFailure,
+                "XQ_LOCAL_COMMAND_RECOVERY_UNAVAILABLE");
+        }
+
         var result = await _createLearningCase.ExecuteAsync(
             request,
             bootstrap.ActorAppUserId,
             cancellationToken);
+
+        var mustKeepRecovery = result.Failure?.Kind is
+            CreateLearningCaseFailureKind.ResultUnknown or
+            CreateLearningCaseFailureKind.Transient;
+
+        if (!mustKeepRecovery)
+        {
+            try
+            {
+                await _createLearningCaseRecovery.RemoveAsync(
+                    bootstrap.ActorAppUserId,
+                    request.OrganizationId,
+                    request.OperationId,
+                    cancellationToken);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch
+            {
+                // A committed result remains authoritative. A stale local recovery
+                // row is safe because any future recovery retries the same
+                // operation_id and therefore cannot duplicate the Case.
+            }
+        }
 
         if (result.IsSuccess)
         {
