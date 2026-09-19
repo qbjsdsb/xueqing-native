@@ -158,12 +158,12 @@
                             AutomationProperties.Name="刷新任教学员与最近记录"
                             Click="RefreshAuthoritativeStudents_Click"
                             Content="刷新"
-                            Visibility="{Binding AuthoritativeStudentDetailVisibility}" />
+                            Visibility="{Binding IsAuthoritativeStudentWorkspace, Converter={StaticResource BooleanToVisibilityConverter}}" />
                     </Grid>
 
                     <StackPanel
                         Spacing="20"
-                        Visibility="{Binding PrototypeStudentDetailVisibility}">
+                        Visibility="{Binding IsAuthoritativeStudentWorkspace, Converter={StaticResource BooleanToVisibilityConverter}, ConverterParameter=Invert}">
 
                         <StackPanel Spacing="10">
                             <TextBlock FontSize="16" FontWeight="SemiBold" Text="正在关注" />
@@ -332,7 +332,7 @@
 
                     <StackPanel
                         Spacing="16"
-                        Visibility="{Binding AuthoritativeStudentDetailVisibility}">
+                        Visibility="{Binding IsAuthoritativeStudentWorkspace, Converter={StaticResource BooleanToVisibilityConverter}}">
                         <ComboBox
                             x:Name="SubjectContextBox"
                             AutomationProperties.AutomationId="StudentSubjectContext"
