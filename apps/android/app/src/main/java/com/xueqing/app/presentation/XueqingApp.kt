@@ -2,7 +2,6 @@ package com.xueqing.app.presentation
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -19,8 +18,6 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -38,6 +35,7 @@ import com.xueqing.app.application.learning.ActionDueBucket
 import com.xueqing.app.application.learning.LearningCaseState
 import com.xueqing.app.application.learning.PersonalTodayAction
 import com.xueqing.app.application.learning.StudentLearningCaseFocus
+import com.xueqing.app.presentation.design.XueqingTheme
 
 internal enum class PrimaryDestination(
     val label: String,
@@ -55,7 +53,6 @@ internal fun XueqingApp(
     learningReadViewModel: LearningReadViewModel,
     startInQuickCapture: Boolean = false,
 ) {
-    val colorScheme = if (isSystemInDarkTheme()) darkColorScheme() else lightColorScheme()
     val quickCaptureState by quickCaptureViewModel.uiState.collectAsState()
     val directoryState by studentDirectoryViewModel.uiState.collectAsState()
     val learningState by learningReadViewModel.uiState.collectAsState()
@@ -69,7 +66,7 @@ internal fun XueqingApp(
         }
     }
 
-    MaterialTheme(colorScheme = colorScheme) {
+    XueqingTheme {
         var selectedName by rememberSaveable { mutableStateOf(PrimaryDestination.Today.name) }
         var selectedStudentKey by rememberSaveable { mutableStateOf<String?>(null) }
         var showingQuickCapture by rememberSaveable { mutableStateOf(startInQuickCapture) }
