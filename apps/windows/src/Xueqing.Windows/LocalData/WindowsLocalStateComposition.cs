@@ -4,41 +4,11 @@ using Windows.Storage;
 
 namespace Xueqing.Windows.LocalData;
 
-internal sealed record WindowsLocalDataScope(
-    string EnvironmentId,
-    string AppUserId,
-    string OrganizationId,
-    Guid InstallationId)
+internal static class WindowsInstallationIdentity
 {
     private const string InstallationIdSetting = "xueqing.local-state.installation-id.v1";
 
-    public static WindowsLocalDataScope Create(
-        ApplicationData applicationData,
-        string environmentId,
-        string appUserId,
-        string organizationId)
-    {
-        ArgumentNullException.ThrowIfNull(applicationData);
-        ArgumentException.ThrowIfNullOrWhiteSpace(environmentId);
-        ArgumentException.ThrowIfNullOrWhiteSpace(appUserId);
-        ArgumentException.ThrowIfNullOrWhiteSpace(organizationId);
-
-        return new WindowsLocalDataScope(
-            environmentId,
-            appUserId,
-            organizationId,
-            LoadOrCreateInstallationId(applicationData.LocalSettings));
-    }
-
-    public static WindowsLocalDataScope CreateFictionalIntegrationScope(
-        ApplicationData applicationData) =>
-        Create(
-            applicationData,
-            "integration",
-            "user-fictional-001",
-            "org-fictional-001");
-
-    private static Guid LoadOrCreateInstallationId(ApplicationDataContainer localSettings)
+    public static Guid LoadOrCreate(ApplicationDataContainer localSettings)
     {
         if (localSettings.Values.TryGetValue(InstallationIdSetting, out var existing)
             && existing is string existingText
@@ -54,6 +24,61 @@ internal sealed record WindowsLocalDataScope(
     }
 }
 
+internal sealed record WindowsActorLocalDataScope(
+    string EnvironmentId,
+    string AppUserId,
+    Guid InstallationId)
+{
+    public static WindowsActorLocalDataScope Create(
+        ApplicationData applicationData,
+        string environmentId,
+        string appUserId)
+    {
+        ArgumentNullException.ThrowIfNull(applicationData);
+        ArgumentException.ThrowIfNullOrWhiteSpace(environmentId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(appUserId);
+
+        return new WindowsActorLocalDataScope(
+            environmentId,
+            appUserId,
+            WindowsInstallationIdentity.LoadOrCreate(applicationData.LocalSettings));
+    }
+}
+
+internal sealed record WindowsLocalDataScope(
+    string EnvironmentId,
+    string AppUserId,
+    string OrganizationId,
+    Guid InstallationId)
+{
+    public static WindowsLocalDataScope Create(
+        ApplicationData applicationData,
+        string environmentId,
+        string appUserId,
+        string organizationId)
+    {
+        ArgumentNullException.ThrowIfNull(applicationData);
+        ArgumentException.ThrowIfNullOrWhiteSpace(environmentId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(appUserId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(organizationId);
+
+        return new WindowsLocalDataScope(
+            environmentId,
+            appUserId,
+            organizationId,
+            WindowsInstallationIdentity.LoadOrCreate(applicationData.LocalSettings));
+    }
+
+    public static WindowsLocalDataScope CreateFictionalIntegrationScope(
+        ApplicationData applicationData) =>
+        Create(
+            applicationData,
+            "integration",
+            "user-fictional-001",
+            "org-fictional-001");
+
+}
+
 internal static class WindowsLocalStatePaths
 {
     public static string GetDurableIntentDatabasePath(
@@ -65,6 +90,26 @@ internal static class WindowsLocalStatePaths
         StorageFolder localFolder,
         WindowsLocalDataScope scope) =>
         GetScopedDatabasePath(localFolder, scope, "online-command-recovery.db");
+
+    public static string GetOnlineCommandRecoveryIndexDatabasePath(
+        StorageFolder localFolder,
+        WindowsActorLocalDataScope scope)
+    {
+        ArgumentNullException.ThrowIfNull(localFolder);
+        ArgumentNullException.ThrowIfNull(scope);
+        ValidateActorScope(scope);
+
+        var scopeDirectory = Path.Combine(
+            localFolder.Path,
+            "scoped-local-data",
+            "v1",
+            "actor",
+            HashActorScope(scope),
+            scope.InstallationId.ToString("N"));
+
+        Directory.CreateDirectory(scopeDirectory);
+        return Path.Combine(scopeDirectory, "online-command-recovery-index.db");
+    }
 
     private static string GetScopedDatabasePath(
         StorageFolder localFolder,
@@ -87,6 +132,16 @@ internal static class WindowsLocalStatePaths
         return Path.Combine(scopeDirectory, fileName);
     }
 
+    private static void ValidateActorScope(WindowsActorLocalDataScope scope)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(scope.EnvironmentId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(scope.AppUserId);
+        if (scope.InstallationId == Guid.Empty)
+        {
+            throw new ArgumentException("Installation id must be non-empty.", nameof(scope));
+        }
+    }
+
     private static void ValidateScope(WindowsLocalDataScope scope)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(scope.EnvironmentId);
@@ -96,6 +151,14 @@ internal static class WindowsLocalStatePaths
         {
             throw new ArgumentException("Installation id must be non-empty.", nameof(scope));
         }
+    }
+
+    private static string HashActorScope(WindowsActorLocalDataScope scope)
+    {
+        var environmentHash = HashSegment(scope.EnvironmentId);
+        var appUserHash = HashSegment(scope.AppUserId);
+
+        return HashSegment(string.Concat(environmentHash, appUserHash));
     }
 
     private static string HashScope(WindowsLocalDataScope scope)
