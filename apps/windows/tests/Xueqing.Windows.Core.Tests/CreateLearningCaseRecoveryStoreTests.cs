@@ -88,6 +88,39 @@ public sealed class CreateLearningCaseRecoveryStoreTests
     }
 
     [TestMethod]
+    public async Task Legacy_candidate_can_expose_scope_but_normal_load_rejects_corrupt_payload()
+    {
+        var path = CreateDatabasePath();
+        var request = Request();
+        await CreateV1DatabaseAsync(path, request);
+
+        var factory = new EncryptedSqliteConnectionFactory(path, TestMasterKey);
+        await using (var connection = await factory.OpenAsync())
+        await using (var corrupt = connection.CreateCommand())
+        {
+            corrupt.CommandText = """
+                UPDATE pending_create_learning_case
+                SET payload_json = '{not-valid-json'
+                WHERE operation_id = $operation_id;
+                """;
+            corrupt.Parameters.AddWithValue(
+                "$operation_id",
+                request.OperationId.ToString("D"));
+            await corrupt.ExecuteNonQueryAsync();
+        }
+
+        var candidate =
+            new SqliteCreateLearningCaseRecoveryStore(path, TestMasterKey);
+
+        CollectionAssert.AreEqual(
+            new[] { request.OrganizationId },
+            (await candidate.InspectStoredOrganizationIdsAsync()).ToArray());
+
+        await Assert.ThrowsExceptionAsync<System.Text.Json.JsonException>(
+            () => candidate.ListPendingAsync(request.OrganizationId));
+    }
+
+    [TestMethod]
     public void Organization_scope_identity_is_deterministic_and_actor_isolated()
     {
         const string environment = "production-eu";
