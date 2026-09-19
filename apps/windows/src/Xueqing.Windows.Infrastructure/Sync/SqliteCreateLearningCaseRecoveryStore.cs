@@ -211,6 +211,36 @@ public sealed class SqliteCreateLearningCaseRecoveryStore
             : Deserialize(payload);
     }
 
+    public async Task<IReadOnlyList<Guid>> ListStoredOrganizationIdsAsync(
+        CancellationToken cancellationToken = default)
+    {
+        await InitializeAsync(cancellationToken);
+
+        using var connection = await OpenConfiguredConnectionAsync(cancellationToken);
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT DISTINCT organization_id
+            FROM pending_create_learning_case
+            ORDER BY organization_id;
+            """;
+
+        var organizationIds = new List<Guid>();
+        using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            if (!Guid.TryParse(reader.GetString(0), out var organizationId) ||
+                organizationId == Guid.Empty)
+            {
+                throw new InvalidDataException(
+                    "CreateLearningCase recovery store contains an invalid organization id.");
+            }
+
+            organizationIds.Add(organizationId);
+        }
+
+        return organizationIds;
+    }
+
     public async Task<IReadOnlyList<CreateLearningCaseRequest>> ListPendingAsync(
         Guid organizationId,
         CancellationToken cancellationToken = default)
