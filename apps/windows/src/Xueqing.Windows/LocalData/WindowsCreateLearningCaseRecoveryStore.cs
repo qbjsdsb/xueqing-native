@@ -197,6 +197,30 @@ internal sealed class WindowsCreateLearningCaseRecoveryStore :
                         continue;
                     }
 
+                    try
+                    {
+                        // Ownership is now proven by the deterministic path.
+                        // Before making the scope durable in the actor index,
+                        // perform the same initialization/migration and payload
+                        // deserialization that normal indexed loading will use.
+                        // A damaged legacy store is therefore isolated here and
+                        // cannot poison all future recovery enumeration.
+                        var ownedCandidateStore =
+                            new SqliteCreateLearningCaseRecoveryStore(databasePath);
+                        _ = await ownedCandidateStore.ListPendingAsync(
+                            organizationId,
+                            cancellationToken);
+                    }
+                    catch (OperationCanceledException)
+                        when (cancellationToken.IsCancellationRequested)
+                    {
+                        throw;
+                    }
+                    catch
+                    {
+                        continue;
+                    }
+
                     await index.RegisterOrganizationAsync(
                         organizationId,
                         cancellationToken);
