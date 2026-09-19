@@ -75,10 +75,19 @@ from pg_catalog.pg_proc as command
 join pg_catalog.pg_namespace as namespace on namespace.oid = command.pronamespace
 where namespace.nspname = 'public' and command.proname = 'create_learning_case';
 
-select has_index(
-    'public',
-    'learning_case_actions',
-    'learning_case_one_pending_primary_action',
+select ok(
+    exists (
+        select 1
+        from pg_catalog.pg_class as index_relation
+        join pg_catalog.pg_namespace as namespace
+          on namespace.oid = index_relation.relnamespace
+        join pg_catalog.pg_index as index_definition
+          on index_definition.indexrelid = index_relation.oid
+        where namespace.nspname = 'public'
+          and index_relation.relname = 'learning_case_one_pending_primary_action'
+          and index_definition.indisunique
+          and index_definition.indpred is not null
+    ),
     'database enforces at most one pending primary Action per Case'
 );
 
