@@ -1,7 +1,7 @@
 schema_version: 1
 project: xueqing-native
 phase: phase-1
-milestone: android-current-focus-today-lightweight-read
+milestone: native-presentation-evolvability-foundation
 status: active
 architecture_baseline: v1-accepted
 
@@ -42,6 +42,7 @@ completed_gates:
   - windows-observation-to-learning-case-ux
   - action-reschedule-and-verification-next-action
   - windows-action-progression-ux
+  - android-current-focus-lightweight-read
 
 open_gates:
   - provider-adapter-conformance-spike
@@ -52,7 +53,7 @@ open_gates:
 next_execution:
   parallel_limit: 1
   lines:
-    - android-current-focus-lightweight-read
+    - native-presentation-evolvability-foundation
   after_current_green:
     - case-lifecycle-and-verification
 
