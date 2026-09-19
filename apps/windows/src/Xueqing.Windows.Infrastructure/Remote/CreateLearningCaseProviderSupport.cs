@@ -48,11 +48,18 @@ internal static class CreateLearningCaseProviderSupport
             return (CreateLearningCaseFailureKind.Validation, message);
         }
 
-        if ((int)statusCode == 429 || (int)statusCode >= 500)
+        if ((int)statusCode >= 500)
+        {
+            return (
+                CreateLearningCaseFailureKind.ResultUnknown,
+                message ?? $"XQ_RESULT_UNKNOWN_HTTP_{(int)statusCode}");
+        }
+
+        if ((int)statusCode == 429)
         {
             return (
                 CreateLearningCaseFailureKind.Transient,
-                message ?? $"HTTP_{(int)statusCode}");
+                message ?? "HTTP_429");
         }
 
         return (
