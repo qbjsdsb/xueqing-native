@@ -15,8 +15,8 @@ public partial class App : Application
 
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
-        var personalWorkspace = LocalReferenceProviderStudentWorkspaceFactory.CreateFromEnvironment();
-        var viewModel = new MainWindowViewModel(personalWorkspace);
+        var teachingWorkspace = LocalReferenceProviderTeachingWorkspaceFactory.CreateFromEnvironment();
+        var viewModel = new MainWindowViewModel(teachingWorkspace);
         _window = new MainWindow(viewModel);
         _window.Activate();
 
