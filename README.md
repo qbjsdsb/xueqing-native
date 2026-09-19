@@ -98,17 +98,17 @@ Teaching Evidence、Intervention、Assessment、Quick Capture 等教学事实必
 
 Local-first 引入新的本地数据安全风险，因此离线授权期限、本地缓存范围、加密方式、退出/停用清理和附件留存策略必须先通过安全 Gate 冻结。
 
-## 当前阶段：First Observation Product Slice + Native UX Reference
+## 当前阶段：Phase 1 核心教学闭环跨端落地
 
 Phase 0 已完成并接受 **Architecture Baseline v1**。广泛架构研究已经停止；后续方向变化必须由新的实验/生产证据和 superseding ADR 驱动。
 
-Windows 的架构、加密 LocalState/MSIX 与 **Native UX Gate** 已完成，并已经进入 UX Foundation v2 的可执行参考阶段。当前 WinUI 主线采用 **Personal / Organization Workspace 分离 + compact NavigationView + Roster / Chronicle**，继续保留既有 800 / 960 / 1024 / 1280 / 1600 DIP、800×480、键盘/焦点、Light/Dark、系统 High Contrast 和 100 / 150 / 200 / 225% text scale 的真实 UIA 证据。真实中文 IME composition 与物理 mouse hover 仍属于设备/人工证据项。
+Windows 已经从 Native UX Reference 进入真实业务闭环：Personal Student / recent Observation、Observation → Learning Case、Current Focus、Personal Today，以及 **Primary Action 改期 / Verification + atomic Next Action** 均已接入真实 reference provider。正式 Action 写入采用 exact Case/Action version、server-side Teaching Fact Gate、operation receipt 与加密 Durable Intent；ResultUnknown / Transient / unverifiable response 会保留原 operation 与原 payload，只允许 same-operation retry。该链已经通过 Windows Core、真实 Supabase E2E、WinUI cloud build、MSIX 原位升级、加密 LocalState 与 Native UX smoke 的 exact-head 证明。
 
-Android 已完成稳定 API 36 的 Kotlin + Compose 基线、Room Draft Engine、process-death recovery、SQLCipher + Android Keystore Durable Intent 加密，以及第一条真实 **Quick Capture → encrypted Durable Outbox → WorkManager → reference provider → authoritative Observation** 产品写入链。服务端已具备 CreateObservation、PersonalBootstrap 和 recent Observation projection；Windows 已完成 recent Observation 真实读取链。
+Android 已完成稳定 API 36 的 Kotlin + Compose 基线、PersonalBootstrap-backed 学生目录、Student → Quick Capture、Room Draft Engine、process-death recovery、SQLCipher + Android Keystore Durable Intent、Observation Outbox + WorkManager，以及真实 **Quick Capture → reference provider → authoritative Observation** 写入链。Offline Access Lease 的 72 小时上限、同 boot monotonic expiry 与 wall-clock rollback 检测也已形成可执行安全基线。
 
-Provider Session/Auth 与 **IdentityLink 身份映射这一层** conformance 已完成。应用业务身份现在由 application-owned `AppUser` 持有，外部 provider 的 `(provider, issuer, subject)` 通过 IdentityLink 解析，当前 CreateObservation / PersonalBootstrap / recent Observation 路径不再直接把 Supabase Auth subject 当作业务用户主键。更广的 Provider Adapter conformance 仍按能力分层推进，Projection / Storage conformance 不在此处提前宣称完成。
+Provider Session/Auth 与 **IdentityLink 身份映射** conformance 已完成。应用业务身份由 application-owned `AppUser` 持有；provider-specific identity、SDK 与 transport 继续限制在 Infrastructure Adapter 边界。Projection / Storage 等更广的 provider conformance 仍按独立 Gate 推进，不提前宣称完成。
 
-当前唯一执行线是 **Android Student + Quick Capture Native Reference**：把已证明可靠的 Android 状态、草稿和 Observation 链包装成真正的 Teaching Pocket 原生体验，而不是继续扩张 bootstrap/demo UI。该参考完成后进入 **Offline Access Lease duration + clock rollback** Gate，再继续下一条真实业务 Vertical Slice。
+当前唯一执行线是 **Android Current Focus + Today lightweight read**。目标是复用已经冻结的 Learning Case / Current Focus / Personal Today 服务端语义，在 Android 建立 provider-neutral read contract、严格 adapter/parser、application state 与原生 Compose 只读体验，让 Teaching Pocket 不只能够“记录”，还能够可靠回答“这个学生现在最需要解决什么、我今天下一步做什么”。这一切片首轮不引入 Android 正式 Action 写命令，不扩大成通用同步框架，也不重做已接受的 Quick Capture 架构。
 
 动态工程状态以 `docs/project/PROJECT_STATE.yaml` 为准。
 
