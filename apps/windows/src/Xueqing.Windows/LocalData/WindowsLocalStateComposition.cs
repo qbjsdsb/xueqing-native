@@ -1,6 +1,5 @@
-using System.Security.Cryptography;
-using System.Text;
 using Windows.Storage;
+using Xueqing.Windows.Infrastructure.LocalData;
 
 namespace Xueqing.Windows.LocalData;
 
@@ -104,7 +103,9 @@ internal static class WindowsLocalStatePaths
             "scoped-local-data",
             "v1",
             "actor",
-            HashActorScope(scope),
+            WindowsLocalScopeIdentity.ComputeActorScopeDirectoryName(
+                scope.EnvironmentId,
+                scope.AppUserId),
             scope.InstallationId.ToString("N"));
 
         Directory.CreateDirectory(scopeDirectory);
@@ -125,11 +126,94 @@ internal static class WindowsLocalStatePaths
             localFolder.Path,
             "scoped-local-data",
             "v1",
-            HashScope(scope),
+            WindowsLocalScopeIdentity.ComputeOrganizationScopeDirectoryName(
+                scope.EnvironmentId,
+                scope.AppUserId,
+                scope.OrganizationId),
             scope.InstallationId.ToString("N"));
 
         Directory.CreateDirectory(scopeDirectory);
         return Path.Combine(scopeDirectory, fileName);
+    }
+
+    public static IReadOnlyList<string> EnumerateLegacyOnlineCommandRecoveryDatabasePaths(
+        StorageFolder localFolder,
+        Guid installationId)
+    {
+        ArgumentNullException.ThrowIfNull(localFolder);
+        if (installationId == Guid.Empty)
+        {
+            throw new ArgumentException("Installation id must be non-empty.", nameof(installationId));
+        }
+
+        var root = Path.Combine(localFolder.Path, "scoped-local-data", "v1");
+        if (!Directory.Exists(root))
+        {
+            return Array.Empty<string>();
+        }
+
+        var installationDirectoryName = installationId.ToString("N");
+        var paths = new List<string>();
+        foreach (var scopeDirectory in Directory.EnumerateDirectories(root))
+        {
+            if (string.Equals(
+                    Path.GetFileName(scopeDirectory),
+                    "actor",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            var installationDirectory = Path.Combine(
+                scopeDirectory,
+                installationDirectoryName);
+            var databasePath = Path.Combine(
+                installationDirectory,
+                "online-command-recovery.db");
+
+            if (File.Exists(databasePath))
+            {
+                paths.Add(Path.GetFullPath(databasePath));
+            }
+        }
+
+        paths.Sort(StringComparer.OrdinalIgnoreCase);
+        return paths;
+    }
+
+    public static bool MatchesOrganizationRecoveryScope(
+        string databasePath,
+        WindowsLocalDataScope scope)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(databasePath);
+        ArgumentNullException.ThrowIfNull(scope);
+        ValidateScope(scope);
+
+        var installationDirectory = Directory.GetParent(Path.GetFullPath(databasePath));
+        var scopeDirectory = installationDirectory?.Parent;
+        if (installationDirectory is null || scopeDirectory is null)
+        {
+            return false;
+        }
+
+        if (!string.Equals(
+                installationDirectory.Name,
+                scope.InstallationId.ToString("N"),
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var expectedScopeDirectory =
+            WindowsLocalScopeIdentity.ComputeOrganizationScopeDirectoryName(
+                scope.EnvironmentId,
+                scope.AppUserId,
+                scope.OrganizationId);
+
+        return string.Equals(
+            scopeDirectory.Name,
+            expectedScopeDirectory,
+            StringComparison.OrdinalIgnoreCase);
     }
 
     private static void ValidateActorScope(WindowsActorLocalDataScope scope)
@@ -153,41 +237,5 @@ internal static class WindowsLocalStatePaths
         }
     }
 
-    private static string HashActorScope(WindowsActorLocalDataScope scope)
-    {
-        var environmentHash = HashSegment(scope.EnvironmentId);
-        var appUserHash = HashSegment(scope.AppUserId);
 
-        return HashSegment(string.Concat(environmentHash, appUserHash));
-    }
-
-    private static string HashScope(WindowsLocalDataScope scope)
-    {
-        var environmentHash = HashSegment(scope.EnvironmentId);
-        var appUserHash = HashSegment(scope.AppUserId);
-        var organizationHash = HashSegment(scope.OrganizationId);
-
-        return HashSegment(string.Concat(environmentHash, appUserHash, organizationHash));
-    }
-
-    private static string HashSegment(string value)
-    {
-        var utf8 = Encoding.UTF8.GetBytes(value);
-        try
-        {
-            var hash = SHA256.HashData(utf8);
-            try
-            {
-                return Convert.ToHexString(hash.AsSpan(0, 16)).ToLowerInvariant();
-            }
-            finally
-            {
-                CryptographicOperations.ZeroMemory(hash);
-            }
-        }
-        finally
-        {
-            CryptographicOperations.ZeroMemory(utf8);
-        }
-    }
 }
