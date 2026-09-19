@@ -101,13 +101,26 @@ jobs:
           dotnet restore apps/windows/src/Xueqing.Windows.Infrastructure/Xueqing.Windows.Infrastructure.csproj --locked-mode
           dotnet build apps/windows/tests/Xueqing.Windows.ReferenceProviderE2E/Xueqing.Windows.ReferenceProviderE2E.csproj -c Release --nologo
 
-      - name: Run Bootstrap to CreateObservation to Windows recent-read E2E
+      - name: Run Windows Core projection and coordinator tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          project=apps/windows/tests/Xueqing.Windows.Core.Tests/Xueqing.Windows.Core.Tests.csproj
+          dotnet build "$project" -c Release --nologo
+          output=apps/windows/tests/Xueqing.Windows.Core.Tests/bin/Release/net10.0
+          "$output/Xueqing.Windows.Core.Tests" \
+            --minimum-expected-tests 18 \
+            --no-banner \
+            --progress off \
+            --output Detailed
+
+      - name: Run Bootstrap, Observation and Learning read-model E2E
         shell: bash
         run: |
           set -euo pipefail
           output=apps/windows/tests/Xueqing.Windows.ReferenceProviderE2E/bin/Release/net10.0
           "$output/Xueqing.Windows.ReferenceProviderE2E" \
-            --minimum-expected-tests 1 \
+            --minimum-expected-tests 2 \
             --no-banner \
             --progress off \
             --output Detailed
