@@ -8,6 +8,9 @@ Current Phase 1 commands:
 - `CREATE_LEARNING_CASE_V1.md` — authoritative online creation of Learning Case + exactly one pending primary Action + provenance event.
 - `RESCHEDULE_PRIMARY_ACTION_V1.md` — online due-date mutation with expected Case/Action versions.
 - `RECORD_VERIFICATION_AND_NEXT_ACTION_V1.md` — online immutable Verification + atomic current-Action completion + next pending primary Action.
+- `TRANSITION_LEARNING_CASE_STATE_V1.md` — forward-only open Case lifecycle transition while preserving the current pending primary Action.
+- `CLOSE_LEARNING_CASE_V1.md` — stable → closed with atomic cancellation of the current pending primary Action.
+- `REOPEN_LEARNING_CASE_V1.md` — closed → intervening with one new pending primary Action; reopen remains an event/command, not a status.
 
 All high-risk/formal commands preserve these semantics:
 
