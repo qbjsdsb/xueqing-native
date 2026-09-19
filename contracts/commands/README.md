@@ -1,8 +1,13 @@
 # Command Contracts
 
-Formal command request/result schemas will live here.
+Formal request/result contracts live in this directory.
 
-All high-risk commands preserve these semantics:
+Current Phase 1 commands:
+
+- `CREATE_OBSERVATION_V1.md` — queueable low-risk classroom Observation; server still re-runs live authority.
+- `CREATE_LEARNING_CASE_V1.md` — authoritative online creation of Learning Case + exactly one pending primary Action + provenance event.
+
+All high-risk/formal commands preserve these semantics:
 
 ```text
 operation_id
@@ -13,4 +18,6 @@ operation-bound events/audit
 idempotent committed result
 ```
 
-Client retries must reuse `operation_id`.
+For creation commands without an existing aggregate version, the relevant current relationship snapshot (for example the exact active teaching assignment id) is still required and re-validated inside the transaction.
+
+Client retries must reuse the same `operation_id`. Unknown-result recovery must never create a replacement intent.
