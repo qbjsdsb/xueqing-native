@@ -1,13 +1,14 @@
 # Contributing to Xueqing Native
 
-Xueqing Native is currently in Phase 0. Contributions should strengthen the product and architecture foundation rather than add speculative features.
+The current phase, milestone, and next execution line are defined only in `docs/project/PROJECT_STATE.yaml`. Do not copy a phase number into this document; dynamic project state must have one durable source of truth.
 
 ## Before changing code
 
 1. Read `README.md` and `AGENTS.md`.
-2. Check relevant ADRs under `docs/adr/`.
-3. For domain behavior, update the contract/document first.
-4. Keep Android, Windows, and backend semantics aligned even when their UI differs.
+2. Read `docs/project/PROJECT_STATE.yaml` for the current milestone and execution line.
+3. Check relevant ADRs and `docs/architecture/EVOLVABILITY_BOUNDARIES.md`.
+4. For domain behavior, update the contract/document first.
+5. Keep Android, Windows, and backend semantics aligned even when their UI differs.
 
 ## Pull request scope
 
