@@ -250,7 +250,7 @@ internal sealed class ActionProgressionTransport
         if (code is "XQ_OPERATION_ID_REQUIRED" or "XQ_TEACHING_CONTEXT_REQUIRED" or
             "XQ_EXPECTED_CASE_VERSION_REQUIRED" or "XQ_EXPECTED_ACTION_VERSION_REQUIRED" or
             "XQ_INVALID_VERIFICATION_OUTCOME" or "XQ_INVALID_VERIFICATION_SUMMARY" or
-            "XQ_INVALID_NEXT_ACTION" or "XQ_ACTION_DUE_UNCHANGED")
+            "XQ_INVALID_PRIMARY_ACTION" or "XQ_ACTION_DUE_UNCHANGED")
             return new(ActionProgressionFailureKind.Validation, code);
         // A response with no recognized deterministic server rejection cannot prove
         // that this operation did not commit. Reconcile with the same operation ID.
