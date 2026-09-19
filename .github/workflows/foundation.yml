@@ -60,6 +60,7 @@ jobs:
             docs/architecture/RELEASE_COMPATIBILITY.md
             docs/architecture/RELEASE_STRATEGY.md
             docs/architecture/TERMINOLOGY.md
+            docs/architecture/EVOLVABILITY_BOUNDARIES.md
             docs/architecture/PHASE_0_EXECUTION.md
             docs/architecture/PHASE_0_CLOSURE.md
             docs/architecture/SPIKE_PLAN.md
@@ -74,6 +75,12 @@ jobs:
           for file in "${required[@]}"; do
             test -f "$file" || { echo "Missing $file"; exit 1; }
           done
+
+      - name: Check architecture boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/architecture/check-boundaries.py
 
       - name: Reject obvious secret/private-data file types
         shell: bash
