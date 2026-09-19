@@ -170,12 +170,12 @@ create or replace function public.test_hold_case_lifecycle()
 returns trigger
 language plpgsql
 set search_path = ''
-as $$
+as \$\$
 begin
   perform pg_catalog.pg_advisory_xact_lock($lock_key);
   return new;
 end;
-$$;
+\$\$;
 
 drop trigger if exists test_hold_case_lifecycle on public.learning_case_events;
 create trigger test_hold_case_lifecycle
