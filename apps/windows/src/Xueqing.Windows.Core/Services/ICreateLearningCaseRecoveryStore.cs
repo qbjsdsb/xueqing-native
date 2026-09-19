@@ -17,6 +17,17 @@ public interface ICreateLearningCaseRecoveryStore
         Guid sourceObservationId,
         CancellationToken cancellationToken = default);
 
+    Task<IReadOnlyList<CreateLearningCaseRequest>> ListPendingAsync(
+        Guid actorAppUserId,
+        IReadOnlyCollection<Guid> currentOrganizationIds,
+        CancellationToken cancellationToken = default);
+
+    Task MarkRejectedAsync(
+        Guid actorAppUserId,
+        Guid organizationId,
+        Guid operationId,
+        CancellationToken cancellationToken = default);
+
     Task RemoveAsync(
         Guid actorAppUserId,
         Guid organizationId,

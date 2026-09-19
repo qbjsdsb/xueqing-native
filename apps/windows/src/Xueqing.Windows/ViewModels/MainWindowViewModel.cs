@@ -21,6 +21,18 @@ public sealed record LearningCaseRecoveryLookup(
     bool IsAvailable,
     CreateLearningCaseRequest? Request);
 
+public sealed record PendingLearningCaseRecoveryItem(
+    CreateLearningCaseRequest Request,
+    string StudentDisplayName,
+    string SubjectDisplayName)
+{
+    public string Title => Request.Title;
+    public string PrimaryActionText => Request.PrimaryActionText;
+    public string DueLabel => Request.PrimaryActionDueOn is { } dueOn
+        ? dueOn.ToString("MM月dd日")
+        : "待安排";
+}
+
 public sealed class MainWindowViewModel : ObservableObject
 {
     private readonly PersonalStudentWorkspaceCoordinator? _personalWorkspace;
@@ -36,6 +48,7 @@ public sealed class MainWindowViewModel : ObservableObject
     private string _recentHistoryMoreText = string.Empty;
     private string _currentFocusStatusText = string.Empty;
     private string _todayStatusText = string.Empty;
+    private string _pendingLearningCaseRecoveryStatusText = string.Empty;
     private bool _initialized;
 
     public MainWindowViewModel()
@@ -58,6 +71,7 @@ public sealed class MainWindowViewModel : ObservableObject
         SelectedTeachingContexts = new ObservableCollection<TeachingContextOption>();
         RecentObservations = new ObservableCollection<StudentRecentObservation>();
         CurrentFocus = new ObservableCollection<LearningFocusDisplayItem>();
+        PendingLearningCaseRecoveries = new ObservableCollection<PendingLearningCaseRecoveryItem>();
         TodayActions = _personalWorkspace is null
             ? new ObservableCollection<TodayActionItem>(UxPrototypeFixtureFactory.CreateTodayActions())
             : new ObservableCollection<TodayActionItem>();
@@ -92,6 +106,8 @@ public sealed class MainWindowViewModel : ObservableObject
     public ObservableCollection<StudentRecentObservation> RecentObservations { get; }
 
     public ObservableCollection<LearningFocusDisplayItem> CurrentFocus { get; }
+
+    public ObservableCollection<PendingLearningCaseRecoveryItem> PendingLearningCaseRecoveries { get; }
 
     public bool IsAuthoritativeStudentWorkspace => _personalWorkspace is not null;
 
@@ -163,6 +179,12 @@ public sealed class MainWindowViewModel : ObservableObject
         private set => SetProperty(ref _todayStatusText, value);
     }
 
+    public string PendingLearningCaseRecoveryStatusText
+    {
+        get => _pendingLearningCaseRecoveryStatusText;
+        private set => SetProperty(ref _pendingLearningCaseRecoveryStatusText, value);
+    }
+
     public async Task InitializeAsync(CancellationToken cancellationToken = default)
     {
         if (_initialized)
@@ -191,6 +213,8 @@ public sealed class MainWindowViewModel : ObservableObject
         RecentObservations.Clear();
         CurrentFocus.Clear();
         TodayActions.Clear();
+        PendingLearningCaseRecoveries.Clear();
+        PendingLearningCaseRecoveryStatusText = string.Empty;
         _learningFocus?.Reset();
         _today?.Reset();
         SelectedTeachingContexts.Clear();
@@ -240,6 +264,7 @@ public sealed class MainWindowViewModel : ObservableObject
             CurrentFocusStatusText = "当前账号暂无有效任教学员。";
         }
 
+        await RefreshPendingLearningCaseRecoveriesAsync(state.Bootstrap, cancellationToken);
         await RefreshTodayAsync(state.Bootstrap.ActorAppUserId, cancellationToken);
     }
 
@@ -408,31 +433,11 @@ public sealed class MainWindowViewModel : ObservableObject
             bootstrap.ActorAppUserId,
             cancellationToken);
 
-        var mustKeepRecovery = result.Failure?.Kind is
-            CreateLearningCaseFailureKind.ResultUnknown or
-            CreateLearningCaseFailureKind.Transient;
-
-        if (!mustKeepRecovery)
-        {
-            try
-            {
-                await _createLearningCaseRecovery.RemoveAsync(
-                    bootstrap.ActorAppUserId,
-                    request.OrganizationId,
-                    request.OperationId,
-                    cancellationToken);
-            }
-            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-            {
-                throw;
-            }
-            catch
-            {
-                // A committed result remains authoritative. A stale local recovery
-                // row is safe because any future recovery retries the same
-                // operation_id and therefore cannot duplicate the Case.
-            }
-        }
+        result = await FinalizeLearningCaseRecoveryAsync(
+            bootstrap.ActorAppUserId,
+            request,
+            result,
+            cancellationToken);
 
         if (result.IsSuccess)
         {
@@ -448,6 +453,213 @@ public sealed class MainWindowViewModel : ObservableObject
             CreateLearningCaseFailureKind.AuthorityChanged)
         {
             await RefreshAuthoritativeStudentsAsync(cancellationToken);
+        }
+        else
+        {
+            // ResultUnknown / Transient must become discoverable in this same
+            // session immediately; deterministic failures must disappear after
+            // quarantine rather than waiting for a manual refresh or restart.
+            await RefreshPendingLearningCaseRecoveriesAsync(
+                bootstrap,
+                cancellationToken);
+        }
+
+        return result;
+    }
+
+    public async Task<CreateLearningCaseResult> RetryPendingLearningCaseAsync(
+        CreateLearningCaseRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        if (_personalWorkspace is null ||
+            _createLearningCase is null ||
+            _createLearningCaseRecovery is null)
+        {
+            return CreateLearningCaseResult.Failed(
+                CreateLearningCaseFailureKind.AuthorityChanged,
+                "XQ_CLIENT_TEACHING_CONTEXT_UNAVAILABLE");
+        }
+
+        var workspaceState = _personalWorkspace.Current;
+        var bootstrap = workspaceState.Status == PersonalStudentWorkspaceStatus.Ready
+            ? workspaceState.Bootstrap
+            : null;
+        if (bootstrap is null)
+        {
+            return CreateLearningCaseResult.Failed(
+                CreateLearningCaseFailureKind.AuthenticationRequired,
+                "XQ_CLIENT_BOOTSTRAP_UNAVAILABLE");
+        }
+
+        var result = await _createLearningCase.ExecuteAsync(
+            request,
+            bootstrap.ActorAppUserId,
+            cancellationToken);
+        result = await FinalizeLearningCaseRecoveryAsync(
+            bootstrap.ActorAppUserId,
+            request,
+            result,
+            cancellationToken);
+
+        if (result.IsSuccess ||
+            result.Failure?.Kind is
+                CreateLearningCaseFailureKind.AuthenticationRequired or
+                CreateLearningCaseFailureKind.AuthorityChanged)
+        {
+            await RefreshAuthoritativeStudentsAsync(cancellationToken);
+        }
+        else
+        {
+            await RefreshPendingLearningCaseRecoveriesAsync(
+                bootstrap,
+                cancellationToken);
+        }
+
+        return result;
+    }
+
+    private async Task RefreshPendingLearningCaseRecoveriesAsync(
+        PersonalBootstrapSnapshot bootstrap,
+        CancellationToken cancellationToken)
+    {
+        PendingLearningCaseRecoveries.Clear();
+        PendingLearningCaseRecoveryStatusText = string.Empty;
+
+        if (_createLearningCaseRecovery is null || _personalWorkspace is null)
+        {
+            return;
+        }
+
+        try
+        {
+            var currentOrganizationIds = bootstrap.Organizations
+                .Select(organization => organization.OrganizationId)
+                .Distinct()
+                .ToArray();
+            var pending = await _createLearningCaseRecovery.ListPendingAsync(
+                bootstrap.ActorAppUserId,
+                currentOrganizationIds,
+                cancellationToken);
+
+            foreach (var request in pending)
+            {
+                var context = bootstrap.TeachingContexts.FirstOrDefault(candidate =>
+                    candidate.OrganizationId == request.OrganizationId &&
+                    candidate.StudentId == request.StudentId &&
+                    candidate.SubjectProfileId == request.SubjectProfileId &&
+                    candidate.AssignmentId == request.OwnerAssignmentId);
+                var student = _personalWorkspace.Students.FirstOrDefault(candidate =>
+                    candidate.OrganizationId == request.OrganizationId &&
+                    candidate.StudentId == request.StudentId);
+
+                PendingLearningCaseRecoveries.Add(
+                    new PendingLearningCaseRecoveryItem(
+                        request,
+                        student?.DisplayName ?? "原任教学员",
+                        context is null
+                            ? "教学上下文已变化"
+                            : FormatSubjectKey(context.SubjectKey)));
+            }
+
+            if (PendingLearningCaseRecoveries.Count > 0)
+            {
+                PendingLearningCaseRecoveryStatusText =
+                    $"有 {PendingLearningCaseRecoveries.Count} 条提交结果尚未确认，请继续原操作确认结果。";
+            }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch
+        {
+            PendingLearningCaseRecoveries.Clear();
+            PendingLearningCaseRecoveryStatusText =
+                "本机待确认提交暂时无法读取。为避免重复创建，请先不要重新发起相同学情问题。";
+        }
+    }
+
+    private async Task<CreateLearningCaseResult> FinalizeLearningCaseRecoveryAsync(
+        Guid actorAppUserId,
+        CreateLearningCaseRequest request,
+        CreateLearningCaseResult result,
+        CancellationToken cancellationToken)
+    {
+        if (_createLearningCaseRecovery is null)
+        {
+            return result;
+        }
+
+        var mustKeepRecovery = result.Failure?.Kind is
+            CreateLearningCaseFailureKind.ResultUnknown or
+            CreateLearningCaseFailureKind.Transient;
+        if (mustKeepRecovery)
+        {
+            return result;
+        }
+
+        if (result.IsSuccess)
+        {
+            try
+            {
+                await _createLearningCaseRecovery.RemoveAsync(
+                    actorAppUserId,
+                    request.OrganizationId,
+                    request.OperationId,
+                    cancellationToken);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch
+            {
+                // A committed result remains authoritative. Leaving the exact
+                // operation pending is safe: the next explicit retry resolves
+                // the same operation_id and cannot duplicate the Case.
+            }
+
+            return result;
+        }
+
+        try
+        {
+            await _createLearningCaseRecovery.MarkRejectedAsync(
+                actorAppUserId,
+                request.OrganizationId,
+                request.OperationId,
+                cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch
+        {
+            return CreateLearningCaseResult.Failed(
+                CreateLearningCaseFailureKind.LocalDurabilityFailure,
+                "XQ_LOCAL_COMMAND_REJECTION_QUARANTINE_FAILED");
+        }
+
+        try
+        {
+            await _createLearningCaseRecovery.RemoveAsync(
+                actorAppUserId,
+                request.OrganizationId,
+                request.OperationId,
+                cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch
+        {
+            // The row is already quarantined from pending discovery. A later
+            // corrected Save for the same source removes rejected_cleanup
+            // rows transactionally before inserting the new intent.
         }
 
         return result;
