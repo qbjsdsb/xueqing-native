@@ -33,6 +33,7 @@ public enum CreateLearningCaseFailureKind
     AuthorityChanged,
     Validation,
     OperationConflict,
+    LocalDurabilityFailure,
     ResultUnknown,
     Transient,
     InvalidResponse,
