@@ -1,7 +1,7 @@
 schema_version: 1
 project: xueqing-native
 phase: phase-1
-milestone: learning-case-primary-action
+milestone: current-focus-today-projections
 status: active
 architecture_baseline: v1-accepted
 
@@ -20,6 +20,7 @@ frozen:
   cloud_development: ci-as-development-lab
   ai_continuity: github-is-engineering-source-of-truth
   offline_access_lease_v1: 72h-max-same-boot-monotonic-with-rollback-detection
+  organization_business_date: server-side-validated-timezone
 
 completed_gates:
   - windows-native-ux-prototype
@@ -35,10 +36,11 @@ completed_gates:
   - provider-identity-link-conformance
   - android-student-quick-capture-native-reference
   - offline-access-lease-duration-and-clock-rollback-spike
+  - learning-case-primary-action-vertical-slice
 
 open_gates:
   - provider-adapter-conformance-spike
-  - learning-case-primary-action-vertical-slice
+  - learning-case-current-focus-and-today-action-projections
   - production-provider-region-data-residency-gate
   - signing-and-recovery-gate
   - backup-storage-restore-gate
@@ -46,11 +48,14 @@ open_gates:
 next_execution:
   parallel_limit: 1
   lines:
-    - learning-case-primary-action-vertical-slice
-  after_current_green:
     - learning-case-current-focus-and-today-action-projections
+  after_current_green:
+    - windows-learning-read-model-adapters
 
 later:
+  - windows-observation-to-learning-case-ux
+  - action-reschedule-and-verification-next-action
+  - android-current-focus-lightweight-read
   - case-lifecycle-and-verification
   - evidence-attachment-staging
   - organization-management-vertical-slice
