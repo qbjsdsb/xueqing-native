@@ -31,13 +31,18 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import com.xueqing.app.application.bootstrap.PersonalTeachingContext
-import com.xueqing.app.application.learning.ActionDueBucket
-import com.xueqing.app.application.learning.LearningCaseState
-import com.xueqing.app.application.learning.PersonalTodayAction
 import com.xueqing.app.application.learning.StudentLearningCaseFocus
+import com.xueqing.app.presentation.design.EmptyMessage
+import com.xueqing.app.presentation.design.SectionTitle
+import com.xueqing.app.presentation.design.StatusMessage
 import com.xueqing.app.presentation.design.XueqingTheme
+import com.xueqing.app.presentation.design.caseStateLabel
+import com.xueqing.app.presentation.design.dueLabel
 import com.xueqing.app.presentation.shell.AppNavigationState
 import com.xueqing.app.presentation.shell.PrimaryDestination
+import com.xueqing.app.presentation.students.StudentRow
+import com.xueqing.app.presentation.students.studentStorageKey
+import com.xueqing.app.presentation.today.TodayScreen
 
 @Composable
 internal fun XueqingApp(
@@ -144,179 +149,6 @@ internal fun XueqingApp(
             }
         }
     }
-}
-
-@Composable
-private fun TodayScreen(
-    innerPadding: PaddingValues,
-    students: List<StudentDirectoryItem>,
-    directoryStatus: StudentDirectoryStatus,
-    todayState: TodayLearningUiState,
-    onQuickCapture: () -> Unit,
-    onOpenStudent: (String) -> Unit,
-) {
-    LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(innerPadding),
-        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 16.dp),
-    ) {
-        item {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text("今日", style = MaterialTheme.typography.headlineSmall)
-                TextButton(
-                    onClick = onQuickCapture,
-                    modifier = Modifier.testTag("today-quick-capture"),
-                ) {
-                    Text("记录")
-                }
-            }
-        }
-
-        item {
-            SectionTitle(
-                text = "待办行动",
-                modifier = Modifier.padding(top = 20.dp),
-            )
-        }
-
-        when (todayState.status) {
-            LearningReadStatus.Idle,
-            LearningReadStatus.Loading,
-            -> item { StatusMessage("正在读取今日行动…") }
-
-            LearningReadStatus.Empty -> item {
-                EmptyMessage("当前没有待办教学行动。")
-            }
-
-            LearningReadStatus.Data -> {
-                val actions = todayState.snapshot?.actions.orEmpty()
-                items(actions, key = { it.actionId.toString() }) { action ->
-                    TodayActionRow(
-                        action = action,
-                        onClick = {
-                            onOpenStudent(
-                                studentStorageKey(
-                                    action.organizationId.toString(),
-                                    action.studentId.toString(),
-                                ),
-                            )
-                        },
-                    )
-                }
-                if (todayState.snapshot?.hasMore == true) {
-                    item { StatusMessage("仅显示前 200 条待办行动。") }
-                }
-            }
-
-            LearningReadStatus.AuthenticationRequired -> item {
-                EmptyMessage("请登录后查看今日行动。")
-            }
-
-            LearningReadStatus.AccessDenied -> item {
-                EmptyMessage("当前教学权限已变化，未显示旧行动。")
-            }
-
-            LearningReadStatus.ServerInvariant -> item {
-                EmptyMessage("行动数据需要服务器校验，暂不展示。")
-            }
-
-            LearningReadStatus.TransientFailure -> item {
-                EmptyMessage("暂时无法刷新今日行动，可稍后再试。")
-            }
-
-            LearningReadStatus.ProtocolFailure -> item {
-                EmptyMessage("服务器返回无法验证，已拒绝显示行动。")
-            }
-        }
-
-        item {
-            SectionTitle(
-                text = "我的学生",
-                modifier = Modifier.padding(top = 28.dp),
-            )
-        }
-
-        when (directoryStatus) {
-            StudentDirectoryStatus.Loading -> item {
-                StatusMessage("正在读取学生…")
-            }
-
-            StudentDirectoryStatus.AuthenticationRequired -> item {
-                EmptyMessage("请登录后查看学生。")
-            }
-
-            StudentDirectoryStatus.Unavailable -> item {
-                EmptyMessage("暂时无法读取学生列表，请稍后再试。")
-            }
-
-            StudentDirectoryStatus.Ready -> {
-                if (students.isEmpty()) {
-                    item { EmptyMessage("还没有可用的教学学生。") }
-                } else {
-                    items(
-                        items = students.take(6),
-                        key = { it.key },
-                    ) { student ->
-                        StudentRow(
-                            student = student,
-                            onClick = { onOpenStudent(student.key) },
-                            testTag = "today-student-row-" + student.key,
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun TodayActionRow(
-    action: PersonalTodayAction,
-    onClick: () -> Unit,
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(role = Role.Button, onClick = onClick)
-            .testTag("today-action-" + action.actionId)
-            .padding(vertical = 14.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.Top,
-    ) {
-        Column(
-            modifier = Modifier
-                .weight(1f)
-                .padding(end = 12.dp),
-        ) {
-            Text(
-                text = action.actionText,
-                style = MaterialTheme.typography.titleMedium,
-            )
-            Text(
-                text = action.studentDisplayName + " · " + subjectLabelForKey(action.subjectKey),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 4.dp),
-            )
-            Text(
-                text = action.caseTitle,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 3.dp),
-            )
-        }
-        Text(
-            text = dueLabel(action.dueBucket, action.dueOn),
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
-    HorizontalDivider()
 }
 
 @Composable
@@ -661,96 +493,3 @@ private fun LearningScreen(
         }
     }
 }
-
-@Composable
-private fun SectionTitle(
-    text: String,
-    modifier: Modifier = Modifier,
-) {
-    Text(
-        text = text,
-        style = MaterialTheme.typography.titleMedium,
-        modifier = modifier.padding(bottom = 8.dp),
-    )
-}
-
-@Composable
-private fun EmptyMessage(text: String) {
-    Text(
-        text = text,
-        style = MaterialTheme.typography.bodyLarge,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.padding(vertical = 12.dp),
-    )
-}
-
-@Composable
-private fun StatusMessage(text: String) {
-    Text(
-        text = text,
-        style = MaterialTheme.typography.bodyMedium,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.padding(vertical = 12.dp),
-    )
-}
-
-@Composable
-private fun StudentRow(
-    student: StudentDirectoryItem,
-    onClick: () -> Unit,
-    testTag: String,
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(
-                role = Role.Button,
-                onClick = onClick,
-            )
-            .testTag(testTag)
-            .padding(vertical = 14.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(text = student.studentDisplayName, style = MaterialTheme.typography.titleMedium)
-            Text(
-                text = student.organizationName + " · " + student.subjectSummary,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 4.dp),
-            )
-        }
-        Text(
-            text = "查看",
-            style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.primary,
-        )
-    }
-    HorizontalDivider()
-}
-
-private fun dueLabel(
-    bucket: ActionDueBucket,
-    dueOn: java.time.LocalDate?,
-): String = when (bucket) {
-    ActionDueBucket.Overdue ->
-        dueOn?.let { "逾期 · " + it.monthValue + "月" + it.dayOfMonth + "日" } ?: "逾期"
-
-    ActionDueBucket.Today -> "今天"
-    ActionDueBucket.Undated -> "待安排"
-    ActionDueBucket.Future ->
-        dueOn?.let { it.monthValue.toString() + "月" + it.dayOfMonth + "日" } ?: "之后"
-}
-
-private fun caseStateLabel(state: LearningCaseState): String = when (state) {
-    LearningCaseState.New -> "新建"
-    LearningCaseState.Confirmed -> "已确认"
-    LearningCaseState.Intervening -> "跟进中"
-    LearningCaseState.PendingVerification -> "待验证"
-    LearningCaseState.Stable -> "稳定"
-}
-
-private fun studentStorageKey(
-    organizationId: String,
-    studentId: String,
-): String = organizationId + ":" + studentId
