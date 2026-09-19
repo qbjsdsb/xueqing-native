@@ -9,7 +9,7 @@ namespace Xueqing.Windows.Infrastructure.Sync;
 
 public sealed class SqliteCreateLearningCaseRecoveryStore
 {
-    private const long CurrentSchemaVersion = 1;
+    private const long CurrentSchemaVersion = 2;
     private const int DefaultBusyTimeoutSeconds = 5;
 
     private readonly EncryptedSqliteConnectionFactory _connectionFactory;
@@ -66,6 +66,10 @@ public sealed class SqliteCreateLearningCaseRecoveryStore
                 {
                     await CreateSchemaAsync(connection, transaction, cancellationToken);
                 }
+                else if (version == 1)
+                {
+                    await MigrateV1ToV2Async(connection, transaction, cancellationToken);
+                }
                 else if (version != CurrentSchemaVersion)
                 {
                     throw new InvalidOperationException(
@@ -93,6 +97,24 @@ public sealed class SqliteCreateLearningCaseRecoveryStore
 
         using var connection = await OpenConfiguredConnectionAsync(cancellationToken);
         using var transaction = connection.BeginTransaction(deferred: false);
+        using (var cleanupRejected = connection.CreateCommand())
+        {
+            cleanupRejected.Transaction = transaction;
+            cleanupRejected.CommandText = """
+                DELETE FROM pending_create_learning_case
+                WHERE organization_id = $organization_id
+                  AND student_id = $student_id
+                  AND subject_profile_id = $subject_profile_id
+                  AND source_observation_id = $source_observation_id
+                  AND disposition = 'rejected_cleanup';
+                """;
+            cleanupRejected.Parameters.AddWithValue("$organization_id", request.OrganizationId.ToString("D"));
+            cleanupRejected.Parameters.AddWithValue("$student_id", request.StudentId.ToString("D"));
+            cleanupRejected.Parameters.AddWithValue("$subject_profile_id", request.SubjectProfileId.ToString("D"));
+            cleanupRejected.Parameters.AddWithValue("$source_observation_id", request.SourceObservationId!.Value.ToString("D"));
+            await cleanupRejected.ExecuteNonQueryAsync(cancellationToken);
+        }
+
         using var insert = connection.CreateCommand();
         insert.Transaction = transaction;
         insert.CommandText = """
@@ -175,6 +197,7 @@ public sealed class SqliteCreateLearningCaseRecoveryStore
               AND student_id = $student_id
               AND subject_profile_id = $subject_profile_id
               AND source_observation_id = $source_observation_id
+              AND disposition = 'pending'
             LIMIT 1;
             """;
         command.Parameters.AddWithValue("$organization_id", organizationId.ToString("D"));
@@ -186,6 +209,56 @@ public sealed class SqliteCreateLearningCaseRecoveryStore
         return payload is null
             ? null
             : Deserialize(payload);
+    }
+
+    public async Task<IReadOnlyList<CreateLearningCaseRequest>> ListPendingAsync(
+        Guid organizationId,
+        CancellationToken cancellationToken = default)
+    {
+        RequireGuid(organizationId, nameof(organizationId));
+        await InitializeAsync(cancellationToken);
+
+        using var connection = await OpenConfiguredConnectionAsync(cancellationToken);
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT payload_json
+            FROM pending_create_learning_case
+            WHERE organization_id = $organization_id
+              AND disposition = 'pending'
+            ORDER BY saved_at_unix_ms, operation_id;
+            """;
+        command.Parameters.AddWithValue("$organization_id", organizationId.ToString("D"));
+
+        var pending = new List<CreateLearningCaseRequest>();
+        using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            pending.Add(Deserialize(reader.GetString(0)));
+        }
+
+        return pending;
+    }
+
+    public async Task MarkRejectedAsync(
+        Guid operationId,
+        CancellationToken cancellationToken = default)
+    {
+        RequireGuid(operationId, nameof(operationId));
+        await InitializeAsync(cancellationToken);
+
+        using var connection = await OpenConfiguredConnectionAsync(cancellationToken);
+        using var transaction = connection.BeginTransaction(deferred: false);
+        using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = """
+            UPDATE pending_create_learning_case
+            SET disposition = 'rejected_cleanup'
+            WHERE operation_id = $operation_id
+              AND disposition = 'pending';
+            """;
+        command.Parameters.AddWithValue("$operation_id", operationId.ToString("D"));
+        await command.ExecuteNonQueryAsync(cancellationToken);
+        transaction.Commit();
     }
 
     public async Task RemoveAsync(
@@ -245,7 +318,9 @@ public sealed class SqliteCreateLearningCaseRecoveryStore
                 subject_profile_id TEXT NOT NULL,
                 source_observation_id TEXT NOT NULL,
                 payload_json TEXT NOT NULL CHECK(length(payload_json) > 0),
-                saved_at_unix_ms INTEGER NOT NULL
+                saved_at_unix_ms INTEGER NOT NULL,
+                disposition TEXT NOT NULL DEFAULT 'pending'
+                    CHECK(disposition IN ('pending', 'rejected_cleanup'))
             ) STRICT;
 
             CREATE UNIQUE INDEX ux_pending_create_learning_case_source
@@ -256,7 +331,24 @@ public sealed class SqliteCreateLearningCaseRecoveryStore
                     source_observation_id
                 );
 
-            PRAGMA user_version = 1;
+            PRAGMA user_version = 2;
+            """;
+        await command.ExecuteNonQueryAsync(cancellationToken);
+    }
+
+    private static async Task MigrateV1ToV2Async(
+        SqliteConnection connection,
+        SqliteTransaction transaction,
+        CancellationToken cancellationToken)
+    {
+        using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = """
+            ALTER TABLE pending_create_learning_case
+                ADD COLUMN disposition TEXT NOT NULL DEFAULT 'pending'
+                    CHECK(disposition IN ('pending', 'rejected_cleanup'));
+
+            PRAGMA user_version = 2;
             """;
         await command.ExecuteNonQueryAsync(cancellationToken);
     }
