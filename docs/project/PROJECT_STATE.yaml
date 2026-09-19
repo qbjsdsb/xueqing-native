@@ -1,7 +1,7 @@
 schema_version: 1
 project: xueqing-native
 phase: phase-1
-milestone: action-reschedule-verification-next-action
+milestone: android-current-focus-today-lightweight-read
 status: active
 architecture_baseline: v1-accepted
 
@@ -40,10 +40,11 @@ completed_gates:
   - learning-case-current-focus-and-today-action-projections
   - windows-learning-read-model-adapters
   - windows-observation-to-learning-case-ux
+  - action-reschedule-and-verification-next-action
+  - windows-action-progression-ux
 
 open_gates:
   - provider-adapter-conformance-spike
-  - action-reschedule-and-verification-next-action
   - production-provider-region-data-residency-gate
   - signing-and-recovery-gate
   - backup-storage-restore-gate
@@ -51,13 +52,11 @@ open_gates:
 next_execution:
   parallel_limit: 1
   lines:
-    - action-reschedule-and-verification-next-action
+    - android-current-focus-lightweight-read
   after_current_green:
-    - windows-action-progression-ux
+    - case-lifecycle-and-verification
 
 later:
-  - android-current-focus-lightweight-read
-  - case-lifecycle-and-verification
   - evidence-attachment-staging
   - organization-management-vertical-slice
   - provider-projection-conformance
