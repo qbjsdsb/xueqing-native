@@ -1,5 +1,7 @@
 using Xueqing.Windows.Core.Services;
+using Windows.Storage;
 using Xueqing.Windows.Infrastructure.Remote;
+using Xueqing.Windows.LocalData;
 
 namespace Xueqing.Windows.Integration;
 
@@ -71,6 +73,9 @@ internal static class LocalReferenceProviderTeachingWorkspaceFactory
             projectUri,
             apiKey,
             AccessTokenProvider);
+        var createLearningCaseRecovery = new WindowsCreateLearningCaseRecoveryStore(
+            projectUri.GetLeftPart(UriPartial.Authority),
+            ApplicationData.Current);
 
         return new PersonalTeachingWorkspaceServices(
             new PersonalStudentWorkspaceCoordinator(
@@ -78,6 +83,7 @@ internal static class LocalReferenceProviderTeachingWorkspaceFactory
                 new StudentRecentObservationsCoordinator(recentReader)),
             new StudentLearningFocusCoordinator(focusReader),
             new PersonalTodayActionsCoordinator(todayReader),
-            createLearningCase);
+            createLearningCase,
+            createLearningCaseRecovery);
     }
 }
