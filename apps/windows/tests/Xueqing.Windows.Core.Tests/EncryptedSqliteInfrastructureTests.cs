@@ -82,6 +82,60 @@ public sealed class EncryptedSqliteInfrastructureTests
     }
 
     [TestMethod]
+    public async Task Read_only_factory_never_creates_missing_database_and_rejects_writes()
+    {
+        var databasePath = CreateDatabasePath();
+        var masterKey = SHA256.HashData(
+            Encoding.UTF8.GetBytes("fictional-xueqing-read-only-key-v1"));
+
+        try
+        {
+            var factory = new EncryptedSqliteConnectionFactory(
+                databasePath,
+                masterKey);
+
+            await Assert.ThrowsExactlyAsync<FileNotFoundException>(
+                () => factory.OpenReadOnlyAsync());
+            Assert.IsFalse(File.Exists(databasePath));
+
+            await using (var writable = await factory.OpenAsync())
+            {
+                await using var create = writable.CreateCommand();
+                create.CommandText = """
+                    CREATE TABLE readonly_probe (
+                        id INTEGER PRIMARY KEY,
+                        value TEXT NOT NULL
+                    );
+                    INSERT INTO readonly_probe (id, value)
+                    VALUES (1, 'fictional-read-only-value');
+                    """;
+                await create.ExecuteNonQueryAsync();
+            }
+
+            await using var readOnly = await factory.OpenReadOnlyAsync();
+            await using (var read = readOnly.CreateCommand())
+            {
+                read.CommandText =
+                    "SELECT value FROM readonly_probe WHERE id = 1;";
+                Assert.AreEqual(
+                    "fictional-read-only-value",
+                    await read.ExecuteScalarAsync());
+            }
+
+            await using var forbiddenWrite = readOnly.CreateCommand();
+            forbiddenWrite.CommandText =
+                "UPDATE readonly_probe SET value = 'must-not-write' WHERE id = 1;";
+            var exception = await Assert.ThrowsExactlyAsync<Microsoft.Data.Sqlite.SqliteException>(
+                () => forbiddenWrite.ExecuteNonQueryAsync());
+            Assert.AreEqual(8, exception.SqliteErrorCode);
+        }
+        finally
+        {
+            CryptographicOperations.ZeroMemory(masterKey);
+        }
+    }
+
+    [TestMethod]
     public async Task Durable_outbox_payload_is_encrypted_and_survives_reopen_with_same_key()
     {
         var databasePath = CreateDatabasePath();

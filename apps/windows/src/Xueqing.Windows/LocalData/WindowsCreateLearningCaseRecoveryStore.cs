@@ -13,6 +13,8 @@ internal sealed class WindowsCreateLearningCaseRecoveryStore :
     private readonly ApplicationData _applicationData;
     private readonly ConcurrentDictionary<Guid, SqliteCreateLearningCaseRecoveryIndex> _indexes = new();
     private readonly ConcurrentDictionary<(Guid ActorId, Guid OrganizationId), SqliteCreateLearningCaseRecoveryStore> _stores = new();
+    private readonly ConcurrentDictionary<Guid, SemaphoreSlim> _legacyMigrationGates = new();
+    private readonly ConcurrentDictionary<Guid, byte> _legacyMigrationCompleted = new();
 
     public WindowsCreateLearningCaseRecoveryStore(
         string environmentId,
@@ -72,6 +74,10 @@ internal sealed class WindowsCreateLearningCaseRecoveryStore :
         ArgumentNullException.ThrowIfNull(currentOrganizationIds);
 
         var index = GetIndex(actorAppUserId);
+        await MigrateLegacyRecoveryScopesAsync(
+            actorAppUserId,
+            index,
+            cancellationToken);
 
         // Current organizations are migration/backfill hints only. Discovery
         // subsequently uses the durable actor index, so a later membership
@@ -121,6 +127,113 @@ internal sealed class WindowsCreateLearningCaseRecoveryStore :
         CancellationToken cancellationToken = default) =>
         GetStore(actorAppUserId, organizationId)
             .RemoveAsync(operationId, cancellationToken);
+
+    private async Task MigrateLegacyRecoveryScopesAsync(
+        Guid actorAppUserId,
+        SqliteCreateLearningCaseRecoveryIndex index,
+        CancellationToken cancellationToken)
+    {
+        if (_legacyMigrationCompleted.ContainsKey(actorAppUserId))
+        {
+            return;
+        }
+
+        var gate = _legacyMigrationGates.GetOrAdd(
+            actorAppUserId,
+            static _ => new SemaphoreSlim(1, 1));
+        await gate.WaitAsync(cancellationToken);
+        try
+        {
+            if (_legacyMigrationCompleted.ContainsKey(actorAppUserId))
+            {
+                return;
+            }
+
+            var actorScope = WindowsActorLocalDataScope.Create(
+                _applicationData,
+                _environmentId,
+                actorAppUserId.ToString("D"));
+            var candidates =
+                WindowsLocalStatePaths.EnumerateLegacyOnlineCommandRecoveryDatabasePaths(
+                    _applicationData.LocalFolder,
+                    actorScope.InstallationId);
+
+            foreach (var databasePath in candidates)
+            {
+                IReadOnlyList<Guid> candidateOrganizationIds;
+                try
+                {
+                    var candidateStore =
+                        new SqliteCreateLearningCaseRecoveryStore(databasePath);
+                    candidateOrganizationIds =
+                        await candidateStore.InspectStoredOrganizationIdsAsync(
+                            cancellationToken);
+                }
+                catch (OperationCanceledException)
+                    when (cancellationToken.IsCancellationRequested)
+                {
+                    throw;
+                }
+                catch
+                {
+                    // Legacy discovery is best-effort per candidate. A damaged,
+                    // foreign or otherwise unreadable store must not prevent
+                    // already-indexed authoritative recoveries from loading.
+                    continue;
+                }
+
+                foreach (var organizationId in candidateOrganizationIds)
+                {
+                    var candidateScope = new WindowsLocalDataScope(
+                        _environmentId,
+                        actorAppUserId.ToString("D"),
+                        organizationId.ToString("D"),
+                        actorScope.InstallationId);
+
+                    if (!WindowsLocalStatePaths.MatchesOrganizationRecoveryScope(
+                            databasePath,
+                            candidateScope))
+                    {
+                        continue;
+                    }
+
+                    try
+                    {
+                        // Ownership is now proven by the deterministic path.
+                        // Before making the scope durable in the actor index,
+                        // perform the same initialization/migration and payload
+                        // deserialization that normal indexed loading will use.
+                        // A damaged legacy store is therefore isolated here and
+                        // cannot poison all future recovery enumeration.
+                        var ownedCandidateStore =
+                            new SqliteCreateLearningCaseRecoveryStore(databasePath);
+                        _ = await ownedCandidateStore.ListPendingAsync(
+                            organizationId,
+                            cancellationToken);
+                    }
+                    catch (OperationCanceledException)
+                        when (cancellationToken.IsCancellationRequested)
+                    {
+                        throw;
+                    }
+                    catch
+                    {
+                        continue;
+                    }
+
+                    await index.RegisterOrganizationAsync(
+                        organizationId,
+                        cancellationToken);
+                }
+            }
+
+            _legacyMigrationCompleted.TryAdd(actorAppUserId, 0);
+        }
+        finally
+        {
+            gate.Release();
+        }
+    }
 
     private SqliteCreateLearningCaseRecoveryIndex GetIndex(Guid actorAppUserId)
     {

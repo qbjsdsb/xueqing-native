@@ -48,6 +48,26 @@ public sealed class CreateLearningCaseRecoveryStoreTests
         await CreateV1DatabaseAsync(path, request);
 
         var migrated = new SqliteCreateLearningCaseRecoveryStore(path, TestMasterKey);
+
+        var inspectedOrganizations =
+            await migrated.InspectStoredOrganizationIdsAsync();
+        CollectionAssert.AreEqual(
+            new[] { request.OrganizationId },
+            inspectedOrganizations.ToArray());
+
+        var preMigrationFactory =
+            new EncryptedSqliteConnectionFactory(path, TestMasterKey);
+        using (var preMigrationConnection =
+               await preMigrationFactory.OpenAsync())
+        using (var preMigrationCommand = preMigrationConnection.CreateCommand())
+        {
+            preMigrationCommand.CommandText = "PRAGMA user_version;";
+            Assert.AreEqual(
+                1L,
+                Convert.ToInt64(
+                    await preMigrationCommand.ExecuteScalarAsync()));
+        }
+
         var pending = await migrated.ListPendingAsync(request.OrganizationId);
 
         Assert.AreEqual(1, pending.Count);
@@ -65,6 +85,77 @@ public sealed class CreateLearningCaseRecoveryStoreTests
         using var command = connection.CreateCommand();
         command.CommandText = "PRAGMA user_version;";
         Assert.AreEqual(2L, Convert.ToInt64(await command.ExecuteScalarAsync()));
+    }
+
+    [TestMethod]
+    public async Task Legacy_candidate_can_expose_scope_but_normal_load_rejects_corrupt_payload()
+    {
+        var path = CreateDatabasePath();
+        var request = Request();
+        await CreateV1DatabaseAsync(path, request);
+
+        var factory = new EncryptedSqliteConnectionFactory(path, TestMasterKey);
+        await using (var connection = await factory.OpenAsync())
+        await using (var corrupt = connection.CreateCommand())
+        {
+            corrupt.CommandText = """
+                UPDATE pending_create_learning_case
+                SET payload_json = '{not-valid-json'
+                WHERE operation_id = $operation_id;
+                """;
+            corrupt.Parameters.AddWithValue(
+                "$operation_id",
+                request.OperationId.ToString("D"));
+            await corrupt.ExecuteNonQueryAsync();
+        }
+
+        var candidate =
+            new SqliteCreateLearningCaseRecoveryStore(path, TestMasterKey);
+
+        CollectionAssert.AreEqual(
+            new[] { request.OrganizationId },
+            (await candidate.InspectStoredOrganizationIdsAsync()).ToArray());
+
+        await Assert.ThrowsExactlyAsync<System.Text.Json.JsonException>(
+            () => candidate.ListPendingAsync(request.OrganizationId));
+    }
+
+    [TestMethod]
+    public void Organization_scope_identity_is_deterministic_and_actor_isolated()
+    {
+        const string environment = "production-eu";
+        const string actorA = "10000000-0000-0000-0000-000000000001";
+        const string actorB = "10000000-0000-0000-0000-000000000002";
+        const string organization = "20000000-0000-0000-0000-000000000001";
+
+        var first =
+            WindowsLocalScopeIdentity.ComputeOrganizationScopeDirectoryName(
+                environment,
+                actorA,
+                organization);
+        var repeated =
+            WindowsLocalScopeIdentity.ComputeOrganizationScopeDirectoryName(
+                environment,
+                actorA,
+                organization);
+        var otherActor =
+            WindowsLocalScopeIdentity.ComputeOrganizationScopeDirectoryName(
+                environment,
+                actorB,
+                organization);
+        var otherEnvironment =
+            WindowsLocalScopeIdentity.ComputeOrganizationScopeDirectoryName(
+                "staging",
+                actorA,
+                organization);
+
+        Assert.AreEqual(first, repeated);
+        Assert.AreNotEqual(first, otherActor);
+        Assert.AreNotEqual(first, otherEnvironment);
+        Assert.AreEqual(32, first.Length);
+        Assert.IsTrue(first.All(character =>
+            char.IsAsciiHexDigit(character) &&
+            !char.IsUpper(character)));
     }
 
     [TestMethod]
