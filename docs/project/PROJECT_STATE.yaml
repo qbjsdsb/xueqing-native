@@ -1,7 +1,7 @@
 schema_version: 1
 project: xueqing-native
 phase: phase-1
-milestone: native-presentation-evolvability-foundation
+milestone: case-lifecycle-and-verification
 status: active
 architecture_baseline: v1-accepted
 
@@ -53,9 +53,9 @@ open_gates:
 next_execution:
   parallel_limit: 1
   lines:
-    - native-presentation-evolvability-foundation
-  after_current_green:
     - case-lifecycle-and-verification
+  after_current_green:
+    - evidence-attachment-staging
 
 later:
   - evidence-attachment-staging
