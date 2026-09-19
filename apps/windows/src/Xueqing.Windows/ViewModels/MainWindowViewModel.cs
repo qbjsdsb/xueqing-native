@@ -12,7 +12,11 @@ public sealed record TeachingContextOption(
 
 public sealed class MainWindowViewModel : ObservableObject
 {
+    private readonly PersonalTeachingWorkspaceServices? _teachingWorkspace;
     private readonly PersonalStudentWorkspaceCoordinator? _personalWorkspace;
+    private readonly StudentLearningFocusCoordinator? _learningFocus;
+    private readonly PersonalTodayActionsCoordinator? _today;
+    private readonly ICreateLearningCaseCommand? _createLearningCase;
     private readonly List<StudentSummary> _allStudents;
     private readonly Dictionary<string, PersonalStudentWorkspaceItem> _authoritativeStudents = new(StringComparer.Ordinal);
     private StudentSummary? _selectedStudent;
@@ -26,10 +30,14 @@ public sealed class MainWindowViewModel : ObservableObject
     {
     }
 
-    public MainWindowViewModel(PersonalStudentWorkspaceCoordinator? personalWorkspace)
+    public MainWindowViewModel(PersonalTeachingWorkspaceServices? teachingWorkspace)
     {
-        _personalWorkspace = personalWorkspace;
-        _allStudents = personalWorkspace is null
+        _teachingWorkspace = teachingWorkspace;
+        _personalWorkspace = teachingWorkspace?.Students;
+        _learningFocus = teachingWorkspace?.LearningFocus;
+        _today = teachingWorkspace?.Today;
+        _createLearningCase = teachingWorkspace?.CreateLearningCase;
+        _allStudents = _personalWorkspace is null
             ? SyntheticDataFactory.CreateStudents(1_000).ToList()
             : new List<StudentSummary>();
         Students = new ObservableCollection<StudentSummary>(_allStudents);
@@ -40,7 +48,7 @@ public sealed class MainWindowViewModel : ObservableObject
         LearningCase = UxPrototypeFixtureFactory.CreateLearningCase();
         _selectedStudent = Students.FirstOrDefault();
 
-        if (personalWorkspace is null)
+        if (_personalWorkspace is null)
         {
             _recentObservationsStatusText = "UX 原型记录，仅用于布局与交互验证。";
         }
