@@ -68,6 +68,44 @@ public sealed class CreateLearningCaseRecoveryStoreTests
     }
 
     [TestMethod]
+    public async Task Actor_recovery_index_survives_reopen_and_is_encrypted()
+    {
+        var path = CreateIndexDatabasePath();
+        var firstOrganization = Guid.Parse("20000000-0000-0000-0000-000000000001");
+        var removedOrganization = Guid.Parse("20000000-0000-0000-0000-000000000099");
+
+        var first = new SqliteCreateLearningCaseRecoveryIndex(path, TestMasterKey);
+        await first.RegisterOrganizationAsync(firstOrganization);
+        await first.RegisterOrganizationAsync(removedOrganization);
+        await first.RegisterOrganizationAsync(firstOrganization);
+
+        var reopened = new SqliteCreateLearningCaseRecoveryIndex(path, TestMasterKey);
+        CollectionAssert.AreEqual(
+            new[] { firstOrganization, removedOrganization },
+            (await reopened.ListOrganizationsAsync()).ToArray());
+
+        var databaseText = Encoding.UTF8.GetString(await File.ReadAllBytesAsync(path));
+        Assert.IsFalse(databaseText.Contains(
+            firstOrganization.ToString("D"),
+            StringComparison.OrdinalIgnoreCase));
+        Assert.IsFalse(databaseText.Contains(
+            removedOrganization.ToString("D"),
+            StringComparison.OrdinalIgnoreCase));
+
+        var walPath = path + "-wal";
+        if (File.Exists(walPath))
+        {
+            var walText = Encoding.UTF8.GetString(await File.ReadAllBytesAsync(walPath));
+            Assert.IsFalse(walText.Contains(
+                firstOrganization.ToString("D"),
+                StringComparison.OrdinalIgnoreCase));
+            Assert.IsFalse(walText.Contains(
+                removedOrganization.ToString("D"),
+                StringComparison.OrdinalIgnoreCase));
+        }
+    }
+
+    [TestMethod]
     public async Task Pending_intents_are_enumerable_without_recent_observation_projection()
     {
         var store = new SqliteCreateLearningCaseRecoveryStore(
@@ -252,6 +290,16 @@ public sealed class CreateLearningCaseRecoveryStoreTests
             "下节课用陌生材料复核三道题",
             new DateOnly(2026, 9, 20),
             Guid.Parse("60000000-0000-0000-0000-000000000001"));
+
+    private static string CreateIndexDatabasePath()
+    {
+        var directory = Path.Combine(
+            Path.GetTempPath(),
+            "xueqing-native-tests",
+            Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        return Path.Combine(directory, "online-command-recovery-index.db");
+    }
 
     private static string CreateDatabasePath()
     {
