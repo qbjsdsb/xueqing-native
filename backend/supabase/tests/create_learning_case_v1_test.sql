@@ -122,7 +122,7 @@ select set_config(
 
 set local role authenticated;
 select lives_ok(
-    $
+    $$
     select public.create_learning_case(
         '92000000-0000-0000-0000-000000000001',
         '20000000-0000-0000-0000-000000000001',
