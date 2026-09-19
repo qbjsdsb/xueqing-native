@@ -11,6 +11,9 @@ Expected families include:
 - version_conflict / stale_plan;
 - operation_unknown / operation_committed;
 - offline_lease_expired;
-- validation_failed.
+- validation_failed;
+- invalid_case_transition / invalid_case_target_state;
+- case_not_stable / case_not_closed / case_closed;
+- primary_action_required / closed_case_has_pending_action.
 
 Provider exception strings must not leak through as product contracts.
