@@ -16,9 +16,9 @@ insert into public.identity_links (
     ('10000000-0000-0000-0000-000000000002', 'supabase', 'supabase-demo', 'a0000000-0000-0000-0000-000000000002', true),
     ('10000000-0000-0000-0000-000000000003', 'supabase', 'supabase-demo', 'a0000000-0000-0000-0000-000000000003', true);
 
-insert into public.organizations (id, name) values
-    ('20000000-0000-0000-0000-000000000001', '虚构机构甲'),
-    ('20000000-0000-0000-0000-000000000002', '虚构机构乙');
+insert into public.organizations (id, name, time_zone) values
+    ('20000000-0000-0000-0000-000000000001', '虚构机构甲', 'Asia/Shanghai'),
+    ('20000000-0000-0000-0000-000000000002', '虚构机构乙', 'America/New_York');
 
 insert into public.memberships (
     organization_id,
