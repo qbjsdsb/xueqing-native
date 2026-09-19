@@ -686,6 +686,7 @@ public sealed class MainWindowViewModel : ObservableObject
         await HandleActionProgressionResultAsync(
             bootstrap,
             target,
+            null,
             result.IsSuccess,
             result.Failure,
             cancellationToken);
@@ -742,6 +743,7 @@ public sealed class MainWindowViewModel : ObservableObject
         await HandleActionProgressionResultAsync(
             bootstrap,
             target,
+            null,
             result.IsSuccess,
             result.Failure,
             cancellationToken);
@@ -811,6 +813,7 @@ public sealed class MainWindowViewModel : ObservableObject
         await HandleActionProgressionResultAsync(
             bootstrap,
             target,
+            intent,
             success,
             failure,
             cancellationToken);
@@ -821,6 +824,7 @@ public sealed class MainWindowViewModel : ObservableObject
     private async Task HandleActionProgressionResultAsync(
         PersonalBootstrapSnapshot bootstrap,
         ActionProgressionTarget? target,
+        ActionProgressionRecoveryIntent? recoveryIntent,
         bool isSuccess,
         ActionProgressionFailure? failure,
         CancellationToken cancellationToken)
@@ -838,6 +842,7 @@ public sealed class MainWindowViewModel : ObservableObject
             await RefreshActionProgressionProjectionsAsync(
                 bootstrap.ActorAppUserId,
                 target,
+                recoveryIntent,
                 cancellationToken);
         }
 
@@ -849,19 +854,28 @@ public sealed class MainWindowViewModel : ObservableObject
     private async Task RefreshActionProgressionProjectionsAsync(
         Guid actorAppUserId,
         ActionProgressionTarget? target,
+        ActionProgressionRecoveryIntent? recoveryIntent,
         CancellationToken cancellationToken)
     {
         var todayTask = RefreshTodayAsync(actorAppUserId, cancellationToken);
         Task<StudentLearningFocusViewState>? focusTask = null;
         var selected = SelectedTeachingContext;
 
-        if (target is not null &&
+        var organizationId = target?.OrganizationId ?? recoveryIntent?.OrganizationId;
+        var studentId = target?.StudentId ?? recoveryIntent?.StudentId;
+        var subjectProfileId = target?.SubjectProfileId ?? recoveryIntent?.SubjectProfileId;
+        var assignmentId = target?.OwnerAssignmentId ?? recoveryIntent?.OwnerAssignmentId;
+
+        if (organizationId is not null &&
+            studentId is not null &&
+            subjectProfileId is not null &&
+            assignmentId is not null &&
             selected is not null &&
             _learningFocus is not null &&
-            selected.Context.OrganizationId == target.OrganizationId &&
-            selected.Context.StudentId == target.StudentId &&
-            selected.Context.SubjectProfileId == target.SubjectProfileId &&
-            selected.Context.AssignmentId == target.OwnerAssignmentId)
+            selected.Context.OrganizationId == organizationId.Value &&
+            selected.Context.StudentId == studentId.Value &&
+            selected.Context.SubjectProfileId == subjectProfileId.Value &&
+            selected.Context.AssignmentId == assignmentId.Value)
         {
             focusTask = _learningFocus.LoadAsync(
                 ToLearningScope(selected.Context),
