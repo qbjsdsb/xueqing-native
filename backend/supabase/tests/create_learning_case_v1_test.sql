@@ -109,9 +109,20 @@ select lives_ok(
 );
 reset role;
 
+select set_config(
+    'xq.test.source_observation_id',
+    (
+        select observation.id::text
+        from public.observations as observation
+        where observation.operation_id =
+            '91000000-0000-0000-0000-000000000001'::uuid
+    ),
+    true
+);
+
 set local role authenticated;
 select lives_ok(
-    $$
+    $
     select public.create_learning_case(
         '92000000-0000-0000-0000-000000000001',
         '20000000-0000-0000-0000-000000000001',
@@ -121,12 +132,7 @@ select lives_ok(
         '信息提取与概括仍不稳定',
         '下节课用三道陌生材料重新检查概括压缩',
         '2026-09-22'::date,
-        (
-            select observation.id
-            from public.observations as observation
-            where observation.operation_id =
-                '91000000-0000-0000-0000-000000000001'::uuid
-        )
+        current_setting('xq.test.source_observation_id')::uuid
     )
     $$,
     'valid assigned teacher atomically creates Case + primary Action'
@@ -278,12 +284,7 @@ select lives_ok(
         '  信息提取与概括仍不稳定  ',
         '  下节课用三道陌生材料重新检查概括压缩  ',
         '2026-09-22'::date,
-        (
-            select observation.id
-            from public.observations as observation
-            where observation.operation_id =
-                '91000000-0000-0000-0000-000000000001'::uuid
-        )
+        current_setting('xq.test.source_observation_id')::uuid
     )
     $$,
     'same operation_id and normalized payload replays the committed receipt'
@@ -495,12 +496,7 @@ select throws_ok(
         '强制失败不能留下半个 Case',
         '强制失败不能留下半个行动',
         null,
-        (
-            select observation.id
-            from public.observations as observation
-            where observation.operation_id =
-                '91000000-0000-0000-0000-000000000001'::uuid
-        )
+        current_setting('xq.test.source_observation_id')::uuid
     )
     $$,
     'P0001',
