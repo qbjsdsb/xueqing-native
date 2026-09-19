@@ -36,6 +36,7 @@ import com.xueqing.app.application.learning.LearningCaseState
 import com.xueqing.app.application.learning.PersonalTodayAction
 import com.xueqing.app.application.learning.StudentLearningCaseFocus
 import com.xueqing.app.presentation.design.XueqingTheme
+import com.xueqing.app.presentation.shell.AppNavigationState
 import com.xueqing.app.presentation.shell.PrimaryDestination
 
 @Composable
@@ -59,26 +60,20 @@ internal fun XueqingApp(
     }
 
     XueqingTheme {
-        var selectedName by rememberSaveable { mutableStateOf(PrimaryDestination.Today.name) }
-        var selectedStudentKey by rememberSaveable { mutableStateOf<String?>(null) }
-        var showingQuickCapture by rememberSaveable { mutableStateOf(startInQuickCapture) }
-        val selected = PrimaryDestination.entries.firstOrNull { it.name == selectedName }
-            ?: PrimaryDestination.Today
-        val selectedStudent = directoryState.students.firstOrNull { it.key == selectedStudentKey }
+        val navigation = AppNavigationState.remember(startInQuickCapture)
+        val selectedStudent = directoryState.students.firstOrNull {
+            it.key == navigation.selectedStudentKey
+        }
 
-        if (showingQuickCapture) {
+        if (navigation.isQuickCaptureOpen) {
             QuickCaptureScreen(
                 state = quickCaptureState,
                 onTextChanged = quickCaptureViewModel::onTextChanged,
                 onClose = {
                     quickCaptureViewModel.flushNow()
-                    showingQuickCapture = false
+                    navigation.closeQuickCapture()
                 },
-                onChooseStudent = {
-                    showingQuickCapture = false
-                    selectedName = PrimaryDestination.Students.name
-                    selectedStudentKey = null
-                },
+                onChooseStudent = navigation::chooseStudentFromQuickCapture,
                 onDiscard = quickCaptureViewModel::discard,
                 onSubmit = quickCaptureViewModel::submit,
             )
@@ -87,7 +82,7 @@ internal fun XueqingApp(
                 student = selectedStudent,
                 actorAppUserId = directoryState.actorAppUserId,
                 focusState = learningState.focus,
-                onBack = { selectedStudentKey = null },
+                onBack = navigation::closeStudent,
                 onLoadFocus = { context ->
                     directoryState.actorAppUserId?.let { actorId ->
                         learningReadViewModel.loadFocus(context, actorId)
@@ -95,7 +90,7 @@ internal fun XueqingApp(
                 },
                 onQuickCapture = { context ->
                     quickCaptureViewModel.selectTeachingContext(context)
-                    showingQuickCapture = true
+                    navigation.openQuickCapture()
                 },
             )
         } else {
@@ -104,11 +99,8 @@ internal fun XueqingApp(
                     NavigationBar {
                         PrimaryDestination.entries.forEach { destination ->
                             NavigationBarItem(
-                                selected = selected == destination,
-                                onClick = {
-                                    selectedName = destination.name
-                                    selectedStudentKey = null
-                                },
+                                selected = navigation.destination == destination,
+                                onClick = { navigation.selectDestination(destination) },
                                 icon = {
                                     Text(
                                         text = destination.bootstrapGlyph,
@@ -121,7 +113,7 @@ internal fun XueqingApp(
                     }
                 },
             ) { innerPadding ->
-                when (selected) {
+                when (navigation.destination) {
                     PrimaryDestination.Today -> TodayScreen(
                         innerPadding = innerPadding,
                         students = directoryState.students,
@@ -129,29 +121,23 @@ internal fun XueqingApp(
                         todayState = learningState.today,
                         onQuickCapture = {
                             quickCaptureViewModel.prepareForUnscopedCapture()
-                            showingQuickCapture = true
+                            navigation.openQuickCapture()
                         },
-                        onOpenStudent = { key ->
-                            selectedName = PrimaryDestination.Students.name
-                            selectedStudentKey = key
-                        },
+                        onOpenStudent = navigation::openStudent,
                     )
 
                     PrimaryDestination.Students -> StudentsScreen(
                         innerPadding = innerPadding,
                         state = directoryState,
-                        onOpenStudent = { selectedStudentKey = it },
+                        onOpenStudent = navigation::openStudent,
                     )
 
                     PrimaryDestination.Learning -> LearningScreen(
                         innerPadding = innerPadding,
                         focusState = learningState.focus,
-                        onOpenStudent = { key ->
-                            selectedName = PrimaryDestination.Students.name
-                            selectedStudentKey = key
-                        },
+                        onOpenStudent = navigation::openStudent,
                         onOpenStudents = {
-                            selectedName = PrimaryDestination.Students.name
+                            navigation.selectDestination(PrimaryDestination.Students)
                         },
                     )
                 }
