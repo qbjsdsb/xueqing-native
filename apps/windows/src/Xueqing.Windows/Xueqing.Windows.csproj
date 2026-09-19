@@ -35,5 +35,6 @@
   <ItemGroup>
     <ProjectReference Include="..\Xueqing.Windows.Core\Xueqing.Windows.Core.csproj" />
     <ProjectReference Include="..\Xueqing.Windows.Infrastructure\Xueqing.Windows.Infrastructure.csproj" />
+    <ProjectReference Include="..\Xueqing.Windows.Presentation\Xueqing.Windows.Presentation.csproj" />
   </ItemGroup>
 </Project>
