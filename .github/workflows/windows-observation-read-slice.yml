@@ -107,8 +107,7 @@ jobs:
           set -euo pipefail
           dotnet test apps/windows/tests/Xueqing.Windows.Core.Tests/Xueqing.Windows.Core.Tests.csproj \
             -c Release \
-            --nologo \
-            --no-restore
+            --nologo
 
       - name: Run Bootstrap, Observation and Learning read-model E2E
         shell: bash
