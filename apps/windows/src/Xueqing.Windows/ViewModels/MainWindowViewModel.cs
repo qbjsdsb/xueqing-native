@@ -21,6 +21,39 @@ public sealed record LearningCaseRecoveryLookup(
     bool IsAvailable,
     CreateLearningCaseRequest? Request);
 
+public sealed record ActionProgressionRecoveryLookup(
+    bool IsAvailable,
+    ActionProgressionTarget? Target,
+    ActionProgressionRecoveryIntent? PendingIntent);
+
+public sealed record ActionProgressionRetryResult(
+    bool IsSuccess,
+    ActionProgressionFailure? Failure);
+
+public sealed record PendingActionProgressionRecoveryItem(
+    ActionProgressionRecoveryIntent Intent,
+    string StudentDisplayName,
+    string SubjectDisplayName)
+{
+    public string Heading => Intent.Kind switch
+    {
+        ActionProgressionRecoveryIntentKind.ReschedulePrimaryAction => "尚未确认的行动改期",
+        ActionProgressionRecoveryIntentKind.RecordVerificationAndNextAction => "尚未确认的教学验证",
+        _ => "尚未确认的教学操作",
+    };
+
+    public string Detail => Intent switch
+    {
+        ReschedulePrimaryActionRecoveryIntent reschedule =>
+            reschedule.Request.NewDueOn is { } dueOn
+                ? $"改期到 {dueOn:MM月dd日}"
+                : "调整为待安排日期",
+        VerificationAndNextActionRecoveryIntent verification =>
+            $"验证：{verification.Request.VerificationSummary} · 下一步：{verification.Request.NextActionText}",
+        _ => string.Empty,
+    };
+}
+
 public sealed record PendingLearningCaseRecoveryItem(
     CreateLearningCaseRequest Request,
     string StudentDisplayName,
@@ -40,8 +73,12 @@ public sealed class MainWindowViewModel : ObservableObject
     private readonly PersonalTodayActionsCoordinator? _today;
     private readonly ICreateLearningCaseCommand? _createLearningCase;
     private readonly ICreateLearningCaseRecoveryStore? _createLearningCaseRecovery;
+    private readonly ActionProgressionCommandCoordinator? _actionProgression;
+    private readonly IActionProgressionRecoveryStore? _actionProgressionRecovery;
     private readonly List<StudentSummary> _allStudents;
     private readonly Dictionary<string, PersonalStudentWorkspaceItem> _authoritativeStudents = new(StringComparer.Ordinal);
+    private readonly Dictionary<Guid, ActionProgressionTarget> _authoritativeTodayActionTargets = new();
+    private readonly Dictionary<Guid, ActionProgressionTarget> _authoritativeFocusTargets = new();
     private StudentSummary? _selectedStudent;
     private TeachingContextOption? _selectedTeachingContext;
     private string _recentObservationsStatusText = string.Empty;
@@ -49,6 +86,7 @@ public sealed class MainWindowViewModel : ObservableObject
     private string _currentFocusStatusText = string.Empty;
     private string _todayStatusText = string.Empty;
     private string _pendingLearningCaseRecoveryStatusText = string.Empty;
+    private string _pendingActionProgressionRecoveryStatusText = string.Empty;
     private bool _initialized;
 
     public MainWindowViewModel()
@@ -63,6 +101,8 @@ public sealed class MainWindowViewModel : ObservableObject
         _today = teachingWorkspace?.Today;
         _createLearningCase = teachingWorkspace?.CreateLearningCase;
         _createLearningCaseRecovery = teachingWorkspace?.CreateLearningCaseRecovery;
+        _actionProgression = teachingWorkspace?.ActionProgression;
+        _actionProgressionRecovery = teachingWorkspace?.ActionProgressionRecovery;
         _allStudents = _personalWorkspace is null
             ? SyntheticDataFactory.CreateStudents(1_000).ToList()
             : new List<StudentSummary>();
@@ -72,6 +112,7 @@ public sealed class MainWindowViewModel : ObservableObject
         RecentObservations = new ObservableCollection<StudentRecentObservation>();
         CurrentFocus = new ObservableCollection<LearningFocusDisplayItem>();
         PendingLearningCaseRecoveries = new ObservableCollection<PendingLearningCaseRecoveryItem>();
+        PendingActionProgressionRecoveries = new ObservableCollection<PendingActionProgressionRecoveryItem>();
         TodayActions = _personalWorkspace is null
             ? new ObservableCollection<TodayActionItem>(UxPrototypeFixtureFactory.CreateTodayActions())
             : new ObservableCollection<TodayActionItem>();
@@ -109,7 +150,12 @@ public sealed class MainWindowViewModel : ObservableObject
 
     public ObservableCollection<PendingLearningCaseRecoveryItem> PendingLearningCaseRecoveries { get; }
 
+    public ObservableCollection<PendingActionProgressionRecoveryItem> PendingActionProgressionRecoveries { get; }
+
     public bool IsAuthoritativeStudentWorkspace => _personalWorkspace is not null;
+
+    public bool SupportsActionProgression =>
+        _actionProgression is not null && _actionProgressionRecovery is not null;
 
     public Visibility PrototypeStudentDetailVisibility => IsAuthoritativeStudentWorkspace
         ? Visibility.Collapsed
@@ -144,6 +190,7 @@ public sealed class MainWindowViewModel : ObservableObject
             {
                 RecentObservations.Clear();
                 CurrentFocus.Clear();
+                _authoritativeFocusTargets.Clear();
                 RecentHistoryMoreText = string.Empty;
                 RecentObservationsStatusText = value is null
                     ? (SelectedTeachingContexts.Count > 1 ? "选择学科后读取最近记录。" : "暂无可读取的教学上下文。")
@@ -185,6 +232,12 @@ public sealed class MainWindowViewModel : ObservableObject
         private set => SetProperty(ref _pendingLearningCaseRecoveryStatusText, value);
     }
 
+    public string PendingActionProgressionRecoveryStatusText
+    {
+        get => _pendingActionProgressionRecoveryStatusText;
+        private set => SetProperty(ref _pendingActionProgressionRecoveryStatusText, value);
+    }
+
     public async Task InitializeAsync(CancellationToken cancellationToken = default)
     {
         if (_initialized)
@@ -213,8 +266,12 @@ public sealed class MainWindowViewModel : ObservableObject
         RecentObservations.Clear();
         CurrentFocus.Clear();
         TodayActions.Clear();
+        _authoritativeFocusTargets.Clear();
+        _authoritativeTodayActionTargets.Clear();
         PendingLearningCaseRecoveries.Clear();
         PendingLearningCaseRecoveryStatusText = string.Empty;
+        PendingActionProgressionRecoveries.Clear();
+        PendingActionProgressionRecoveryStatusText = string.Empty;
         _learningFocus?.Reset();
         _today?.Reset();
         SelectedTeachingContexts.Clear();
@@ -265,6 +322,7 @@ public sealed class MainWindowViewModel : ObservableObject
         }
 
         await RefreshPendingLearningCaseRecoveriesAsync(state.Bootstrap, cancellationToken);
+        await RefreshPendingActionProgressionRecoveriesAsync(state.Bootstrap, cancellationToken);
         await RefreshTodayAsync(state.Bootstrap.ActorAppUserId, cancellationToken);
     }
 
@@ -286,6 +344,7 @@ public sealed class MainWindowViewModel : ObservableObject
         var selected = SelectedTeachingContext;
         RecentObservations.Clear();
         CurrentFocus.Clear();
+        _authoritativeFocusTargets.Clear();
         RecentHistoryMoreText = string.Empty;
         RecentObservationsStatusText = "正在读取最近记录…";
         CurrentFocusStatusText = "正在读取当前关注…";
@@ -520,6 +579,423 @@ public sealed class MainWindowViewModel : ObservableObject
         return result;
     }
 
+    public async Task<ActionProgressionRecoveryLookup> FindTodayActionProgressionAsync(
+        TodayActionItem displayItem,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(displayItem);
+
+        if (!Guid.TryParse(displayItem.Id, out var actionId) ||
+            !_authoritativeTodayActionTargets.TryGetValue(actionId, out var target))
+        {
+            return new ActionProgressionRecoveryLookup(false, null, null);
+        }
+
+        return await FindActionProgressionAsync(target, cancellationToken);
+    }
+
+    public async Task<ActionProgressionRecoveryLookup> FindFocusActionProgressionAsync(
+        LearningFocusDisplayItem displayItem,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(displayItem);
+
+        if (!_authoritativeFocusTargets.TryGetValue(displayItem.CaseId, out var target))
+        {
+            return new ActionProgressionRecoveryLookup(false, null, null);
+        }
+
+        return await FindActionProgressionAsync(target, cancellationToken);
+    }
+
+    private async Task<ActionProgressionRecoveryLookup> FindActionProgressionAsync(
+        ActionProgressionTarget target,
+        CancellationToken cancellationToken)
+    {
+        if (_personalWorkspace is null || _actionProgressionRecovery is null)
+        {
+            return new ActionProgressionRecoveryLookup(false, null, null);
+        }
+
+        var bootstrap = _personalWorkspace.Current.Status == PersonalStudentWorkspaceStatus.Ready
+            ? _personalWorkspace.Current.Bootstrap
+            : null;
+        if (bootstrap is null || !ContainsExactTargetContext(bootstrap, target))
+        {
+            return new ActionProgressionRecoveryLookup(false, null, null);
+        }
+
+        try
+        {
+            var pending = await _actionProgressionRecovery.FindByPrimaryActionAsync(
+                bootstrap.ActorAppUserId,
+                target.OrganizationId,
+                target.CaseId,
+                target.PrimaryActionId,
+                cancellationToken);
+            return new ActionProgressionRecoveryLookup(true, target, pending);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch
+        {
+            return new ActionProgressionRecoveryLookup(false, null, null);
+        }
+    }
+
+    public async Task<ActionProgressionResult<ReschedulePrimaryActionReceipt>> ReschedulePrimaryActionAsync(
+        ActionProgressionTarget target,
+        DateOnly? newDueOn,
+        Guid operationId,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(target);
+
+        if (_personalWorkspace is null || _actionProgression is null)
+        {
+            return ActionProgressionResult<ReschedulePrimaryActionReceipt>.Failed(
+                ActionProgressionFailureKind.AuthorityChanged,
+                "XQ_CLIENT_ACTION_PROGRESS_UNAVAILABLE");
+        }
+
+        var bootstrap = _personalWorkspace.Current.Status == PersonalStudentWorkspaceStatus.Ready
+            ? _personalWorkspace.Current.Bootstrap
+            : null;
+        if (bootstrap is null)
+        {
+            return ActionProgressionResult<ReschedulePrimaryActionReceipt>.Failed(
+                ActionProgressionFailureKind.AuthenticationRequired,
+                "XQ_CLIENT_BOOTSTRAP_UNAVAILABLE");
+        }
+
+        if (!IsCurrentAuthoritativeTarget(target) ||
+            !ContainsExactTargetContext(bootstrap, target))
+        {
+            return ActionProgressionResult<ReschedulePrimaryActionReceipt>.Failed(
+                ActionProgressionFailureKind.VersionConflict,
+                "XQ_CLIENT_ACTION_TARGET_STALE");
+        }
+
+        var result = await _actionProgression.RescheduleAsync(
+            target.CreateRescheduleRequest(operationId, newDueOn),
+            bootstrap.ActorAppUserId,
+            cancellationToken);
+
+        await HandleActionProgressionResultAsync(
+            bootstrap,
+            target,
+            null,
+            result.IsSuccess,
+            result.Failure,
+            cancellationToken);
+        return result;
+    }
+
+    public async Task<ActionProgressionResult<RecordVerificationAndNextActionReceipt>> RecordVerificationAndNextActionAsync(
+        ActionProgressionTarget target,
+        VerificationOutcome outcome,
+        string verificationSummary,
+        string nextActionText,
+        DateOnly? nextActionDueOn,
+        Guid operationId,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(target);
+
+        if (_personalWorkspace is null || _actionProgression is null)
+        {
+            return ActionProgressionResult<RecordVerificationAndNextActionReceipt>.Failed(
+                ActionProgressionFailureKind.AuthorityChanged,
+                "XQ_CLIENT_ACTION_PROGRESS_UNAVAILABLE");
+        }
+
+        var bootstrap = _personalWorkspace.Current.Status == PersonalStudentWorkspaceStatus.Ready
+            ? _personalWorkspace.Current.Bootstrap
+            : null;
+        if (bootstrap is null)
+        {
+            return ActionProgressionResult<RecordVerificationAndNextActionReceipt>.Failed(
+                ActionProgressionFailureKind.AuthenticationRequired,
+                "XQ_CLIENT_BOOTSTRAP_UNAVAILABLE");
+        }
+
+        if (!IsCurrentAuthoritativeTarget(target) ||
+            !ContainsExactTargetContext(bootstrap, target))
+        {
+            return ActionProgressionResult<RecordVerificationAndNextActionReceipt>.Failed(
+                ActionProgressionFailureKind.VersionConflict,
+                "XQ_CLIENT_ACTION_TARGET_STALE");
+        }
+
+        var request = target.CreateVerificationRequest(
+            operationId,
+            outcome,
+            verificationSummary.Trim(),
+            nextActionText.Trim(),
+            nextActionDueOn);
+        var result = await _actionProgression.VerifyAsync(
+            request,
+            bootstrap.ActorAppUserId,
+            cancellationToken);
+
+        await HandleActionProgressionResultAsync(
+            bootstrap,
+            target,
+            null,
+            result.IsSuccess,
+            result.Failure,
+            cancellationToken);
+        return result;
+    }
+
+    public async Task<ActionProgressionRetryResult> RetryPendingActionProgressionAsync(
+        ActionProgressionRecoveryIntent intent,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(intent);
+
+        if (_personalWorkspace is null || _actionProgression is null)
+        {
+            return new ActionProgressionRetryResult(
+                false,
+                new ActionProgressionFailure(
+                    ActionProgressionFailureKind.AuthorityChanged,
+                    "XQ_CLIENT_ACTION_PROGRESS_UNAVAILABLE"));
+        }
+
+        var bootstrap = _personalWorkspace.Current.Status == PersonalStudentWorkspaceStatus.Ready
+            ? _personalWorkspace.Current.Bootstrap
+            : null;
+        if (bootstrap is null)
+        {
+            return new ActionProgressionRetryResult(
+                false,
+                new ActionProgressionFailure(
+                    ActionProgressionFailureKind.AuthenticationRequired,
+                    "XQ_CLIENT_BOOTSTRAP_UNAVAILABLE"));
+        }
+
+        bool success;
+        ActionProgressionFailure? failure;
+        switch (intent)
+        {
+            case ReschedulePrimaryActionRecoveryIntent reschedule:
+            {
+                var result = await _actionProgression.RescheduleAsync(
+                    reschedule.Request,
+                    bootstrap.ActorAppUserId,
+                    cancellationToken);
+                success = result.IsSuccess;
+                failure = result.Failure;
+                break;
+            }
+            case VerificationAndNextActionRecoveryIntent verification:
+            {
+                var result = await _actionProgression.VerifyAsync(
+                    verification.Request,
+                    bootstrap.ActorAppUserId,
+                    cancellationToken);
+                success = result.IsSuccess;
+                failure = result.Failure;
+                break;
+            }
+            default:
+                return new ActionProgressionRetryResult(
+                    false,
+                    new ActionProgressionFailure(
+                        ActionProgressionFailureKind.Validation,
+                        "XQ_CLIENT_ACTION_RECOVERY_KIND_INVALID"));
+        }
+
+        var target = TryResolveCurrentTarget(intent);
+        await HandleActionProgressionResultAsync(
+            bootstrap,
+            target,
+            intent,
+            success,
+            failure,
+            cancellationToken);
+
+        return new ActionProgressionRetryResult(success, failure);
+    }
+
+    private async Task HandleActionProgressionResultAsync(
+        PersonalBootstrapSnapshot bootstrap,
+        ActionProgressionTarget? target,
+        ActionProgressionRecoveryIntent? recoveryIntent,
+        bool isSuccess,
+        ActionProgressionFailure? failure,
+        CancellationToken cancellationToken)
+    {
+        if (failure?.Kind is
+            ActionProgressionFailureKind.AuthenticationRequired or
+            ActionProgressionFailureKind.AuthorityChanged)
+        {
+            await RefreshAuthoritativeStudentsAsync(cancellationToken);
+            return;
+        }
+
+        if (isSuccess || failure?.Kind == ActionProgressionFailureKind.VersionConflict)
+        {
+            await RefreshActionProgressionProjectionsAsync(
+                bootstrap.ActorAppUserId,
+                target,
+                recoveryIntent,
+                cancellationToken);
+        }
+
+        await RefreshPendingActionProgressionRecoveriesAsync(
+            bootstrap,
+            cancellationToken);
+    }
+
+    private async Task RefreshActionProgressionProjectionsAsync(
+        Guid actorAppUserId,
+        ActionProgressionTarget? target,
+        ActionProgressionRecoveryIntent? recoveryIntent,
+        CancellationToken cancellationToken)
+    {
+        var todayTask = RefreshTodayAsync(actorAppUserId, cancellationToken);
+        Task<StudentLearningFocusViewState>? focusTask = null;
+        var selected = SelectedTeachingContext;
+
+        var organizationId = target?.OrganizationId ?? recoveryIntent?.OrganizationId;
+        var studentId = target?.StudentId ?? recoveryIntent?.StudentId;
+        var subjectProfileId = target?.SubjectProfileId ?? recoveryIntent?.SubjectProfileId;
+        var assignmentId = target?.OwnerAssignmentId ?? recoveryIntent?.OwnerAssignmentId;
+
+        if (organizationId is not null &&
+            studentId is not null &&
+            subjectProfileId is not null &&
+            assignmentId is not null &&
+            selected is not null &&
+            _learningFocus is not null &&
+            selected.Context.OrganizationId == organizationId.Value &&
+            selected.Context.StudentId == studentId.Value &&
+            selected.Context.SubjectProfileId == subjectProfileId.Value &&
+            selected.Context.AssignmentId == assignmentId.Value)
+        {
+            focusTask = _learningFocus.LoadAsync(
+                ToLearningScope(selected.Context),
+                actorAppUserId,
+                cancellationToken);
+        }
+
+        await todayTask;
+        if (focusTask is not null)
+        {
+            var focusState = await focusTask;
+            if (ReferenceEquals(selected, SelectedTeachingContext) ||
+                selected == SelectedTeachingContext)
+            {
+                ApplyFocusState(focusState);
+            }
+        }
+    }
+
+    private async Task RefreshPendingActionProgressionRecoveriesAsync(
+        PersonalBootstrapSnapshot bootstrap,
+        CancellationToken cancellationToken)
+    {
+        PendingActionProgressionRecoveries.Clear();
+        PendingActionProgressionRecoveryStatusText = string.Empty;
+
+        if (_actionProgressionRecovery is null)
+        {
+            return;
+        }
+
+        try
+        {
+            var currentOrganizationIds = bootstrap.Organizations
+                .Select(organization => organization.OrganizationId)
+                .Distinct()
+                .ToArray();
+            var pending = await _actionProgressionRecovery.ListPendingAsync(
+                bootstrap.ActorAppUserId,
+                currentOrganizationIds,
+                cancellationToken);
+
+            foreach (var intent in pending)
+            {
+                var context = bootstrap.TeachingContexts.FirstOrDefault(candidate =>
+                    candidate.OrganizationId == intent.OrganizationId &&
+                    candidate.StudentId == intent.StudentId &&
+                    candidate.SubjectProfileId == intent.SubjectProfileId &&
+                    candidate.AssignmentId == intent.OwnerAssignmentId);
+
+                PendingActionProgressionRecoveries.Add(
+                    new PendingActionProgressionRecoveryItem(
+                        intent,
+                        context?.StudentDisplayName ?? "原任教学员",
+                        context is null
+                            ? "教学上下文已变化"
+                            : FormatSubjectKey(context.SubjectKey)));
+            }
+
+            if (PendingActionProgressionRecoveries.Count > 0)
+            {
+                PendingActionProgressionRecoveryStatusText =
+                    $"有 {PendingActionProgressionRecoveries.Count} 条行动操作结果尚未确认，请继续原操作确认结果。";
+            }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch
+        {
+            PendingActionProgressionRecoveries.Clear();
+            PendingActionProgressionRecoveryStatusText =
+                "本机待确认行动暂时无法读取。为避免重复操作，请先不要重新发起相同行动。";
+        }
+    }
+
+    private bool IsCurrentAuthoritativeTarget(ActionProgressionTarget target) =>
+        (_authoritativeTodayActionTargets.TryGetValue(
+            target.PrimaryActionId,
+            out var todayTarget) &&
+         todayTarget == target) ||
+        (_authoritativeFocusTargets.TryGetValue(
+            target.CaseId,
+            out var focusTarget) &&
+         focusTarget == target);
+
+    private ActionProgressionTarget? TryResolveCurrentTarget(
+        ActionProgressionRecoveryIntent intent)
+    {
+        if (_authoritativeTodayActionTargets.TryGetValue(
+                intent.PrimaryActionId,
+                out var todayTarget) &&
+            todayTarget.CaseId == intent.CaseId &&
+            todayTarget.OrganizationId == intent.OrganizationId)
+        {
+            return todayTarget;
+        }
+
+        if (_authoritativeFocusTargets.TryGetValue(
+                intent.CaseId,
+                out var focusTarget) &&
+            focusTarget.PrimaryActionId == intent.PrimaryActionId &&
+            focusTarget.OrganizationId == intent.OrganizationId)
+        {
+            return focusTarget;
+        }
+
+        return null;
+    }
+
+    private static bool ContainsExactTargetContext(
+        PersonalBootstrapSnapshot bootstrap,
+        ActionProgressionTarget target) =>
+        bootstrap.TeachingContexts.Any(context =>
+            context.OrganizationId == target.OrganizationId &&
+            context.StudentId == target.StudentId &&
+            context.SubjectProfileId == target.SubjectProfileId &&
+            context.AssignmentId == target.OwnerAssignmentId);
+
     private async Task RefreshPendingLearningCaseRecoveriesAsync(
         PersonalBootstrapSnapshot bootstrap,
         CancellationToken cancellationToken)
@@ -734,6 +1210,7 @@ public sealed class MainWindowViewModel : ObservableObject
         SelectedTeachingContexts.Clear();
         RecentObservations.Clear();
         CurrentFocus.Clear();
+        _authoritativeFocusTargets.Clear();
         RecentHistoryMoreText = string.Empty;
 
         if (selectedStudent is null || !_authoritativeStudents.TryGetValue(selectedStudent.Id, out var workspaceStudent))
@@ -804,12 +1281,17 @@ public sealed class MainWindowViewModel : ObservableObject
     private void ApplyFocusState(StudentLearningFocusViewState state)
     {
         CurrentFocus.Clear();
+        _authoritativeFocusTargets.Clear();
 
         switch (state.Status)
         {
             case StudentLearningFocusViewStatus.Data when state.Snapshot is not null:
                 foreach (var learningCase in state.Snapshot.Cases)
                 {
+                    var target = ActionProgressionTargetResolver.FromFocus(
+                        state.Snapshot,
+                        learningCase);
+                    _authoritativeFocusTargets.Add(target.CaseId, target);
                     CurrentFocus.Add(ToFocusDisplayItem(learningCase));
                 }
                 CurrentFocusStatusText = state.Snapshot.HasMore
@@ -843,12 +1325,15 @@ public sealed class MainWindowViewModel : ObservableObject
     private void ApplyTodayState(PersonalTodayActionsViewState state)
     {
         TodayActions.Clear();
+        _authoritativeTodayActionTargets.Clear();
 
         switch (state.Status)
         {
             case PersonalTodayActionsViewStatus.Data when state.Snapshot is not null:
                 foreach (var action in state.Snapshot.Actions)
                 {
+                    var target = ActionProgressionTargetResolver.FromToday(action);
+                    _authoritativeTodayActionTargets.Add(target.PrimaryActionId, target);
                     TodayActions.Add(ToTodayActionItem(action));
                 }
                 TodayStatusText = state.Snapshot.HasMore

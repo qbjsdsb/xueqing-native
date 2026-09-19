@@ -77,6 +77,22 @@ internal static class LocalReferenceProviderTeachingWorkspaceFactory
             projectUri.GetLeftPart(UriPartial.Authority),
             ApplicationData.Current);
 
+        var actionProgressionRecovery = new WindowsActionProgressionRecoveryStore(
+            projectUri.GetLeftPart(UriPartial.Authority),
+            ApplicationData.Current);
+        var actionProgression = new ActionProgressionCommandCoordinator(
+            new PostgrestReschedulePrimaryActionCommand(
+                httpClient,
+                projectUri,
+                apiKey,
+                AccessTokenProvider),
+            new PostgrestRecordVerificationAndNextActionCommand(
+                httpClient,
+                projectUri,
+                apiKey,
+                AccessTokenProvider),
+            actionProgressionRecovery);
+
         return new PersonalTeachingWorkspaceServices(
             new PersonalStudentWorkspaceCoordinator(
                 bootstrapReader,
@@ -84,6 +100,8 @@ internal static class LocalReferenceProviderTeachingWorkspaceFactory
             new StudentLearningFocusCoordinator(focusReader),
             new PersonalTodayActionsCoordinator(todayReader),
             createLearningCase,
-            createLearningCaseRecovery);
+            createLearningCaseRecovery,
+            actionProgression,
+            actionProgressionRecovery);
     }
 }

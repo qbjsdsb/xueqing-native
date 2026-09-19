@@ -79,6 +79,66 @@ public sealed partial class TodayView : UserControl
         await resultDialog.ShowAsync();
     }
 
+    private void ActionProgressionButton_Loaded(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button button &&
+            DataContext is MainWindowViewModel viewModel)
+        {
+            button.Visibility = viewModel.SupportsActionProgression
+                ? Visibility.Visible
+                : Visibility.Collapsed;
+        }
+    }
+
+    private async void RescheduleAction_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button button ||
+            button.Tag is not TodayActionItem item ||
+            DataContext is not MainWindowViewModel viewModel)
+        {
+            return;
+        }
+
+        var lookup = await viewModel.FindTodayActionProgressionAsync(item);
+        await ActionProgressionDialogFlow.ShowRescheduleAsync(
+            XamlRoot,
+            viewModel,
+            lookup);
+    }
+
+    private async void VerifyAction_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button button ||
+            button.Tag is not TodayActionItem item ||
+            DataContext is not MainWindowViewModel viewModel)
+        {
+            return;
+        }
+
+        var lookup = await viewModel.FindTodayActionProgressionAsync(item);
+        await ActionProgressionDialogFlow.ShowVerificationAsync(
+            XamlRoot,
+            viewModel,
+            lookup);
+    }
+
+    private async void RetryPendingActionProgression_Click(
+        object sender,
+        RoutedEventArgs e)
+    {
+        if (sender is not Button button ||
+            button.Tag is not ActionProgressionRecoveryIntent intent ||
+            DataContext is not MainWindowViewModel viewModel)
+        {
+            return;
+        }
+
+        await ActionProgressionDialogFlow.ShowPendingRecoveryAsync(
+            XamlRoot,
+            viewModel,
+            intent);
+    }
+
     private static string FailureText(CreateLearningCaseResult result) =>
         result.Failure?.Kind switch
         {

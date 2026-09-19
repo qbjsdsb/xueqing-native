@@ -150,6 +150,181 @@ public sealed class LearningReadReferenceProviderE2ETest
     }
 
 
+    [TestMethod]
+    public async Task Action_progression_updates_Focus_and_Today_through_real_reference_provider()
+    {
+        var providerUrl = RequiredEnvironment("XUEQING_REFERENCE_PROVIDER_URL");
+        var apiKey = RequiredEnvironment("XUEQING_REFERENCE_API_KEY");
+        var accessToken = RequiredEnvironment("XUEQING_REFERENCE_ACCESS_TOKEN");
+        var projectUri = new Uri(providerUrl, UriKind.Absolute);
+        using var httpClient = new HttpClient();
+
+        ValueTask<string?> AccessTokenProvider(CancellationToken _) =>
+            ValueTask.FromResult<string?>(accessToken);
+
+        var bootstrapReader = new PostgrestPersonalBootstrapReader(
+            httpClient,
+            projectUri,
+            apiKey,
+            AccessTokenProvider);
+        var bootstrap = await bootstrapReader.ReadAsync();
+        Assert.IsTrue(bootstrap.IsSuccess, bootstrap.Failure?.Code);
+        Assert.IsNotNull(bootstrap.Snapshot);
+        Assert.AreEqual(1, bootstrap.Snapshot.TeachingContexts.Count);
+        var actorId = bootstrap.Snapshot.ActorAppUserId;
+        var context = bootstrap.Snapshot.TeachingContexts[0];
+
+        var scope = new StudentLearningScope(
+            context.OrganizationId,
+            context.StudentId,
+            context.SubjectProfileId);
+        var focusReader = new PostgrestStudentLearningFocusReader(
+            httpClient,
+            projectUri,
+            apiKey,
+            AccessTokenProvider);
+        var todayReader = new PostgrestPersonalTodayActionsReader(
+            httpClient,
+            projectUri,
+            apiKey,
+            AccessTokenProvider);
+
+        var baselineFocus = await focusReader.ReadAsync(scope, actorId);
+        Assert.IsTrue(baselineFocus.IsSuccess, baselineFocus.Failure?.Code);
+        Assert.IsNotNull(baselineFocus.Snapshot);
+        var businessDate = baselineFocus.Snapshot.OrganizationBusinessDate;
+
+        var createCase = new PostgrestCreateLearningCaseCommand(
+            httpClient,
+            projectUri,
+            apiKey,
+            AccessTokenProvider);
+        var createRequest = new CreateLearningCaseRequest(
+            Guid.Parse("76000000-0000-0000-0000-000000000001"),
+            context.OrganizationId,
+            context.StudentId,
+            context.SubjectProfileId,
+            context.AssignmentId,
+            "Windows E2E · 行动推进闭环",
+            "Windows E2E · 第一轮行动",
+            businessDate,
+            null);
+        var created = await createCase.ExecuteAsync(createRequest, actorId);
+        Assert.IsTrue(created.IsSuccess, created.Failure?.Code);
+        Assert.IsNotNull(created.Receipt);
+
+        var focusAfterCreate = await focusReader.ReadAsync(scope, actorId);
+        Assert.IsTrue(focusAfterCreate.IsSuccess, focusAfterCreate.Failure?.Code);
+        Assert.IsNotNull(focusAfterCreate.Snapshot);
+        var createdCase = focusAfterCreate.Snapshot.Cases.Single(
+            item => item.CaseId == created.Receipt.CaseId);
+        var initialTarget = ActionProgressionTargetResolver.FromFocus(
+            focusAfterCreate.Snapshot,
+            createdCase);
+
+        var reschedule = new PostgrestReschedulePrimaryActionCommand(
+            httpClient,
+            projectUri,
+            apiKey,
+            AccessTokenProvider);
+        var rescheduleDue = businessDate.AddDays(2);
+        var rescheduleRequest = initialTarget.CreateRescheduleRequest(
+            Guid.Parse("76000000-0000-0000-0000-000000000002"),
+            rescheduleDue);
+
+        var rescheduled = await reschedule.ExecuteAsync(rescheduleRequest, actorId);
+        var rescheduledReplay = await reschedule.ExecuteAsync(rescheduleRequest, actorId);
+
+        Assert.IsTrue(rescheduled.IsSuccess, rescheduled.Failure?.Code);
+        Assert.IsTrue(rescheduledReplay.IsSuccess, rescheduledReplay.Failure?.Code);
+        Assert.IsNotNull(rescheduled.Receipt);
+        Assert.IsNotNull(rescheduledReplay.Receipt);
+        Assert.AreEqual(rescheduled.Receipt.CaseEventId, rescheduledReplay.Receipt.CaseEventId);
+        Assert.AreEqual(rescheduled.Receipt.ServerCommittedAt, rescheduledReplay.Receipt.ServerCommittedAt);
+        Assert.AreEqual(initialTarget.CaseVersion + 1, rescheduled.Receipt.CaseVersion);
+        Assert.AreEqual(initialTarget.ActionVersion + 1, rescheduled.Receipt.ActionVersion);
+        Assert.AreEqual(initialTarget.CurrentDueOn, rescheduled.Receipt.PreviousDueOn);
+        Assert.AreEqual(rescheduleDue, rescheduled.Receipt.DueOn);
+
+        var focusAfterReschedule = await focusReader.ReadAsync(scope, actorId);
+        Assert.IsTrue(focusAfterReschedule.IsSuccess, focusAfterReschedule.Failure?.Code);
+        Assert.IsNotNull(focusAfterReschedule.Snapshot);
+        var rescheduledCase = focusAfterReschedule.Snapshot.Cases.Single(
+            item => item.CaseId == created.Receipt.CaseId);
+        Assert.AreEqual(rescheduleDue, rescheduledCase.PrimaryAction.DueOn);
+        Assert.AreEqual(rescheduled.Receipt.CaseVersion, rescheduledCase.Version);
+        Assert.AreEqual(rescheduled.Receipt.ActionVersion, rescheduledCase.PrimaryAction.Version);
+
+        var todayAfterReschedule = await todayReader.ReadAsync(actorId);
+        Assert.IsTrue(todayAfterReschedule.IsSuccess, todayAfterReschedule.Failure?.Code);
+        Assert.IsNotNull(todayAfterReschedule.Snapshot);
+        var rescheduledToday = todayAfterReschedule.Snapshot.Actions.Single(
+            item => item.ActionId == created.Receipt.PrimaryActionId);
+        Assert.AreEqual(rescheduleDue, rescheduledToday.DueOn);
+        Assert.AreEqual(ActionDueBucket.Future, rescheduledToday.DueBucket);
+        Assert.AreEqual(rescheduled.Receipt.CaseVersion, rescheduledToday.CaseVersion);
+        Assert.AreEqual(rescheduled.Receipt.ActionVersion, rescheduledToday.ActionVersion);
+
+        var targetAfterReschedule = ActionProgressionTargetResolver.FromFocus(
+            focusAfterReschedule.Snapshot,
+            rescheduledCase);
+        var verification = new PostgrestRecordVerificationAndNextActionCommand(
+            httpClient,
+            projectUri,
+            apiKey,
+            AccessTokenProvider);
+        var nextDue = businessDate.AddDays(3);
+        var verificationRequest = targetAfterReschedule.CreateVerificationRequest(
+            Guid.Parse("76000000-0000-0000-0000-000000000003"),
+            VerificationOutcome.PartiallyMet,
+            "Windows E2E · 已有进步，但限制条件仍有遗漏。",
+            "Windows E2E · 下一轮只检查限制条件是否保留。",
+            nextDue);
+
+        var verified = await verification.ExecuteAsync(verificationRequest, actorId);
+        var verifiedReplay = await verification.ExecuteAsync(verificationRequest, actorId);
+
+        Assert.IsTrue(verified.IsSuccess, verified.Failure?.Code);
+        Assert.IsTrue(verifiedReplay.IsSuccess, verifiedReplay.Failure?.Code);
+        Assert.IsNotNull(verified.Receipt);
+        Assert.IsNotNull(verifiedReplay.Receipt);
+        Assert.AreEqual(verified.Receipt.VerificationId, verifiedReplay.Receipt.VerificationId);
+        Assert.AreEqual(verified.Receipt.NextPrimaryActionId, verifiedReplay.Receipt.NextPrimaryActionId);
+        Assert.AreEqual(verified.Receipt.ServerCommittedAt, verifiedReplay.Receipt.ServerCommittedAt);
+        Assert.AreEqual(targetAfterReschedule.CaseVersion + 1, verified.Receipt.CaseVersion);
+        Assert.AreEqual(
+            targetAfterReschedule.ActionVersion + 1,
+            verified.Receipt.CompletedActionVersion);
+        Assert.AreEqual(1L, verified.Receipt.NextActionVersion);
+
+        var focusAfterVerification = await focusReader.ReadAsync(scope, actorId);
+        Assert.IsTrue(focusAfterVerification.IsSuccess, focusAfterVerification.Failure?.Code);
+        Assert.IsNotNull(focusAfterVerification.Snapshot);
+        var progressedCase = focusAfterVerification.Snapshot.Cases.Single(
+            item => item.CaseId == created.Receipt.CaseId);
+        Assert.AreEqual(verified.Receipt.CaseVersion, progressedCase.Version);
+        Assert.AreEqual(verified.Receipt.NextPrimaryActionId, progressedCase.PrimaryAction.ActionId);
+        Assert.AreEqual(verificationRequest.NextActionText, progressedCase.PrimaryAction.ActionText);
+        Assert.AreEqual(nextDue, progressedCase.PrimaryAction.DueOn);
+        Assert.AreEqual(1L, progressedCase.PrimaryAction.Version);
+
+        var todayAfterVerification = await todayReader.ReadAsync(actorId);
+        Assert.IsTrue(todayAfterVerification.IsSuccess, todayAfterVerification.Failure?.Code);
+        Assert.IsNotNull(todayAfterVerification.Snapshot);
+        Assert.IsFalse(
+            todayAfterVerification.Snapshot.Actions.Any(
+                item => item.ActionId == created.Receipt.PrimaryActionId),
+            "Completed primary Action must disappear from Personal Today.");
+        var nextToday = todayAfterVerification.Snapshot.Actions.Single(
+            item => item.ActionId == verified.Receipt.NextPrimaryActionId);
+        Assert.AreEqual(verificationRequest.NextActionText, nextToday.ActionText);
+        Assert.AreEqual(nextDue, nextToday.DueOn);
+        Assert.AreEqual(ActionDueBucket.Future, nextToday.DueBucket);
+        Assert.AreEqual(verified.Receipt.CaseVersion, nextToday.CaseVersion);
+        Assert.AreEqual(1L, nextToday.ActionVersion);
+    }
+
+
     private static async Task<Guid> CreateSourceObservationAsync(
         HttpClient httpClient,
         Uri projectUri,
