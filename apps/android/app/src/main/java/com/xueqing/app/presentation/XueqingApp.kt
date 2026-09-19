@@ -36,15 +36,7 @@ import com.xueqing.app.application.learning.LearningCaseState
 import com.xueqing.app.application.learning.PersonalTodayAction
 import com.xueqing.app.application.learning.StudentLearningCaseFocus
 import com.xueqing.app.presentation.design.XueqingTheme
-
-internal enum class PrimaryDestination(
-    val label: String,
-    val bootstrapGlyph: String,
-) {
-    Today("今日", "今"),
-    Students("学生", "生"),
-    Learning("学情", "学"),
-}
+import com.xueqing.app.presentation.shell.PrimaryDestination
 
 @Composable
 internal fun XueqingApp(
