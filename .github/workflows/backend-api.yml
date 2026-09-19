@@ -70,6 +70,12 @@ jobs:
           set -euo pipefail
           bash backend/supabase/tests/create_learning_case_concurrency.sh
 
+      - name: Prove Action progression locks authority and competing mutations
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash backend/supabase/tests/action_progression_concurrency.sh
+
       - name: Prove provider-issued old tokens fail closed after live authority revoke
         shell: bash
         run: |
