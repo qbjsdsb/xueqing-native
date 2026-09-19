@@ -604,8 +604,22 @@ function Assert-CompactStudentKeyboardJourney {
             return $null
         }
 
-        Invoke-Element -Element $items[0]
-        return $items[0]
+        try {
+            Invoke-Element -Element $items[0]
+            return $items[0]
+        }
+        catch [System.Management.Automation.MethodInvocationException] {
+            # WinUI can transiently invalidate SelectionItemPattern while the
+            # virtualized ListView is rebuilding after search changes. Retry
+            # with a freshly acquired UIA element until the bounded timeout.
+            return $null
+        }
+        catch [System.InvalidOperationException] {
+            return $null
+        }
+        catch [System.Windows.Automation.ElementNotAvailableException] {
+            return $null
+        }
     }
     $firstVisible.SetFocus()
     [System.Windows.Forms.SendKeys]::SendWait('{DOWN}{DOWN}{DOWN}')
