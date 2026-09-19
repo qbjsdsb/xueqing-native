@@ -67,6 +67,8 @@ At minimum:
 
 - command = `reschedule_primary_action_v1`;
 - operation_id;
+- responsible_teacher_app_user_id;
+- owner_assignment_id;
 - case_id;
 - case_state;
 - case_version;
