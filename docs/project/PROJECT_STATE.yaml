@@ -1,7 +1,7 @@
 schema_version: 1
 project: xueqing-native
 phase: phase-1
-milestone: first-observation-product-slice
+milestone: offline-access-lease-gate
 status: active
 architecture_baseline: v1-accepted
 
@@ -32,11 +32,12 @@ completed_gates:
   - windows-student-recent-observation-v1
   - provider-session-auth-conformance
   - provider-identity-link-conformance
+  - android-student-quick-capture-native-reference
 
 open_gates:
   - provider-adapter-conformance-spike
-  - android-student-quick-capture-native-reference
   - offline-access-lease-duration-and-clock-rollback-spike
+  - learning-case-primary-action-vertical-slice
   - production-provider-region-data-residency-gate
   - signing-and-recovery-gate
   - backup-storage-restore-gate
@@ -44,9 +45,9 @@ open_gates:
 next_execution:
   parallel_limit: 1
   lines:
-    - android-student-quick-capture-native-reference
-  after_current_green:
     - offline-access-lease-duration-and-clock-rollback-spike
+  after_current_green:
+    - learning-case-primary-action-vertical-slice
 
 later:
   - provider-projection-conformance
