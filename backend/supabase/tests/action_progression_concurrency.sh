@@ -74,7 +74,15 @@ trap cleanup EXIT
 fixture_receipt="$(psql_db -At <<SQL
 select pg_catalog.set_config('request.jwt.claim.sub', '$auth_subject', false);
 select pg_catalog.set_config('request.jwt.claim.role', 'authenticated', false);
-select pg_catalog.set_config('request.jwt.claims', '{\"sub\":\"$auth_subject\",\"role\":\"authenticated\",\"iss\":\"$auth_issuer\"}', false);
+select pg_catalog.set_config(
+  'request.jwt.claims',
+  pg_catalog.jsonb_build_object(
+    'sub', '$auth_subject',
+    'role', 'authenticated',
+    'iss', '$auth_issuer'
+  )::text,
+  false
+);
 set role authenticated;
 select public.create_learning_case(
   '$fixture_operation_id'::uuid,
@@ -144,7 +152,15 @@ psql_db > /tmp/xueqing-action-progression.log 2>&1 <<SQL &
 set application_name = '$writer_app';
 select pg_catalog.set_config('request.jwt.claim.sub', '$auth_subject', false);
 select pg_catalog.set_config('request.jwt.claim.role', 'authenticated', false);
-select pg_catalog.set_config('request.jwt.claims', '{"sub":"$auth_subject","role":"authenticated","iss":"$auth_issuer"}', false);
+select pg_catalog.set_config(
+  'request.jwt.claims',
+  pg_catalog.jsonb_build_object(
+    'sub', '$auth_subject',
+    'role', 'authenticated',
+    'iss', '$auth_issuer'
+  )::text,
+  false
+);
 set role authenticated;
 select public.record_verification_and_next_action(
   '$progress_operation_id'::uuid,
