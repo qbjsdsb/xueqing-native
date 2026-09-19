@@ -97,11 +97,28 @@ public sealed partial class StudentsView : UserControl
             return;
         }
 
+        var recovery = await viewModel.FindPendingLearningCaseForObservationAsync(observation);
+        if (!recovery.IsAvailable)
+        {
+            var unavailableDialog = new ContentDialog
+            {
+                XamlRoot = XamlRoot,
+                Title = "暂时无法创建学情问题",
+                Content = "无法安全读取本机待确认操作。为避免重复创建，本次不会提交。",
+                CloseButtonText = "知道了",
+                DefaultButton = ContentDialogButton.Close,
+            };
+            await unavailableDialog.ShowAsync();
+            return;
+        }
+
+        var pendingRequest = recovery.Request;
         var titleBox = new TextBox
         {
             Header = "关注问题",
             PlaceholderText = "例如：概括题压缩仍不稳定",
             MaxLength = 500,
+            Text = pendingRequest?.Title ?? string.Empty,
         };
         var actionBox = new TextBox
         {
@@ -111,16 +128,23 @@ public sealed partial class StudentsView : UserControl
             AcceptsReturn = true,
             TextWrapping = TextWrapping.Wrap,
             MinHeight = 88,
+            Text = pendingRequest?.PrimaryActionText ?? string.Empty,
         };
         var duePicker = new CalendarDatePicker
         {
             Header = "行动日期",
             PlaceholderText = "可选",
+            Date = pendingRequest?.PrimaryActionDueOn is { } pendingDueOn
+                ? ToCalendarDate(pendingDueOn)
+                : null,
         };
         var statusText = new TextBlock
         {
             Opacity = 0.70,
             TextWrapping = TextWrapping.Wrap,
+            Text = pendingRequest is null
+                ? string.Empty
+                : "发现上次尚未确认的提交。请重新确认结果。",
         };
         var content = new StackPanel
         {
@@ -137,16 +161,23 @@ public sealed partial class StudentsView : UserControl
             XamlRoot = XamlRoot,
             Title = "形成学情问题",
             Content = content,
-            PrimaryButtonText = "创建",
+            PrimaryButtonText = pendingRequest is null ? "创建" : "重新确认",
             CloseButtonText = "取消",
             DefaultButton = ContentDialogButton.Primary,
         };
 
-        var operationId = Guid.NewGuid();
-        string? submittedTitle = null;
-        string? submittedAction = null;
-        DateOnly? submittedDueOn = null;
-        var intentFrozen = false;
+        var operationId = pendingRequest?.OperationId ?? Guid.NewGuid();
+        string? submittedTitle = pendingRequest?.Title;
+        string? submittedAction = pendingRequest?.PrimaryActionText;
+        DateOnly? submittedDueOn = pendingRequest?.PrimaryActionDueOn;
+        var intentFrozen = pendingRequest is not null;
+
+        if (intentFrozen)
+        {
+            titleBox.IsEnabled = false;
+            actionBox.IsEnabled = false;
+            duePicker.IsEnabled = false;
+        }
 
         dialog.PrimaryButtonClick += async (_, args) =>
         {
@@ -185,7 +216,9 @@ public sealed partial class StudentsView : UserControl
                 }
 
                 dialog.IsPrimaryButtonEnabled = false;
-                statusText.Text = "正在提交…";
+                statusText.Text = pendingRequest is null
+                    ? "正在提交…"
+                    : "正在重新确认上次提交…";
 
                 var result = await viewModel.CreateLearningCaseFromObservationAsync(
                     observation,
@@ -224,6 +257,12 @@ public sealed partial class StudentsView : UserControl
         await dialog.ShowAsync();
     }
 
+    private static DateTimeOffset ToCalendarDate(DateOnly date)
+    {
+        var localDate = date.ToDateTime(TimeOnly.MinValue, DateTimeKind.Unspecified);
+        return new DateTimeOffset(localDate, TimeZoneInfo.Local.GetUtcOffset(localDate));
+    }
+
     private static string CreateLearningCaseFailureText(CreateLearningCaseResult result) =>
         result.Failure?.Kind switch
         {
@@ -235,6 +274,8 @@ public sealed partial class StudentsView : UserControl
                 "当前输入未通过服务器校验。请取消后重新发起。",
             CreateLearningCaseFailureKind.OperationConflict =>
                 "这次操作标识发生冲突。为避免重复创建，已停止提交。",
+            CreateLearningCaseFailureKind.LocalDurabilityFailure =>
+                "无法安全保存本机恢复记录。为避免重复提交，本次没有发送到服务器。",
             CreateLearningCaseFailureKind.ResultUnknown =>
                 "提交结果尚未确认。请使用“重试确认”继续同一次操作，不要重复创建。",
             CreateLearningCaseFailureKind.Transient =>
