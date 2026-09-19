@@ -211,12 +211,14 @@ public sealed class SqliteCreateLearningCaseRecoveryStore
             : Deserialize(payload);
     }
 
-    public async Task<IReadOnlyList<Guid>> ListStoredOrganizationIdsAsync(
+    public async Task<IReadOnlyList<Guid>> InspectStoredOrganizationIdsAsync(
         CancellationToken cancellationToken = default)
     {
-        await InitializeAsync(cancellationToken);
-
-        using var connection = await OpenConfiguredConnectionAsync(cancellationToken);
+        // Legacy discovery must be read-only until the path-derived actor scope
+        // has been proven. In particular, do not run InitializeAsync here:
+        // schema-v1 migration is a write and a scanned candidate may belong to
+        // another application actor on the same Windows user profile.
+        using var connection = await _connectionFactory.OpenAsync(cancellationToken);
         using var command = connection.CreateCommand();
         command.CommandText = """
             SELECT DISTINCT organization_id
