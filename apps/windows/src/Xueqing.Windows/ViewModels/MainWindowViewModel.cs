@@ -454,6 +454,15 @@ public sealed class MainWindowViewModel : ObservableObject
         {
             await RefreshAuthoritativeStudentsAsync(cancellationToken);
         }
+        else
+        {
+            // ResultUnknown / Transient must become discoverable in this same
+            // session immediately; deterministic failures must disappear after
+            // quarantine rather than waiting for a manual refresh or restart.
+            await RefreshPendingLearningCaseRecoveriesAsync(
+                bootstrap,
+                cancellationToken);
+        }
 
         return result;
     }
@@ -501,11 +510,11 @@ public sealed class MainWindowViewModel : ObservableObject
         {
             await RefreshAuthoritativeStudentsAsync(cancellationToken);
         }
-        else if (result.Failure?.Kind is not
-                     (CreateLearningCaseFailureKind.ResultUnknown or
-                      CreateLearningCaseFailureKind.Transient))
+        else
         {
-            await RefreshPendingLearningCaseRecoveriesAsync(bootstrap, cancellationToken);
+            await RefreshPendingLearningCaseRecoveriesAsync(
+                bootstrap,
+                cancellationToken);
         }
 
         return result;
@@ -525,34 +534,33 @@ public sealed class MainWindowViewModel : ObservableObject
 
         try
         {
-            foreach (var organizationId in bootstrap.Organizations
-                         .Select(organization => organization.OrganizationId)
-                         .Distinct())
+            var currentOrganizationIds = bootstrap.Organizations
+                .Select(organization => organization.OrganizationId)
+                .Distinct()
+                .ToArray();
+            var pending = await _createLearningCaseRecovery.ListPendingAsync(
+                bootstrap.ActorAppUserId,
+                currentOrganizationIds,
+                cancellationToken);
+
+            foreach (var request in pending)
             {
-                var pending = await _createLearningCaseRecovery.ListPendingAsync(
-                    bootstrap.ActorAppUserId,
-                    organizationId,
-                    cancellationToken);
+                var context = bootstrap.TeachingContexts.FirstOrDefault(candidate =>
+                    candidate.OrganizationId == request.OrganizationId &&
+                    candidate.StudentId == request.StudentId &&
+                    candidate.SubjectProfileId == request.SubjectProfileId &&
+                    candidate.AssignmentId == request.OwnerAssignmentId);
+                var student = _personalWorkspace.Students.FirstOrDefault(candidate =>
+                    candidate.OrganizationId == request.OrganizationId &&
+                    candidate.StudentId == request.StudentId);
 
-                foreach (var request in pending)
-                {
-                    var context = bootstrap.TeachingContexts.FirstOrDefault(candidate =>
-                        candidate.OrganizationId == request.OrganizationId &&
-                        candidate.StudentId == request.StudentId &&
-                        candidate.SubjectProfileId == request.SubjectProfileId &&
-                        candidate.AssignmentId == request.OwnerAssignmentId);
-                    var student = _personalWorkspace.Students.FirstOrDefault(candidate =>
-                        candidate.OrganizationId == request.OrganizationId &&
-                        candidate.StudentId == request.StudentId);
-
-                    PendingLearningCaseRecoveries.Add(
-                        new PendingLearningCaseRecoveryItem(
-                            request,
-                            student?.DisplayName ?? "当前学生",
-                            context is null
-                                ? "教学上下文已变化"
-                                : FormatSubjectKey(context.SubjectKey)));
-                }
+                PendingLearningCaseRecoveries.Add(
+                    new PendingLearningCaseRecoveryItem(
+                        request,
+                        student?.DisplayName ?? "原任教学员",
+                        context is null
+                            ? "教学上下文已变化"
+                            : FormatSubjectKey(context.SubjectKey)));
             }
 
             if (PendingLearningCaseRecoveries.Count > 0)
