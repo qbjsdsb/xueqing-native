@@ -208,7 +208,15 @@ expect_lock_blocked   'Assignment revoke'   "update public.student_teacher_assig
 
 expect_lock_blocked   'Competing reschedule'   "select pg_catalog.set_config('request.jwt.claim.sub', '$auth_subject', false);
    select pg_catalog.set_config('request.jwt.claim.role', 'authenticated', false);
-   select pg_catalog.set_config('request.jwt.claims', '{"sub":"$auth_subject","role":"authenticated","iss":"$auth_issuer"}', false);
+   select pg_catalog.set_config(
+     'request.jwt.claims',
+     pg_catalog.jsonb_build_object(
+       'sub', '$auth_subject',
+       'role', 'authenticated',
+       'iss', '$auth_issuer'
+     )::text,
+     false
+   );
    set role authenticated;
    select public.reschedule_primary_action(
      '$competing_operation_id'::uuid,
