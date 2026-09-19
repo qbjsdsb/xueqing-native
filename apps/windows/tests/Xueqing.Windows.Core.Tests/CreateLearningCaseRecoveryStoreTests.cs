@@ -39,6 +39,65 @@ public sealed class CreateLearningCaseRecoveryStoreTests
     }
 
     [TestMethod]
+    public async Task Pending_intents_are_enumerable_without_recent_observation_projection()
+    {
+        var store = new SqliteCreateLearningCaseRecoveryStore(
+            CreateDatabasePath(),
+            TestMasterKey);
+        var first = Request();
+        var second = Request() with
+        {
+            OperationId = Guid.Parse("76000000-0000-0000-0000-000000000002"),
+            SourceObservationId = Guid.Parse("60000000-0000-0000-0000-000000000002"),
+            Title = "第二个尚未确认的虚构学情问题",
+        };
+
+        await store.SaveAsync(first);
+        await store.SaveAsync(second);
+
+        var pending = await store.ListPendingAsync(first.OrganizationId);
+
+        Assert.AreEqual(2, pending.Count);
+        CollectionAssert.AreEqual(
+            new[] { first.OperationId, second.OperationId },
+            pending.Select(item => item.OperationId).ToArray());
+    }
+
+    [TestMethod]
+    public async Task Rejected_intent_is_hidden_and_does_not_block_corrected_operation()
+    {
+        var store = new SqliteCreateLearningCaseRecoveryStore(
+            CreateDatabasePath(),
+            TestMasterKey);
+        var rejected = Request();
+
+        await store.SaveAsync(rejected);
+        await store.MarkRejectedAsync(rejected.OperationId);
+
+        Assert.IsNull(await store.FindBySourceObservationAsync(
+            rejected.OrganizationId,
+            rejected.StudentId,
+            rejected.SubjectProfileId,
+            rejected.SourceObservationId!.Value));
+        Assert.AreEqual(0, (await store.ListPendingAsync(rejected.OrganizationId)).Count);
+
+        var corrected = rejected with
+        {
+            OperationId = Guid.Parse("76000000-0000-0000-0000-000000000099"),
+            Title = "修正后的虚构学情问题",
+        };
+        await store.SaveAsync(corrected);
+
+        Assert.AreEqual(
+            corrected,
+            await store.FindBySourceObservationAsync(
+                corrected.OrganizationId,
+                corrected.StudentId,
+                corrected.SubjectProfileId,
+                corrected.SourceObservationId!.Value));
+    }
+
+    [TestMethod]
     public async Task Same_operation_is_idempotent_but_collision_is_rejected()
     {
         var store = new SqliteCreateLearningCaseRecoveryStore(
