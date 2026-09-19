@@ -1,7 +1,7 @@
 begin;
 set local search_path = public, extensions;
 
-select plan(49);
+select plan(59);
 
 select has_table(
     'public',
@@ -238,10 +238,30 @@ select is(
     'reschedule appends one provenance event'
 );
 
+select is(
+    (
+        select result_payload ->> 'responsible_teacher_app_user_id'
+        from public.operation_receipts
+        where operation_id = '95000000-0000-0000-0000-000000000002'::uuid
+    ),
+    '10000000-0000-0000-0000-000000000001'::text,
+    'reschedule receipt exposes the server-resolved responsible teacher'
+);
+
+select is(
+    (
+        select result_payload ->> 'owner_assignment_id'
+        from public.operation_receipts
+        where operation_id = '95000000-0000-0000-0000-000000000002'::uuid
+    ),
+    '50000000-0000-0000-0000-000000000001'::text,
+    'reschedule receipt exposes the authoritative owner assignment'
+);
+
 set local role authenticated;
 
 select lives_ok(
-    $$
+    $
     select public.reschedule_primary_action(
         '95000000-0000-0000-0000-000000000002',
         '20000000-0000-0000-0000-000000000001',
@@ -254,8 +274,28 @@ select lives_ok(
         1,
         '2026-09-22'::date
     )
-    $$,
+    $,
     'same reschedule operation replays committed receipt despite current versions moving'
+);
+
+select throws_ok(
+    $
+    select public.reschedule_primary_action(
+        '95000000-0000-0000-0000-000000000002',
+        '20000000-0000-0000-0000-000000000001',
+        '30000000-0000-0000-0000-000000000001',
+        '40000000-0000-0000-0000-000000000001',
+        '50000000-0000-0000-0000-000000000001',
+        current_setting('xq.test.case_id')::uuid,
+        current_setting('xq.test.action_id')::uuid,
+        1,
+        1,
+        '2026-09-23'::date
+    )
+    $,
+    'P0001',
+    'XQ_OPERATION_REUSED_WITH_DIFFERENT_PAYLOAD',
+    'reschedule operation id cannot be reused for a different due date'
 );
 
 select throws_ok(
@@ -483,10 +523,60 @@ select is(
     'verification progression commits one operation receipt'
 );
 
+select is(
+    (
+        select result_payload ->> 'responsible_teacher_app_user_id'
+        from public.operation_receipts
+        where operation_id = '95000000-0000-0000-0000-000000000006'::uuid
+    ),
+    '10000000-0000-0000-0000-000000000001'::text,
+    'verification receipt exposes the server-resolved responsible teacher'
+);
+
+select is(
+    (
+        select result_payload ->> 'owner_assignment_id'
+        from public.operation_receipts
+        where operation_id = '95000000-0000-0000-0000-000000000006'::uuid
+    ),
+    '50000000-0000-0000-0000-000000000001'::text,
+    'verification receipt exposes the authoritative owner assignment'
+);
+
+select is(
+    (
+        select result_payload ->> 'verification_summary'
+        from public.operation_receipts
+        where operation_id = '95000000-0000-0000-0000-000000000006'::uuid
+    ),
+    '能压缩主要信息，但跨段概括仍会漏掉限制条件。'::text,
+    'verification receipt echoes normalized teacher verification text'
+);
+
+select is(
+    (
+        select result_payload ->> 'next_action_text'
+        from public.operation_receipts
+        where operation_id = '95000000-0000-0000-0000-000000000006'::uuid
+    ),
+    '下一轮改用两篇跨段材料，只检查限制条件是否保留。'::text,
+    'verification receipt echoes normalized next Action text'
+);
+
+select is(
+    (
+        select result_payload ->> 'next_action_due_on'
+        from public.operation_receipts
+        where operation_id = '95000000-0000-0000-0000-000000000006'::uuid
+    ),
+    '2026-09-24'::text,
+    'verification receipt echoes the committed next Action due date'
+);
+
 set local role authenticated;
 
 select lives_ok(
-    $$
+    $
     select public.record_verification_and_next_action(
         '95000000-0000-0000-0000-000000000006',
         '20000000-0000-0000-0000-000000000001',
@@ -502,8 +592,31 @@ select lives_ok(
         '  下一轮改用两篇跨段材料，只检查限制条件是否保留。  ',
         '2026-09-24'::date
     )
-    $$,
+    $,
     'same verification operation replays receipt even after Action has been replaced'
+);
+
+select throws_ok(
+    $
+    select public.record_verification_and_next_action(
+        '95000000-0000-0000-0000-000000000006',
+        '20000000-0000-0000-0000-000000000001',
+        '30000000-0000-0000-0000-000000000001',
+        '40000000-0000-0000-0000-000000000001',
+        '50000000-0000-0000-0000-000000000001',
+        current_setting('xq.test.case_id')::uuid,
+        current_setting('xq.test.action_id')::uuid,
+        2,
+        2,
+        'partially_met',
+        '能压缩主要信息，但跨段概括仍会漏掉限制条件。',
+        '改成另一条下一步行动。',
+        '2026-09-24'::date
+    )
+    $,
+    'P0001',
+    'XQ_OPERATION_REUSED_WITH_DIFFERENT_PAYLOAD',
+    'verification operation id cannot be reused for a different next Action'
 );
 
 reset role;
@@ -684,7 +797,7 @@ select set_config(
 set local role authenticated;
 
 select throws_ok(
-    $$
+    $
     select public.reschedule_primary_action(
         '95000000-0000-0000-0000-000000000020',
         '20000000-0000-0000-0000-000000000001',
@@ -697,10 +810,33 @@ select throws_ok(
         1,
         '2026-09-25'::date
     )
-    $$,
+    $,
     'P0001',
     'XQ_TEACHER_ASSIGNMENT_REQUIRED',
     'member without the legal assignment cannot reschedule another teacher Action'
+);
+
+select throws_ok(
+    $
+    select public.record_verification_and_next_action(
+        '95000000-0000-0000-0000-000000000021',
+        '20000000-0000-0000-0000-000000000001',
+        '30000000-0000-0000-0000-000000000001',
+        '40000000-0000-0000-0000-000000000001',
+        '50000000-0000-0000-0000-000000000001',
+        current_setting('xq.test.rollback_case_id')::uuid,
+        current_setting('xq.test.rollback_action_id')::uuid,
+        1,
+        1,
+        'uncertain',
+        '另一个老师不能写入这条 Verification。',
+        '另一个老师也不能建立下一步。',
+        null
+    )
+    $,
+    'P0001',
+    'XQ_TEACHER_ASSIGNMENT_REQUIRED',
+    'member without the legal assignment cannot verify another teacher Action'
 );
 
 reset role;
