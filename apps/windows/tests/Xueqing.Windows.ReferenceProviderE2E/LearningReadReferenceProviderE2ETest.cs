@@ -53,16 +53,41 @@ public sealed class LearningReadReferenceProviderE2ETest
         Assert.IsTrue(initialFocus.IsSuccess, initialFocus.Failure?.Code);
         Assert.IsNotNull(initialFocus.Snapshot);
 
+        const string sourceText = "Windows E2E · 从真实课堂观察形成学情问题";
+        var sourceObservationId = await CreateSourceObservationAsync(
+            httpClient,
+            projectUri,
+            apiKey,
+            accessToken,
+            context,
+            sourceText);
+
+        var recentReader = new PostgrestStudentRecentObservationsReader(
+            httpClient,
+            projectUri,
+            apiKey,
+            _ => ValueTask.FromResult<string?>(accessToken));
+        var recent = await recentReader.ReadAsync(
+            context.ObservationScope,
+            bootstrap.Snapshot.ActorAppUserId);
+        Assert.IsTrue(recent.IsSuccess, recent.Failure?.Code);
+        Assert.IsNotNull(recent.Snapshot);
+        Assert.AreEqual(
+            sourceText,
+            recent.Snapshot.Observations.Single(
+                item => item.ObservationId == sourceObservationId).RawText);
+
         var operationId = Guid.Parse("75000000-0000-0000-0000-000000000037");
         const string caseTitle = "Windows E2E · 虚构概括问题";
         const string actionText = "Windows E2E · 今天复核三道陌生材料";
         var dueOn = initialFocus.Snapshot.OrganizationBusinessDate;
 
-        var firstReceipt = await CreateLearningCaseAsync(
+        var createCase = new PostgrestCreateLearningCaseCommand(
             httpClient,
             projectUri,
             apiKey,
-            accessToken,
+            _ => ValueTask.FromResult<string?>(accessToken));
+        var commandRequest = new CreateLearningCaseRequest(
             operationId,
             context.OrganizationId,
             context.StudentId,
@@ -70,24 +95,30 @@ public sealed class LearningReadReferenceProviderE2ETest
             context.AssignmentId,
             caseTitle,
             actionText,
-            dueOn);
-        var retryReceipt = await CreateLearningCaseAsync(
-            httpClient,
-            projectUri,
-            apiKey,
-            accessToken,
-            operationId,
-            context.OrganizationId,
-            context.StudentId,
-            context.SubjectProfileId,
-            context.AssignmentId,
-            caseTitle,
-            actionText,
-            dueOn);
+            dueOn,
+            sourceObservationId);
+
+        var firstResult = await createCase.ExecuteAsync(
+            commandRequest,
+            bootstrap.Snapshot.ActorAppUserId);
+        var retryResult = await createCase.ExecuteAsync(
+            commandRequest,
+            bootstrap.Snapshot.ActorAppUserId);
+
+        Assert.IsTrue(firstResult.IsSuccess, firstResult.Failure?.Code);
+        Assert.IsTrue(retryResult.IsSuccess, retryResult.Failure?.Code);
+        Assert.IsNotNull(firstResult.Receipt);
+        Assert.IsNotNull(retryResult.Receipt);
+        var firstReceipt = firstResult.Receipt;
+        var retryReceipt = retryResult.Receipt;
 
         Assert.AreEqual(firstReceipt.CaseId, retryReceipt.CaseId);
         Assert.AreEqual(firstReceipt.PrimaryActionId, retryReceipt.PrimaryActionId);
         Assert.AreEqual(firstReceipt.ServerCommittedAt, retryReceipt.ServerCommittedAt);
+        Assert.AreEqual(operationId, firstReceipt.OperationId);
+        Assert.AreEqual(bootstrap.Snapshot.ActorAppUserId, firstReceipt.ResponsibleTeacherAppUserId);
+        Assert.AreEqual(context.AssignmentId, firstReceipt.OwnerAssignmentId);
+        Assert.AreEqual(sourceObservationId, firstReceipt.SourceObservationId);
 
         var focus = await focusReader.ReadAsync(
             scope,
@@ -118,55 +149,48 @@ public sealed class LearningReadReferenceProviderE2ETest
         Assert.AreEqual(initialFocus.Snapshot.OrganizationTimeZone, projectedAction.OrganizationTimeZone);
     }
 
-    private static async Task<LearningCaseReceipt> CreateLearningCaseAsync(
+
+    private static async Task<Guid> CreateSourceObservationAsync(
         HttpClient httpClient,
         Uri projectUri,
         string apiKey,
         string accessToken,
-        Guid operationId,
-        Guid organizationId,
-        Guid studentId,
-        Guid subjectProfileId,
-        Guid assignmentId,
-        string title,
-        string actionText,
-        DateOnly dueOn)
+        PersonalTeachingContext context,
+        string rawText)
     {
         var baseUri = projectUri.AbsoluteUri.EndsWith("/", StringComparison.Ordinal)
             ? projectUri
             : new Uri(projectUri.AbsoluteUri + "/", UriKind.Absolute);
         using var request = new HttpRequestMessage(
             HttpMethod.Post,
-            new Uri(baseUri, "rest/v1/rpc/create_learning_case"));
+            new Uri(baseUri, "rest/v1/rpc/create_observation"));
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
         request.Headers.TryAddWithoutValidation("apikey", apiKey);
         request.Content = JsonContent.Create(new
         {
-            p_operation_id = operationId,
-            p_organization_id = organizationId,
-            p_student_id = studentId,
-            p_subject_profile_id = subjectProfileId,
-            p_owner_assignment_id = assignmentId,
-            p_title = title,
-            p_primary_action_text = actionText,
-            p_primary_action_due_on = dueOn,
-            p_source_observation_id = (Guid?)null,
+            p_operation_id = Guid.Parse("74000000-0000-0000-0000-000000000038"),
+            p_organization_id = context.OrganizationId,
+            p_student_id = context.StudentId,
+            p_subject_profile_id = context.SubjectProfileId,
+            p_assignment_id = context.AssignmentId,
+            p_raw_text = rawText,
+            p_client_captured_at = (DateTimeOffset?)null,
+            p_client_capture_metadata = new
+            {
+                source = "windows_learning_case_e2e",
+            },
         });
 
         using var response = await httpClient.SendAsync(request);
         var body = await response.Content.ReadAsStringAsync();
-        Assert.IsTrue(response.IsSuccessStatusCode,
-            $"CreateLearningCase failed with HTTP {(int)response.StatusCode}: {body}");
+        Assert.IsTrue(
+            response.IsSuccessStatusCode,
+            $"CreateObservation fixture failed with HTTP {(int)response.StatusCode}: {body}");
 
         using var document = JsonDocument.Parse(body);
-        var root = document.RootElement;
-        Assert.AreEqual("create_learning_case_v1", root.GetProperty("command").GetString());
-        return new LearningCaseReceipt(
-            Guid.Parse(root.GetProperty("case_id").GetString()
-                ?? throw new InvalidDataException("CreateLearningCase receipt is missing case_id.")),
-            Guid.Parse(root.GetProperty("primary_action_id").GetString()
-                ?? throw new InvalidDataException("CreateLearningCase receipt is missing primary_action_id.")),
-            root.GetProperty("server_committed_at").GetDateTimeOffset());
+        return Guid.Parse(
+            document.RootElement.GetProperty("observation_id").GetString()
+            ?? throw new InvalidDataException("CreateObservation receipt is missing observation_id."));
     }
 
     private static string RequiredEnvironment(string name)
@@ -176,9 +200,4 @@ public sealed class LearningReadReferenceProviderE2ETest
             ? throw new InvalidOperationException($"Required E2E environment variable '{name}' is missing.")
             : value;
     }
-
-    private sealed record LearningCaseReceipt(
-        Guid CaseId,
-        Guid PrimaryActionId,
-        DateTimeOffset ServerCommittedAt);
 }
