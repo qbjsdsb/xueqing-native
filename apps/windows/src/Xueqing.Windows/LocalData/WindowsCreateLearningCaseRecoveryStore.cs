@@ -48,6 +48,21 @@ internal sealed class WindowsCreateLearningCaseRecoveryStore :
                 sourceObservationId,
                 cancellationToken);
 
+    public Task<IReadOnlyList<CreateLearningCaseRequest>> ListPendingAsync(
+        Guid actorAppUserId,
+        Guid organizationId,
+        CancellationToken cancellationToken = default) =>
+        GetStore(actorAppUserId, organizationId)
+            .ListPendingAsync(organizationId, cancellationToken);
+
+    public Task MarkRejectedAsync(
+        Guid actorAppUserId,
+        Guid organizationId,
+        Guid operationId,
+        CancellationToken cancellationToken = default) =>
+        GetStore(actorAppUserId, organizationId)
+            .MarkRejectedAsync(operationId, cancellationToken);
+
     public Task RemoveAsync(
         Guid actorAppUserId,
         Guid organizationId,
