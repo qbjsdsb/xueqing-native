@@ -87,6 +87,162 @@ public sealed partial class StudentsView : UserControl
         }
     }
 
+
+    private async void CreateLearningCase_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button button ||
+            button.Tag is not StudentRecentObservation observation ||
+            DataContext is not MainWindowViewModel viewModel)
+        {
+            return;
+        }
+
+        var titleBox = new TextBox
+        {
+            Header = "关注问题",
+            PlaceholderText = "例如：概括题压缩仍不稳定",
+            MaxLength = 500,
+        };
+        var actionBox = new TextBox
+        {
+            Header = "下一步行动",
+            PlaceholderText = "写下下一次要做的具体教学动作",
+            MaxLength = 1000,
+            AcceptsReturn = true,
+            TextWrapping = TextWrapping.Wrap,
+            MinHeight = 88,
+        };
+        var duePicker = new CalendarDatePicker
+        {
+            Header = "行动日期",
+            PlaceholderText = "可选",
+        };
+        var statusText = new TextBlock
+        {
+            Opacity = 0.70,
+            TextWrapping = TextWrapping.Wrap,
+        };
+        var content = new StackPanel
+        {
+            Spacing = 12,
+            MinWidth = 420,
+        };
+        content.Children.Add(titleBox);
+        content.Children.Add(actionBox);
+        content.Children.Add(duePicker);
+        content.Children.Add(statusText);
+
+        var dialog = new ContentDialog
+        {
+            XamlRoot = XamlRoot,
+            Title = "形成学情问题",
+            Content = content,
+            PrimaryButtonText = "创建",
+            CloseButtonText = "取消",
+            DefaultButton = ContentDialogButton.Primary,
+        };
+
+        var operationId = Guid.NewGuid();
+        string? submittedTitle = null;
+        string? submittedAction = null;
+        DateOnly? submittedDueOn = null;
+        var intentFrozen = false;
+
+        dialog.PrimaryButtonClick += async (_, args) =>
+        {
+            var deferral = args.GetDeferral();
+            args.Cancel = true;
+
+            try
+            {
+                if (!intentFrozen)
+                {
+                    var title = titleBox.Text.Trim();
+                    var primaryAction = actionBox.Text.Trim();
+                    if (title.Length is < 1 or > 500)
+                    {
+                        statusText.Text = "请填写 1–500 个字符的关注问题。";
+                        titleBox.Focus(FocusState.Programmatic);
+                        return;
+                    }
+
+                    if (primaryAction.Length is < 1 or > 1000)
+                    {
+                        statusText.Text = "请填写 1–1000 个字符的下一步行动。";
+                        actionBox.Focus(FocusState.Programmatic);
+                        return;
+                    }
+
+                    submittedTitle = title;
+                    submittedAction = primaryAction;
+                    submittedDueOn = duePicker.Date is { } selectedDate
+                        ? DateOnly.FromDateTime(selectedDate.DateTime)
+                        : null;
+                    intentFrozen = true;
+                    titleBox.IsEnabled = false;
+                    actionBox.IsEnabled = false;
+                    duePicker.IsEnabled = false;
+                }
+
+                dialog.IsPrimaryButtonEnabled = false;
+                statusText.Text = "正在提交…";
+
+                var result = await viewModel.CreateLearningCaseFromObservationAsync(
+                    observation,
+                    submittedTitle!,
+                    submittedAction!,
+                    submittedDueOn,
+                    operationId);
+
+                if (result.IsSuccess)
+                {
+                    statusText.Text = string.Empty;
+                    args.Cancel = false;
+                    return;
+                }
+
+                statusText.Text = CreateLearningCaseFailureText(result);
+                if (result.Failure?.Kind is
+                    CreateLearningCaseFailureKind.ResultUnknown or
+                    CreateLearningCaseFailureKind.Transient)
+                {
+                    dialog.PrimaryButtonText = "重试确认";
+                    dialog.IsPrimaryButtonEnabled = true;
+                }
+                else
+                {
+                    dialog.PrimaryButtonText = "无法提交";
+                    dialog.IsPrimaryButtonEnabled = false;
+                }
+            }
+            finally
+            {
+                deferral.Complete();
+            }
+        };
+
+        await dialog.ShowAsync();
+    }
+
+    private static string CreateLearningCaseFailureText(CreateLearningCaseResult result) =>
+        result.Failure?.Kind switch
+        {
+            CreateLearningCaseFailureKind.AuthenticationRequired =>
+                "登录状态已失效。已停止提交，请重新登录后再试。",
+            CreateLearningCaseFailureKind.AuthorityChanged =>
+                "当前教学权限或任课关系已经变化。已刷新工作区，请重新确认后再试。",
+            CreateLearningCaseFailureKind.Validation =>
+                "当前输入未通过服务器校验。请取消后重新发起。",
+            CreateLearningCaseFailureKind.OperationConflict =>
+                "这次操作标识发生冲突。为避免重复创建，已停止提交。",
+            CreateLearningCaseFailureKind.ResultUnknown =>
+                "提交结果尚未确认。请使用“重试确认”继续同一次操作，不要重复创建。",
+            CreateLearningCaseFailureKind.Transient =>
+                "服务暂时不可用。可以使用“重试确认”继续同一次操作。",
+            _ =>
+                "服务器返回无法验证。为避免重复创建，已停止提交。",
+        };
+
     private void StudentList_KeyDown(object sender, KeyRoutedEventArgs e)
     {
         if (_layoutMode == WindowLayoutMode.Expanded || StudentList.SelectedItem is null)
