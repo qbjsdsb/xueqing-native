@@ -386,6 +386,26 @@
                                                     FontSize="12"
                                                     Opacity="0.56"
                                                     Text="{Binding DueLabel}" />
+                                                <StackPanel
+                                                    Margin="0,4,0,0"
+                                                    Orientation="Horizontal"
+                                                    HorizontalAlignment="Right"
+                                                    Spacing="6">
+                                                    <Button
+                                                        Visibility="Collapsed"
+                                                        AutomationProperties.Name="调整当前关注的行动日期"
+                                                        Loaded="ActionProgressionButton_Loaded"
+                                                        Click="RescheduleFocusAction_Click"
+                                                        Content="改期"
+                                                        Tag="{Binding}" />
+                                                    <Button
+                                                        Visibility="Collapsed"
+                                                        AutomationProperties.Name="验证当前关注并安排下一步"
+                                                        Loaded="ActionProgressionButton_Loaded"
+                                                        Click="VerifyFocusAction_Click"
+                                                        Content="验证"
+                                                        Tag="{Binding}" />
+                                                </StackPanel>
                                             </StackPanel>
                                         </Grid>
                                     </DataTemplate>

@@ -87,6 +87,49 @@ public sealed partial class StudentsView : UserControl
         }
     }
 
+    private void ActionProgressionButton_Loaded(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button button &&
+            DataContext is MainWindowViewModel viewModel)
+        {
+            button.Visibility = viewModel.SupportsActionProgression
+                ? Visibility.Visible
+                : Visibility.Collapsed;
+        }
+    }
+
+    private async void RescheduleFocusAction_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button button ||
+            button.Tag is not LearningFocusDisplayItem item ||
+            DataContext is not MainWindowViewModel viewModel)
+        {
+            return;
+        }
+
+        var lookup = await viewModel.FindFocusActionProgressionAsync(item);
+        await ActionProgressionDialogFlow.ShowRescheduleAsync(
+            XamlRoot,
+            viewModel,
+            lookup);
+    }
+
+    private async void VerifyFocusAction_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button button ||
+            button.Tag is not LearningFocusDisplayItem item ||
+            DataContext is not MainWindowViewModel viewModel)
+        {
+            return;
+        }
+
+        var lookup = await viewModel.FindFocusActionProgressionAsync(item);
+        await ActionProgressionDialogFlow.ShowVerificationAsync(
+            XamlRoot,
+            viewModel,
+            lookup);
+    }
+
 
     private async void CreateLearningCase_Click(object sender, RoutedEventArgs e)
     {
