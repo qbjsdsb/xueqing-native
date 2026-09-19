@@ -274,7 +274,7 @@ select lives_ok(
         1,
         '2026-09-22'::date
     )
-    $,
+    $$,
     'same reschedule operation replays committed receipt despite current versions moving'
 );
 
@@ -292,7 +292,7 @@ select throws_ok(
         1,
         '2026-09-23'::date
     )
-    $,
+    $$,
     'P0001',
     'XQ_OPERATION_REUSED_WITH_DIFFERENT_PAYLOAD',
     'reschedule operation id cannot be reused for a different due date'
@@ -592,7 +592,7 @@ select lives_ok(
         '  下一轮改用两篇跨段材料，只检查限制条件是否保留。  ',
         '2026-09-24'::date
     )
-    $,
+    $$,
     'same verification operation replays receipt even after Action has been replaced'
 );
 
@@ -613,7 +613,7 @@ select throws_ok(
         '改成另一条下一步行动。',
         '2026-09-24'::date
     )
-    $,
+    $$,
     'P0001',
     'XQ_OPERATION_REUSED_WITH_DIFFERENT_PAYLOAD',
     'verification operation id cannot be reused for a different next Action'
@@ -810,7 +810,7 @@ select throws_ok(
         1,
         '2026-09-25'::date
     )
-    $,
+    $$,
     'P0001',
     'XQ_TEACHER_ASSIGNMENT_REQUIRED',
     'member without the legal assignment cannot reschedule another teacher Action'
@@ -833,7 +833,7 @@ select throws_ok(
         '另一个老师也不能建立下一步。',
         null
     )
-    $,
+    $$,
     'P0001',
     'XQ_TEACHER_ASSIGNMENT_REQUIRED',
     'member without the legal assignment cannot verify another teacher Action'
