@@ -275,7 +275,7 @@ public sealed partial class StudentsView : UserControl
             CreateLearningCaseFailureKind.OperationConflict =>
                 "这次操作标识发生冲突。为避免重复创建，已停止提交。",
             CreateLearningCaseFailureKind.LocalDurabilityFailure =>
-                "无法安全保存本机恢复记录。为避免重复提交，本次没有发送到服务器。",
+                "本机恢复状态无法安全更新。为避免重复或覆盖，本次停止继续处理。",
             CreateLearningCaseFailureKind.ResultUnknown =>
                 "提交结果尚未确认。请使用“重试确认”继续同一次操作，不要重复创建。",
             CreateLearningCaseFailureKind.Transient =>

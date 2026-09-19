@@ -9,6 +9,7 @@
         RowSpacing="14">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
@@ -28,8 +29,57 @@
                 TextWrapping="Wrap" />
         </StackPanel>
 
-        <ListView
+        <StackPanel
             Grid.Row="1"
+            Spacing="8">
+            <TextBlock
+                AutomationProperties.AutomationId="PendingLearningCaseRecoveryStatus"
+                Opacity="0.66"
+                Text="{Binding PendingLearningCaseRecoveryStatusText}"
+                TextWrapping="Wrap" />
+
+            <ListView
+                MaxHeight="220"
+                IsItemClickEnabled="False"
+                ItemsSource="{Binding PendingLearningCaseRecoveries}"
+                SelectionMode="None">
+                <ListView.ItemTemplate>
+                    <DataTemplate>
+                        <Grid Padding="4,8,8,10" ColumnSpacing="16">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Spacing="3">
+                                <TextBlock
+                                    FontWeight="SemiBold"
+                                    Text="{Binding Title}"
+                                    TextWrapping="Wrap" />
+                                <TextBlock
+                                    Opacity="0.72"
+                                    Text="{Binding PrimaryActionText}"
+                                    TextWrapping="Wrap" />
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <TextBlock Opacity="0.58" Text="{Binding StudentDisplayName}" />
+                                    <TextBlock Opacity="0.58" Text="{Binding SubjectDisplayName}" />
+                                    <TextBlock Opacity="0.58" Text="{Binding DueLabel}" />
+                                </StackPanel>
+                            </StackPanel>
+                            <Button
+                                Grid.Column="1"
+                                VerticalAlignment="Center"
+                                AutomationProperties.Name="重新确认尚未确认的学情问题提交"
+                                Click="RetryPendingLearningCase_Click"
+                                Content="重新确认"
+                                Tag="{Binding Request}" />
+                        </Grid>
+                    </DataTemplate>
+                </ListView.ItemTemplate>
+            </ListView>
+        </StackPanel>
+
+        <ListView
+            Grid.Row="2"
             AutomationProperties.AutomationId="TodayActionList"
             ItemsSource="{Binding TodayActions}"
             IsItemClickEnabled="False"
