@@ -336,6 +336,8 @@ begin
     v_result := pg_catalog.jsonb_build_object(
         'command', 'reschedule_primary_action_v1',
         'operation_id', p_operation_id,
+        'responsible_teacher_app_user_id', v_actor_id,
+        'owner_assignment_id', p_owner_assignment_id,
         'organization_id', p_organization_id,
         'student_id', p_student_id,
         'subject_profile_id', p_subject_profile_id,
@@ -752,6 +754,8 @@ begin
     v_result := pg_catalog.jsonb_build_object(
         'command', 'record_verification_and_next_action_v1',
         'operation_id', p_operation_id,
+        'responsible_teacher_app_user_id', v_actor_id,
+        'owner_assignment_id', p_owner_assignment_id,
         'organization_id', p_organization_id,
         'student_id', p_student_id,
         'subject_profile_id', p_subject_profile_id,
@@ -763,8 +767,11 @@ begin
         'completed_action_version', v_completed_action_version,
         'verification_id', v_verification_id,
         'verification_outcome', p_verification_outcome,
+        'verification_summary', pg_catalog.btrim(p_verification_summary),
         'next_primary_action_id', v_next_action_id,
         'next_action_version', 1,
+        'next_action_text', pg_catalog.btrim(p_next_action_text),
+        'next_action_due_on', p_next_action_due_on,
         'case_event_id', v_event_id,
         'server_committed_at', v_committed_at
     );
