@@ -30,7 +30,8 @@ public sealed class ActionProgressionCommandCoordinatorTests
         CollectionAssert.AreEqual(
             new[] { "save", "reschedule-send", "remove" },
             calls.ToArray());
-        Assert.AreEqual(request.OperationId, recovery.LastSaved!.OperationId);
+        Assert.AreEqual(request.OperationId, recovery.LastPersisted!.OperationId);
+        Assert.IsNull(recovery.LastSaved);
     }
 
     [TestMethod]
@@ -217,6 +218,7 @@ public sealed class ActionProgressionCommandCoordinatorTests
         public int MarkRejectedCount { get; private set; }
         public int RemoveCount { get; private set; }
         public ActionProgressionRecoveryIntent? LastSaved { get; private set; }
+        public ActionProgressionRecoveryIntent? LastPersisted { get; private set; }
 
         public Task SaveAsync(
             Guid actorAppUserId,
@@ -230,6 +232,7 @@ public sealed class ActionProgressionCommandCoordinatorTests
             }
 
             LastSaved = intent;
+            LastPersisted = intent;
             return Task.CompletedTask;
         }
 
