@@ -25,14 +25,29 @@ The accepted formal Case creation path contains:
 
 A successful new Case begins in `new` state, is bound to the current legal responsible-teacher assignment, and atomically receives exactly one pending primary Action.
 
+### Action progression + Verification
+
+The active slice adds two online-only formal commands:
+
+- `ReschedulePrimaryAction v1` — optimistic Case/Action versions, live authority re-check, Action due-date change, aggregate version increment, provenance event and receipt;
+- `RecordVerificationAndNextAction v1` — immutable Verification fact + atomic completion of the current Action + creation of exactly one next pending primary Action.
+
+Verification outcome is descriptive (`met / partially_met / not_met / uncertain`). It does **not** implicitly mark a Case stable or closed.
+
+The open-Case invariant remains:
+
+```text
+legal responsible teacher + exactly one pending primary Action
+```
+
+No client repair step is permitted between completion and next-Action creation; both are one database transaction.
+
 ### Organization business date + personal read models
 
-The active read-model slice adds:
-
-- an explicit validated Organization timezone;
+- explicit validated Organization timezone;
 - server-side Organization business-date calculation;
-- `StudentLearningFocus v1` — at most three recent-active open Cases with their authoritative pending primary Action;
-- `PersonalTodayActions v1` — explicit pending primary Actions across the actor's own live teaching assignments.
+- `StudentLearningFocus v1`;
+- `PersonalTodayActions v1`.
 
 Today bucketing is server-authoritative per Organization:
 
@@ -44,7 +59,7 @@ Clients must not recompute overdue/today/future from the device timezone.
 
 Organization management authority alone never causes another teacher's Case or Action to appear in personal projections.
 
-Evidence/Intervention/Assessment, Case transitions/close/reopen, Action completion/reschedule, attachments, realtime and generic sync cursors remain outside these read models.
+Case stable/close/reopen, responsibility reassignment, attachments, realtime and generic sync cursors remain separate later slices.
 
 The Git migrations are schema truth. `seed.sql` contains deterministic fictional fixtures only. Database tests live under `tests/` and run through `supabase test db` / pgTAP.
 
@@ -57,14 +72,11 @@ Authoritative command/projection RPCs are narrow `SECURITY DEFINER` boundaries. 
 - set `search_path=''`;
 - schema-qualify referenced relations/functions;
 - resolve the application-owned actor through the active `IdentityLink`;
-- re-check the relevant live Membership/Profile/Assignment scope;
+- re-check relevant live Membership/Profile/Assignment scope;
+- use explicit expected aggregate versions for mutable Case/Action commands;
 - expose only versioned domain contracts rather than direct table access.
 
 Write commands additionally serialize stable user intents by `operation_id` and commit domain side effects plus receipts atomically.
-
-`CreateObservation v1` appends a low-risk teaching fact after the live Teaching Fact Gate.
-
-`CreateLearningCase v1` is an online-only formal command. It derives responsibility from the caller's live assignment and atomically creates Case + pending primary Action + provenance event + optional Observation link + receipt.
 
 Read projections fail closed with `XQ_CASE_PRIMARY_ACTION_INVARIANT` if privileged/manual corruption leaves a visible open Case without exactly one pending primary Action.
 
