@@ -74,7 +74,7 @@ trap cleanup EXIT
 fixture_receipt="$(psql_db -At <<SQL
 select pg_catalog.set_config('request.jwt.claim.sub', '$auth_subject', false);
 select pg_catalog.set_config('request.jwt.claim.role', 'authenticated', false);
-select pg_catalog.set_config('request.jwt.claims', '{"sub":"$auth_subject","role":"authenticated","iss":"$auth_issuer"}', false);
+select pg_catalog.set_config('request.jwt.claims', '{\"sub\":\"$auth_subject\",\"role\":\"authenticated\",\"iss\":\"$auth_issuer\"}', false);
 set role authenticated;
 select public.create_learning_case(
   '$fixture_operation_id'::uuid,
