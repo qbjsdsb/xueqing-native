@@ -28,7 +28,6 @@ public sealed partial class TodayView : UserControl
         };
         summary.Children.Add(new TextBlock
         {
-            FontWeight = Windows.UI.Text.FontWeights.SemiBold,
             Text = request.Title,
             TextWrapping = TextWrapping.Wrap,
         });
