@@ -218,7 +218,7 @@ public sealed class SqliteCreateLearningCaseRecoveryStore
         // has been proven. In particular, do not run InitializeAsync here:
         // schema-v1 migration is a write and a scanned candidate may belong to
         // another application actor on the same Windows user profile.
-        using var connection = await _connectionFactory.OpenAsync(cancellationToken);
+        using var connection = await _connectionFactory.OpenReadOnlyAsync(cancellationToken);
         using var command = connection.CreateCommand();
         command.CommandText = """
             SELECT DISTINCT organization_id
