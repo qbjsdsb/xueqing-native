@@ -4,4 +4,5 @@ public sealed record PersonalTeachingWorkspaceServices(
     PersonalStudentWorkspaceCoordinator Students,
     StudentLearningFocusCoordinator LearningFocus,
     PersonalTodayActionsCoordinator Today,
-    ICreateLearningCaseCommand CreateLearningCase);
+    ICreateLearningCaseCommand CreateLearningCase,
+    ICreateLearningCaseRecoveryStore CreateLearningCaseRecovery);
