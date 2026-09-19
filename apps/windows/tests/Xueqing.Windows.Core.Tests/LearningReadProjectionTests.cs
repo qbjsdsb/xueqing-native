@@ -230,9 +230,13 @@ public sealed class LearningReadProjectionTests
     public async Task Learning_readers_map_authority_invariant_and_transient_failures()
     {
         var focusDenied = CreateFocusReader(
-            new StubHandler(HttpStatusCode.BadRequest, "{"code":"P0001","message":"XQ_TEACHING_CONTEXT_UNAVAILABLE"}"));
+            new StubHandler(
+                HttpStatusCode.BadRequest,
+                """{"code":"P0001","message":"XQ_TEACHING_CONTEXT_UNAVAILABLE"}"""));
         var todayInvariant = CreateTodayReader(
-            new StubHandler(HttpStatusCode.BadRequest, "{"code":"P0001","message":"XQ_CASE_PRIMARY_ACTION_INVARIANT"}"));
+            new StubHandler(
+                HttpStatusCode.BadRequest,
+                """{"code":"P0001","message":"XQ_CASE_PRIMARY_ACTION_INVARIANT"}"""));
         var todayTransient = CreateTodayReader(new StubHandler(HttpStatusCode.ServiceUnavailable, "{}"));
 
         var denied = await focusDenied.ReadAsync(Scope(), ActorId);
@@ -390,7 +394,9 @@ public sealed class LearningReadProjectionTests
         string dueBucket,
         string caseUpdatedAt)
     {
-        var dueJson = dueOn is null ? "null" : $""{dueOn}"";
+        var dueJson = dueOn is null
+            ? "null"
+            : System.Text.Json.JsonSerializer.Serialize(dueOn);
         return $$"""
         {
           "organization_id":"{{organizationId}}",
