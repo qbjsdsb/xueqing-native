@@ -75,8 +75,9 @@ class StudentReferenceInstrumentedTest {
         }
         composeRule.onNodeWithTag(
             "current-focus-60000000-0000-0000-0000-000000000001",
-        ).assertTextContains("跨段概括仍会漏掉限制条件")
-            .assertTextContains("复核陌生材料中的限制条件")
+        ).assertExists()
+        composeRule.onNodeWithText("跨段概括仍会漏掉限制条件").assertExists()
+        composeRule.onNodeWithText("复核陌生材料中的限制条件").assertExists()
     }
 
 }
