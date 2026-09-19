@@ -5,4 +5,6 @@ public sealed record PersonalTeachingWorkspaceServices(
     StudentLearningFocusCoordinator LearningFocus,
     PersonalTodayActionsCoordinator Today,
     ICreateLearningCaseCommand CreateLearningCase,
-    ICreateLearningCaseRecoveryStore CreateLearningCaseRecovery);
+    ICreateLearningCaseRecoveryStore CreateLearningCaseRecovery,
+    ActionProgressionCommandCoordinator? ActionProgression = null,
+    IActionProgressionRecoveryStore? ActionProgressionRecovery = null);
