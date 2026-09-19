@@ -36,6 +36,7 @@ data class StudentDirectoryItem(
 
 data class StudentDirectoryUiState(
     val status: StudentDirectoryStatus = StudentDirectoryStatus.Loading,
+    val actorAppUserId: UUID? = null,
     val students: List<StudentDirectoryItem> = emptyList(),
 )
 
@@ -107,6 +108,7 @@ class StudentDirectoryViewModel(
             _uiState.value = when (result) {
                 is PersonalBootstrapResult.Loaded -> StudentDirectoryUiState(
                     status = StudentDirectoryStatus.Ready,
+                    actorAppUserId = result.bootstrap.actor.appUserId,
                     students = buildStudentDirectory(result.bootstrap),
                 )
 
