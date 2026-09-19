@@ -38,8 +38,12 @@
                 Text="{Binding PendingLearningCaseRecoveryStatusText}"
                 TextWrapping="Wrap" />
 
-            <ItemsControl ItemsSource="{Binding PendingLearningCaseRecoveries}">
-                <ItemsControl.ItemTemplate>
+            <ListView
+                MaxHeight="220"
+                IsItemClickEnabled="False"
+                ItemsSource="{Binding PendingLearningCaseRecoveries}"
+                SelectionMode="None">
+                <ListView.ItemTemplate>
                     <DataTemplate>
                         <Grid Padding="4,8,8,10" ColumnSpacing="16">
                             <Grid.ColumnDefinitions>
@@ -70,8 +74,8 @@
                                 Tag="{Binding Request}" />
                         </Grid>
                     </DataTemplate>
-                </ItemsControl.ItemTemplate>
-            </ItemsControl>
+                </ListView.ItemTemplate>
+            </ListView>
         </StackPanel>
 
         <ListView
