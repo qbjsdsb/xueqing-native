@@ -1,6 +1,5 @@
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
-using Microsoft.UI.Xaml;
 using Xueqing.Windows.Core.Models;
 using Xueqing.Windows.Core.Services;
 
@@ -156,14 +155,6 @@ public sealed class MainWindowViewModel : ObservableObject
 
     public bool SupportsActionProgression =>
         _actionProgression is not null && _actionProgressionRecovery is not null;
-
-    public Visibility PrototypeStudentDetailVisibility => IsAuthoritativeStudentWorkspace
-        ? Visibility.Collapsed
-        : Visibility.Visible;
-
-    public Visibility AuthoritativeStudentDetailVisibility => IsAuthoritativeStudentWorkspace
-        ? Visibility.Visible
-        : Visibility.Collapsed;
 
     public string SearchPlaceholderText => IsAuthoritativeStudentWorkspace
         ? "搜索姓名或学科"
