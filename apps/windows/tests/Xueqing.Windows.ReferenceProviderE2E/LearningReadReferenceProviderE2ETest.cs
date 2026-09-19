@@ -1,3 +1,6 @@
+using System.Net.Http.Headers;
+using System.Net.Http.Json;
+using System.Text.Json;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Xueqing.Windows.Core.Models;
 using Xueqing.Windows.Infrastructure.Remote;
@@ -50,6 +53,30 @@ public sealed class LearningReadReferenceProviderE2ETest
         Assert.IsTrue(initialFocus.IsSuccess, initialFocus.Failure?.Code);
         Assert.IsNotNull(initialFocus.Snapshot);
 
+        const string sourceText = "Windows E2E · 从真实课堂观察形成学情问题";
+        var sourceObservationId = await CreateSourceObservationAsync(
+            httpClient,
+            projectUri,
+            apiKey,
+            accessToken,
+            context,
+            sourceText);
+
+        var recentReader = new PostgrestStudentRecentObservationsReader(
+            httpClient,
+            projectUri,
+            apiKey,
+            _ => ValueTask.FromResult<string?>(accessToken));
+        var recent = await recentReader.ReadAsync(
+            context.ObservationScope,
+            bootstrap.Snapshot.ActorAppUserId);
+        Assert.IsTrue(recent.IsSuccess, recent.Failure?.Code);
+        Assert.IsNotNull(recent.Snapshot);
+        Assert.AreEqual(
+            sourceText,
+            recent.Snapshot.Observations.Single(
+                item => item.ObservationId == sourceObservationId).RawText);
+
         var operationId = Guid.Parse("75000000-0000-0000-0000-000000000037");
         const string caseTitle = "Windows E2E · 虚构概括问题";
         const string actionText = "Windows E2E · 今天复核三道陌生材料";
@@ -69,7 +96,7 @@ public sealed class LearningReadReferenceProviderE2ETest
             caseTitle,
             actionText,
             dueOn,
-            null);
+            sourceObservationId);
 
         var firstResult = await createCase.ExecuteAsync(
             commandRequest,
@@ -91,6 +118,7 @@ public sealed class LearningReadReferenceProviderE2ETest
         Assert.AreEqual(operationId, firstReceipt.OperationId);
         Assert.AreEqual(bootstrap.Snapshot.ActorAppUserId, firstReceipt.ResponsibleTeacherAppUserId);
         Assert.AreEqual(context.AssignmentId, firstReceipt.OwnerAssignmentId);
+        Assert.AreEqual(sourceObservationId, firstReceipt.SourceObservationId);
 
         var focus = await focusReader.ReadAsync(
             scope,
@@ -119,6 +147,50 @@ public sealed class LearningReadReferenceProviderE2ETest
         Assert.AreEqual(ActionDueBucket.Today, projectedAction.DueBucket);
         Assert.AreEqual(initialFocus.Snapshot.OrganizationBusinessDate, projectedAction.OrganizationBusinessDate);
         Assert.AreEqual(initialFocus.Snapshot.OrganizationTimeZone, projectedAction.OrganizationTimeZone);
+    }
+
+
+    private static async Task<Guid> CreateSourceObservationAsync(
+        HttpClient httpClient,
+        Uri projectUri,
+        string apiKey,
+        string accessToken,
+        PersonalTeachingContext context,
+        string rawText)
+    {
+        var baseUri = projectUri.AbsoluteUri.EndsWith("/", StringComparison.Ordinal)
+            ? projectUri
+            : new Uri(projectUri.AbsoluteUri + "/", UriKind.Absolute);
+        using var request = new HttpRequestMessage(
+            HttpMethod.Post,
+            new Uri(baseUri, "rest/v1/rpc/create_observation"));
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+        request.Headers.TryAddWithoutValidation("apikey", apiKey);
+        request.Content = JsonContent.Create(new
+        {
+            p_operation_id = Guid.Parse("74000000-0000-0000-0000-000000000038"),
+            p_organization_id = context.OrganizationId,
+            p_student_id = context.StudentId,
+            p_subject_profile_id = context.SubjectProfileId,
+            p_assignment_id = context.AssignmentId,
+            p_raw_text = rawText,
+            p_client_captured_at = (DateTimeOffset?)null,
+            p_client_capture_metadata = new
+            {
+                source = "windows_learning_case_e2e",
+            },
+        });
+
+        using var response = await httpClient.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.IsTrue(
+            response.IsSuccessStatusCode,
+            $"CreateObservation fixture failed with HTTP {(int)response.StatusCode}: {body}");
+
+        using var document = JsonDocument.Parse(body);
+        return Guid.Parse(
+            document.RootElement.GetProperty("observation_id").GetString()
+            ?? throw new InvalidDataException("CreateObservation receipt is missing observation_id."));
     }
 
     private static string RequiredEnvironment(string name)
