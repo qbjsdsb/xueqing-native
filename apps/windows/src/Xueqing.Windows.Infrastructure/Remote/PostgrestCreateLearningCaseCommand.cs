@@ -122,14 +122,14 @@ public sealed class PostgrestCreateLearningCaseCommand : ICreateLearningCaseComm
                 catch (JsonException)
                 {
                     return CreateLearningCaseResult.Failed(
-                        CreateLearningCaseFailureKind.InvalidResponse,
-                        "XQ_COMMAND_RECEIPT_JSON_INVALID");
+                        CreateLearningCaseFailureKind.ResultUnknown,
+                        "XQ_RESULT_UNKNOWN_RECEIPT_JSON");
                 }
                 catch (InvalidDataException)
                 {
                     return CreateLearningCaseResult.Failed(
-                        CreateLearningCaseFailureKind.InvalidResponse,
-                        "XQ_COMMAND_RECEIPT_CONTRACT_INVALID");
+                        CreateLearningCaseFailureKind.ResultUnknown,
+                        "XQ_RESULT_UNKNOWN_RECEIPT_CONTRACT");
                 }
             }
 
