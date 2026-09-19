@@ -105,9 +105,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          dotnet test apps/windows/tests/Xueqing.Windows.Core.Tests/Xueqing.Windows.Core.Tests.csproj \
-            -c Release \
-            --nologo
+          project=apps/windows/tests/Xueqing.Windows.Core.Tests/Xueqing.Windows.Core.Tests.csproj
+          dotnet build "$project" -c Release --nologo
+          output=apps/windows/tests/Xueqing.Windows.Core.Tests/bin/Release/net10.0
+          "$output/Xueqing.Windows.Core.Tests" \
+            --minimum-expected-tests 18 \
+            --no-banner \
+            --progress off \
+            --output Detailed
 
       - name: Run Bootstrap, Observation and Learning read-model E2E
         shell: bash
