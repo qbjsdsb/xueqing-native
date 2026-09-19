@@ -75,7 +75,7 @@ public sealed class CreateLearningCaseCommandTests
 
             Assert.AreEqual(CreateLearningCaseFailureKind.ResultUnknown, result.Failure?.Kind);
             Assert.IsTrue(result.MustRetrySameOperation);
-            Assert.AreEqual("XQ_COMMAND_RECEIPT_CONTRACT_INVALID", result.Failure?.Code);
+            Assert.AreEqual("XQ_RESULT_UNKNOWN_RECEIPT_CONTRACT", result.Failure?.Code);
             Assert.IsNull(result.Receipt);
         }
     }
