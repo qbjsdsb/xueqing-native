@@ -73,7 +73,8 @@ public sealed class CreateLearningCaseCommandTests
                 }))
                 .ExecuteAsync(Request(), ActorId);
 
-            Assert.AreEqual(CreateLearningCaseFailureKind.InvalidResponse, result.Failure?.Kind);
+            Assert.AreEqual(CreateLearningCaseFailureKind.ResultUnknown, result.Failure?.Kind);
+            Assert.IsTrue(result.MustRetrySameOperation);
             Assert.AreEqual("XQ_COMMAND_RECEIPT_CONTRACT_INVALID", result.Failure?.Code);
             Assert.IsNull(result.Receipt);
         }
@@ -95,7 +96,8 @@ public sealed class CreateLearningCaseCommandTests
                 }))
                 .ExecuteAsync(Request(), ActorId);
 
-            Assert.AreEqual(CreateLearningCaseFailureKind.InvalidResponse, result.Failure?.Kind);
+            Assert.AreEqual(CreateLearningCaseFailureKind.ResultUnknown, result.Failure?.Kind);
+            Assert.IsTrue(result.MustRetrySameOperation);
         }
     }
 
@@ -112,7 +114,8 @@ public sealed class CreateLearningCaseCommandTests
         Assert.AreEqual(CreateLearningCaseFailureKind.Validation, validation.Failure?.Kind);
         Assert.AreEqual(CreateLearningCaseFailureKind.OperationConflict, conflict.Failure?.Kind);
         Assert.AreEqual(CreateLearningCaseFailureKind.AuthenticationRequired, auth.Failure?.Kind);
-        Assert.AreEqual(CreateLearningCaseFailureKind.Transient, transient.Failure?.Kind);
+        Assert.AreEqual(CreateLearningCaseFailureKind.ResultUnknown, transient.Failure?.Kind);
+        Assert.IsTrue(transient.MustRetrySameOperation);
     }
 
     [TestMethod]
