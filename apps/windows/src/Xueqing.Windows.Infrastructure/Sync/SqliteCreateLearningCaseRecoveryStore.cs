@@ -295,7 +295,8 @@ public sealed class SqliteCreateLearningCaseRecoveryStore
         RequireGuid(request.SubjectProfileId, nameof(request.SubjectProfileId));
         RequireGuid(request.OwnerAssignmentId, nameof(request.OwnerAssignmentId));
 
-        if (request.SourceObservationId is null or { } source when source == Guid.Empty)
+        if (request.SourceObservationId is not Guid sourceObservationId ||
+            sourceObservationId == Guid.Empty)
         {
             throw new ArgumentException(
                 "Observation-to-Case recovery requires a non-empty source Observation.",
