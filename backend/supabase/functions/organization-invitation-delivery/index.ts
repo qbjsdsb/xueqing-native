@@ -44,6 +44,43 @@ function optionalEnvironment(...names: string[]): string | null {
   return null;
 }
 
+function mappedKey(environmentName: string): string | null {
+  const raw = Deno.env.get(environmentName)?.trim();
+  if (!raw) return null;
+
+  try {
+    const parsed = JSON.parse(raw) as JsonObject;
+    const candidate = stringValue(parsed.default);
+    if (!candidate) return null;
+
+    // Current Supabase runtimes expose the concrete sb_* key in the JSON map.
+    // Supporting an environment-variable indirection as well keeps local and
+    // transitional self-hosted environments compatible without treating an
+    // environment variable name as a credential.
+    return Deno.env.get(candidate)?.trim() ?? candidate;
+  } catch {
+    return null;
+  }
+}
+
+function publishableKey(): string {
+  const value = mappedKey("SUPABASE_PUBLISHABLE_KEYS") ??
+    optionalEnvironment("SUPABASE_PUBLISHABLE_KEY", "SUPABASE_ANON_KEY");
+  if (!value) {
+    throw new DeliveryError("XQ_INVITATION_DELIVERY_UNAVAILABLE", 503);
+  }
+  return value;
+}
+
+function secretKey(): string {
+  const value = mappedKey("SUPABASE_SECRET_KEYS") ??
+    optionalEnvironment("SUPABASE_SECRET_KEY", "SUPABASE_SERVICE_ROLE_KEY");
+  if (!value) {
+    throw new DeliveryError("XQ_INVITATION_DELIVERY_UNAVAILABLE", 503);
+  }
+  return value;
+}
+
 function requiredBearer(request: Request): string {
   const header = request.headers.get("Authorization")?.trim() ?? "";
   if (!header.toLowerCase().startsWith("bearer ")) {
@@ -134,14 +171,8 @@ async function handle(request: Request): Promise<Response> {
 
   const accessToken = requiredBearer(request);
   const supabaseUrl = requiredEnvironment("SUPABASE_URL");
-  const publishableKey = requiredEnvironment("SUPABASE_ANON_KEY");
-  const serviceKey = optionalEnvironment(
-    "SUPABASE_SERVICE_ROLE_KEY",
-    "SUPABASE_SECRET_KEY",
-  );
-  if (!serviceKey) {
-    throw new DeliveryError("XQ_INVITATION_DELIVERY_UNAVAILABLE", 503);
-  }
+  const publishableApiKey = publishableKey();
+  const serviceKey = secretKey();
 
   let input: JsonObject;
   try {
@@ -154,7 +185,7 @@ async function handle(request: Request): Promise<Response> {
   const operationId = requiredUuid(input.operation_id);
   const invitationId = requiredUuid(input.invitation_id);
 
-  const userClient = createClient(supabaseUrl, publishableKey, {
+  const userClient = createClient(supabaseUrl, publishableApiKey, {
     auth: { autoRefreshToken: false, persistSession: false },
     global: { headers: { Authorization: `Bearer ${accessToken}` } },
   });
@@ -215,7 +246,7 @@ async function handle(request: Request): Promise<Response> {
   }
 
   const redirectTo = redirectForInvitation(supabaseUrl, invitationId);
-  const authClient = createClient(supabaseUrl, publishableKey, {
+  const authClient = createClient(supabaseUrl, publishableApiKey, {
     auth: { autoRefreshToken: false, persistSession: false },
   });
 
