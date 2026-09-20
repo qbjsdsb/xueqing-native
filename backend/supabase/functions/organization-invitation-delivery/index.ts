@@ -57,7 +57,12 @@ function mappedKey(environmentName: string): string | null {
     // Supporting an environment-variable indirection as well keeps local and
     // transitional self-hosted environments compatible without treating an
     // environment variable name as a credential.
-    return Deno.env.get(candidate)?.trim() ?? candidate;
+    const indirect = Deno.env.get(candidate)?.trim();
+    if (indirect) return indirect;
+    if (candidate.startsWith("sb_") || candidate.split(".").length === 3) {
+      return candidate;
+    }
+    return null;
   } catch {
     return null;
   }
