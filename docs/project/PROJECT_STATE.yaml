@@ -1,7 +1,7 @@
 schema_version: 1
 project: xueqing-native
 phase: phase-1
-milestone: provider-storage-conformance
+milestone: windows-organization-invitation-product-closure
 status: active
 architecture_baseline: v1-accepted
 
@@ -54,19 +54,19 @@ completed_gates:
   - provider-projection-conformance
 
 open_gates:
-  - provider-adapter-conformance-spike
+  - windows-organization-invitation-product-closure
   - production-provider-region-data-residency-gate
-  - signing-and-recovery-gate
   - backup-storage-restore-gate
+  - signing-and-recovery-gate
 
 next_execution:
   parallel_limit: 1
   lines:
-    - provider-storage-conformance
+    - windows-organization-invitation-product-closure
   after_current_green:
     - production-provider-region-data-residency-gate
-    - signing-and-recovery-gate
     - backup-storage-restore-gate
+    - signing-and-recovery-gate
 
 later:
   - generic-change-list-or-cursor-sync
