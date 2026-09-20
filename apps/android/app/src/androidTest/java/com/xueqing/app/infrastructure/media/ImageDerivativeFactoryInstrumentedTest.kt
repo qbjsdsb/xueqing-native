@@ -67,10 +67,16 @@ class ImageDerivativeFactoryInstrumentedTest {
         assertNull(derivativeExif.getAttribute(ExifInterface.TAG_MODEL))
         assertNull(derivativeExif.getAttribute(ExifInterface.TAG_GPS_LATITUDE))
         assertNull(derivativeExif.getAttribute(ExifInterface.TAG_GPS_LONGITUDE))
-        // Re-encoding intentionally emits no source EXIF block at all. An
-        // absent Orientation tag is stronger evidence than rewriting it to
-        // ORIENTATION_NORMAL.
-        assertNull(derivativeExif.getAttribute(ExifInterface.TAG_ORIENTATION))
+        // Platform ExifInterface reports an absent Orientation tag as
+        // ORIENTATION_UNDEFINED. The source ROTATE_90 value must not survive
+        // into the newly encoded derivative.
+        assertEquals(
+            ExifInterface.ORIENTATION_UNDEFINED,
+            derivativeExif.getAttributeInt(
+                ExifInterface.TAG_ORIENTATION,
+                ExifInterface.ORIENTATION_UNDEFINED,
+            ),
+        )
 
         sourceFile.delete()
     }
