@@ -106,6 +106,12 @@ jobs:
           set -euo pipefail
           bash backend/supabase/tests/organization_invitation_acceptance_concurrency.sh
 
+      - name: Prove Organization invitation delivery through local Mailpit
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash backend/supabase/tests/organization_invitation_delivery_provider_conformance.sh
+
       - name: Prove Observation Attachment Storage RLS and immutable commit boundary
         shell: bash
         run: |
