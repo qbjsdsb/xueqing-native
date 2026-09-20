@@ -116,7 +116,9 @@ Organization Management vertical slice 已完成第一条真实闭环：Owner/Ad
 
 Organization Invitation Acceptance 已完成并合入主线：已认证邀请人身份通过 provider-neutral invite email 与锁定邀请匹配；新的外部身份可原子创建 application-owned AppUser + IdentityLink + Membership，已有活动 IdentityLink 则复用原 AppUser；邀请状态、Membership 与 operation receipt 同事务提交，重放幂等，并发创建被序列化，且接受邀请永不创建 StudentTeacherAssignment。该链已经通过 backend pgTAP/concurrency、Windows real-provider E2E、Windows real-app/MSIX/Native UX 与 Android device reference-provider exact-head 门禁。
 
-当前唯一执行线已切换到 **Organization Invitation Delivery**。这一阶段只建立可信服务端的通知投递边界与可审计 delivery-attempt 状态：邀请仍由 Xueqing Organization domain 持有，邮件/Auth provider 只负责传输，不成为 Membership、身份或邀请状态的事实源。Windows Invite UI、resend/revoke、角色变更和 Owner transfer 保持在后续独立 Gate，避免把 provider 副作用、领域事务和桌面交互绑成一个大 PR。
+Organization Invitation Delivery 已完成并合入主线：邀请发送先持久化 provider-side delivery intent，再由受信任服务端适配器发送；same-operation replay 不会重复投递，provider/network ResultUnknown 保留为 `dispatching`，客户端不接触 secret，邮件成功也不会创建 Membership 或 StudentTeacherAssignment。该链已通过真实本地 Mailpit 单封邮件证明以及 Windows / Android reference-provider 回归。
+
+当前唯一执行线已切换到 **Provider Projection Conformance**。这一阶段不新增产品功能，而是冻结已接受读模型的 provider-neutral 语义：两个独立真实外部 Auth 身份通过 `IdentityLink` 映射到同一 application-owned AppUser 后，PersonalBootstrap、Recent Observation、Current Focus、Case history、Personal Today 与 Organization Management 必须产生相同业务 payload，并禁止 provider subject / issuer / token 等基础设施字段泄漏到业务投影。
 
 动态工程状态以 `docs/project/PROJECT_STATE.yaml` 为准。
 
