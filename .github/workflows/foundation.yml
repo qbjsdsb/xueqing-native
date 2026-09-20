@@ -71,6 +71,9 @@ jobs:
             docs/adr/0002-android-compose.md
             docs/adr/0013-v1-projection-snapshot-sync.md
             contracts/fixtures/README.md
+            contracts/operations/PRODUCTION_PROVIDER_REGION_DATA_RESIDENCY_V1.md
+            docs/production/PROVIDER_TOPOLOGY.json
+            tools/production/verify_provider_topology.py
           )
           for file in "${required[@]}"; do
             test -f "$file" || { echo "Missing $file"; exit 1; }
@@ -81,6 +84,13 @@ jobs:
         run: |
           set -euo pipefail
           python3 tools/architecture/check-boundaries.py
+
+      - name: Validate production provider topology evidence shape
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/production/verify_provider_topology.py \
+            docs/production/PROVIDER_TOPOLOGY.json
 
       - name: Reject obvious secret/private-data file types
         shell: bash
