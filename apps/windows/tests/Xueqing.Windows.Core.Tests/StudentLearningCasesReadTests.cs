@@ -51,8 +51,8 @@ public sealed class StudentLearningCasesReadTests
     public void Parser_rejects_responsibility_marker_that_conflicts_with_ids()
     {
         var json = ValidJson().Replace(
-            ""is_current_actor_responsibility":true",
-            ""is_current_actor_responsibility":false",
+            "\"is_current_actor_responsibility\":true",
+            "\"is_current_actor_responsibility\":false",
             StringComparison.Ordinal);
 
         Assert.ThrowsException<InvalidDataException>(
@@ -63,7 +63,7 @@ public sealed class StudentLearningCasesReadTests
     public void Parser_rejects_current_action_on_closed_case()
     {
         var json = ValidJson().Replace(
-            ""primary_action":null",
+            "\"primary_action\":null",
             """
             "primary_action":{
               "action_id":"71000000-0000-0000-0000-000000000002",
@@ -92,7 +92,7 @@ public sealed class StudentLearningCasesReadTests
               "action_version":3
             }
             """,
-            ""primary_action":null",
+            "\"primary_action\":null",
             StringComparison.Ordinal);
 
         Assert.ThrowsException<InvalidDataException>(
