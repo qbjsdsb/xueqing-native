@@ -338,7 +338,7 @@ public sealed class MainWindowViewModel : ObservableObject
         }
     }
 
-    private async Task RefreshOrganizationManagementAsync(CancellationToken cancellationToken)
+    public async Task RefreshOrganizationManagementAsync(CancellationToken cancellationToken = default)
     {
         _organizationManagementSnapshot = null;
         OrganizationMembers.Clear();

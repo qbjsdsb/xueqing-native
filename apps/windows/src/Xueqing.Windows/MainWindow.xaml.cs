@@ -56,8 +56,14 @@ public sealed partial class MainWindow : Window
         ApplyWorkspace(isOrganization: false);
     }
 
-    private void OrganizationWorkspace_Click(object sender, RoutedEventArgs e)
+    private async void OrganizationWorkspace_Click(object sender, RoutedEventArgs e)
     {
+        if (ViewModel.IsOrganizationManagementAuthoritative)
+        {
+            await ViewModel.RefreshOrganizationManagementAsync();
+            ApplyOrganizationWorkspaceAccess();
+        }
+
         if (ViewModel.CanUseOrganizationWorkspace)
         {
             ApplyWorkspace(isOrganization: true);
