@@ -32,9 +32,28 @@
     "edge_invitation_delivery": {
       "default_execution": "globally-distributed-nearest-request-region",
       "production_execution_region": null,
-      "region_control": "unresolved",
+      "region_control": "client-x-region-plus-server-SB_REGION-guard-implemented-production-config-required",
       "personal_data": "invitee-email-server-derived-from-authoritative-invitation",
-      "accepted": false
+      "accepted": false,
+      "same_region_with_primary_required": true,
+      "global_gateway_transit": "unresolved",
+      "supported_regions_snapshot": [
+        "ap-northeast-1",
+        "ap-northeast-2",
+        "ap-south-1",
+        "ap-southeast-1",
+        "ap-southeast-2",
+        "ca-central-1",
+        "eu-central-1",
+        "eu-central-2",
+        "eu-west-1",
+        "eu-west-2",
+        "eu-west-3",
+        "sa-east-1",
+        "us-east-1",
+        "us-west-1",
+        "us-west-2"
+      ]
     },
     "logs_diagnostics": {
       "application_pii_logging": "forbidden",
@@ -72,7 +91,10 @@
     "https://supabase.com/docs/guides/storage/cdn/smart-cdn",
     "https://supabase.com/docs/guides/functions/regional-invocation",
     "https://supabase.com/docs/guides/platform/backups",
-    "https://supabase.com/docs/guides/observability/log-drains"
+    "https://supabase.com/docs/guides/observability/log-drains",
+    "https://supabase.com/docs/guides/platform/free-project-pausing",
+    "https://supabase.com/docs/guides/deployment/going-into-prod",
+    "https://supabase.com/docs/guides/storage/s3/authentication"
   ],
   "repository_evidence": {
     "private_attachment_bucket_migration": "backend/supabase/migrations/20260920055000_observation_attachment_v1.sql",
@@ -81,5 +103,20 @@
       "apps/windows/src",
       "apps/android/app/src/main"
     ]
+  },
+  "hosted_environment_observation": {
+    "native_production_project_provisioned": false,
+    "existing_development_reference_region": "ap-southeast-1",
+    "existing_development_reference_matches_native_backend": false,
+    "evidence_checked_at": "2026-09-21"
+  },
+  "deployment_constraints": {
+    "zero_paid_dependency_target": true,
+    "hosted_free_automatic_backups": false,
+    "hosted_free_pitr": false,
+    "hosted_free_log_drains": false,
+    "hosted_free_log_retention_days": 1,
+    "hosted_free_inactivity_pause_possible": true,
+    "hosted_free_can_be_sole_production_durability_layer": false
   }
 }
