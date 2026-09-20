@@ -98,6 +98,27 @@ internal static class LocalReferenceProviderTeachingWorkspaceFactory
                 AccessTokenProvider),
             actionProgressionRecovery);
 
+        var caseLifecycleRecovery = new WindowsCaseLifecycleRecoveryStore(
+            projectUri.GetLeftPart(UriPartial.Authority),
+            ApplicationData.Current);
+        var caseLifecycle = new CaseLifecycleCommandCoordinator(
+            new PostgrestTransitionLearningCaseStateCommand(
+                httpClient,
+                projectUri,
+                apiKey,
+                AccessTokenProvider),
+            new PostgrestCloseLearningCaseCommand(
+                httpClient,
+                projectUri,
+                apiKey,
+                AccessTokenProvider),
+            new PostgrestReopenLearningCaseCommand(
+                httpClient,
+                projectUri,
+                apiKey,
+                AccessTokenProvider),
+            caseLifecycleRecovery);
+
         return new PersonalTeachingWorkspaceServices(
             new PersonalStudentWorkspaceCoordinator(
                 bootstrapReader,
@@ -108,6 +129,8 @@ internal static class LocalReferenceProviderTeachingWorkspaceFactory
             createLearningCase,
             createLearningCaseRecovery,
             actionProgression,
-            actionProgressionRecovery);
+            actionProgressionRecovery,
+            caseLifecycle,
+            caseLifecycleRecovery);
     }
 }

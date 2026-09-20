@@ -386,6 +386,15 @@
                                                     FontSize="12"
                                                     Opacity="0.56"
                                                     Text="{Binding DueLabel}" />
+                                                <Button
+                                                    Margin="0,4,0,0"
+                                                    HorizontalAlignment="Right"
+                                                    Visibility="Collapsed"
+                                                    AutomationProperties.Name="{Binding LifecycleAutomationName}"
+                                                    Loaded="CaseLifecycleButton_Loaded"
+                                                    Click="CaseLifecycle_Click"
+                                                    Content="{Binding LifecycleActionLabel}"
+                                                    Tag="{Binding}" />
                                                 <StackPanel
                                                     Margin="0,4,0,0"
                                                     Orientation="Horizontal"
