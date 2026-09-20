@@ -123,6 +123,19 @@ if [[ "$ready" != 'true' ]]; then
   exit 1
 fi
 
+unauthenticated_status="$(
+  curl --silent --output /dev/null --write-out '%{http_code}' \
+    -X POST "$function_url" \
+    -H "apikey: $ANON_KEY" \
+    -H 'Content-Type: application/json' \
+    --data "{\"operation_id\":\"$delivery_operation\",\"invitation_id\":\"$invitation_id\"}" || true
+)"
+if [[ "$unauthenticated_status" != '401' ]]; then
+  cat "$function_log" >&2
+  echo "Invitation delivery explicit auth boundary expected HTTP 401, got $unauthenticated_status." >&2
+  exit 1
+fi
+
 deliver() {
   curl --fail-with-body --silent --show-error     -X POST "$function_url"     -H "apikey: $ANON_KEY"     -H "Authorization: Bearer $owner_token"     -H 'Content-Type: application/json'     --data "{\"operation_id\":\"$delivery_operation\",\"invitation_id\":\"$invitation_id\"}"
 }
