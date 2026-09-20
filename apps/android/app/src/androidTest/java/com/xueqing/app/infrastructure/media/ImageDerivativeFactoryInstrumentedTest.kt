@@ -67,13 +67,10 @@ class ImageDerivativeFactoryInstrumentedTest {
         assertNull(derivativeExif.getAttribute(ExifInterface.TAG_MODEL))
         assertNull(derivativeExif.getAttribute(ExifInterface.TAG_GPS_LATITUDE))
         assertNull(derivativeExif.getAttribute(ExifInterface.TAG_GPS_LONGITUDE))
-        assertEquals(
-            ExifInterface.ORIENTATION_NORMAL,
-            derivativeExif.getAttributeInt(
-                ExifInterface.TAG_ORIENTATION,
-                ExifInterface.ORIENTATION_NORMAL,
-            ),
-        )
+        // Re-encoding intentionally emits no source EXIF block at all. An
+        // absent Orientation tag is stronger evidence than rewriting it to
+        // ORIENTATION_NORMAL.
+        assertNull(derivativeExif.getAttribute(ExifInterface.TAG_ORIENTATION))
 
         sourceFile.delete()
     }
