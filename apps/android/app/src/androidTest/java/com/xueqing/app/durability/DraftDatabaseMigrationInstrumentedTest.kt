@@ -50,9 +50,44 @@ class DraftDatabaseMigrationInstrumentedTest {
         migrated.close()
     }
 
+    @Test
+    fun migration2To3PreservesDraftAndAddsEmptyAttachmentStaging() {
+        helper.createDatabase(TEST_DB_V2, 2).apply {
+            execSQL(
+                "INSERT INTO draft_scope_state(scope_key, epoch) VALUES(?, ?)",
+                arrayOf<Any>(SCOPE_KEY, 9L),
+            )
+            execSQL(
+                "INSERT INTO drafts(scope_key, epoch, text, updated_at_epoch_millis) VALUES(?, ?, ?, ?)",
+                arrayOf<Any>(SCOPE_KEY, 9L, V2_SENTINEL, 1_789_632_000_100L),
+            )
+            close()
+        }
+
+        val migrated = helper.runMigrationsAndValidate(
+            TEST_DB_V2,
+            3,
+            true,
+            DraftDatabase.MIGRATION_2_3,
+        )
+
+        migrated.query("SELECT epoch, text FROM drafts WHERE scope_key = ?", arrayOf<Any>(SCOPE_KEY)).use { cursor ->
+            assertTrue(cursor.moveToFirst())
+            assertEquals(9L, cursor.getLong(0))
+            assertEquals(V2_SENTINEL, cursor.getString(1))
+        }
+        migrated.query("SELECT COUNT(*) FROM attachment_staging").use { cursor ->
+            assertTrue(cursor.moveToFirst())
+            assertEquals(0L, cursor.getLong(0))
+        }
+        migrated.close()
+    }
+
     private companion object {
         const val TEST_DB = "xueqing-migration-test"
+        const val TEST_DB_V2 = "xueqing-migration-v2-v3-test"
         const val SCOPE_KEY = "migration-scope"
         const val SENTINEL = "v1 草稿必须在 v2 Outbox 迁移后保留"
+        const val V2_SENTINEL = "v2 Durable Intent 必须在 v3 附件 staging 迁移后保留"
     }
 }

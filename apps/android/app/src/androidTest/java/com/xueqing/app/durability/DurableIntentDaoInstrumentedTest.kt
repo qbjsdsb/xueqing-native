@@ -75,6 +75,51 @@ class DurableIntentDaoInstrumentedTest {
     }
 
     @Test
+    fun submitAtomicallyBindsOnlyCurrentDraftEpochStagedAttachments() = runBlocking {
+        val session = draftStore.open(scope)
+        val attachment = AttachmentStagingEntity(
+            attachmentId = "71000000-0000-0000-0000-000000000002",
+            scopeKey = scope.storageKey,
+            draftEpoch = session.epoch,
+            environmentId = scope.environmentId,
+            appUserId = scope.appUserId,
+            organizationId = scope.organizationId,
+            studentId = scope.studentId,
+            subjectProfileId = scope.subjectId,
+            assignmentId = "66666666-6666-6666-6666-666666666666",
+            localEncryptedFileName = "71000000-0000-0000-0000-000000000002.xqas",
+            contentType = "image/jpeg",
+            byteSize = 128,
+            state = AttachmentStagingState.Staged,
+            parentObservationOperationId = null,
+            authoritativeObservationId = null,
+            remoteObjectName = null,
+            attachmentCommitOperationId = null,
+            lastErrorClass = null,
+            createdAtEpochMillis = NOW,
+            updatedAtEpochMillis = NOW,
+        )
+        database.attachmentStagingDao().insert(attachment)
+
+        val operationId = UUID.randomUUID()
+        val request = request(operationId, "带附件的课堂观察")
+        assertNotNull(
+            dao.submitObservation(
+                scopeKey = scope.storageKey,
+                expectedEpoch = session.epoch,
+                finalText = request.rawText,
+                updatedAtEpochMillis = NOW + 1,
+                outbox = outbox(request),
+            ),
+        )
+
+        val bound = requireNotNull(database.attachmentStagingDao().read(attachment.attachmentId))
+        assertEquals(AttachmentStagingState.WaitingForObservation, bound.state)
+        assertEquals(operationId.toString(), bound.parentObservationOperationId)
+        assertEquals(NOW + 1, bound.updatedAtEpochMillis)
+    }
+
+    @Test
     fun failedOutboxInsertRollsBackDraftRetirementAndEpochAdvance() = runBlocking {
         val existingSession = draftStore.open(scope)
         val duplicateOperationId = UUID.randomUUID()

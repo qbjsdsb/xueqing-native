@@ -28,6 +28,27 @@ interface DurableIntentDao {
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insertOutbox(entity: ObservationOutboxEntity): Long
 
+    @Query(
+        """
+        UPDATE attachment_staging
+        SET state = :waitingState,
+            parent_observation_operation_id = :operationId,
+            updated_at_epoch_millis = :updatedAtEpochMillis
+        WHERE scope_key = :scopeKey
+          AND draft_epoch = :draftEpoch
+          AND state = :stagedState
+          AND parent_observation_operation_id IS NULL
+        """,
+    )
+    suspend fun bindStagedAttachmentsToObservation(
+        scopeKey: String,
+        draftEpoch: Long,
+        operationId: String,
+        stagedState: String = AttachmentStagingState.Staged,
+        waitingState: String = AttachmentStagingState.WaitingForObservation,
+        updatedAtEpochMillis: Long,
+    ): Int
+
     @Query("SELECT * FROM observation_outbox WHERE operation_id = :operationId LIMIT 1")
     suspend fun readByOperationId(operationId: String): ObservationOutboxEntity?
 
@@ -208,6 +229,12 @@ interface DurableIntentDao {
             ),
         )
         insertOutbox(outbox)
+        bindStagedAttachmentsToObservation(
+            scopeKey = scopeKey,
+            draftEpoch = expectedEpoch,
+            operationId = outbox.operationId,
+            updatedAtEpochMillis = updatedAtEpochMillis,
+        )
         deleteDraft(scopeKey)
 
         val nextEpoch = Math.addExact(expectedEpoch, 1)
