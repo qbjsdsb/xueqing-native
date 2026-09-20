@@ -24,9 +24,9 @@ source "$status_env"
 set +a
 rm -f "$status_env"
 
-: "\${API_URL:?API_URL missing from local Supabase status}"
-: "\${SERVICE_ROLE_KEY:?SERVICE_ROLE_KEY missing from local Supabase status}"
-api_url="\${API_URL%/}"
+: "${API_URL:?API_URL missing from local Supabase status}"
+: "${SERVICE_ROLE_KEY:?SERVICE_ROLE_KEY missing from local Supabase status}"
+api_url="${API_URL%/}"
 echo "::add-mask::$SERVICE_ROLE_KEY"
 
 db_container="$(docker ps --filter 'name=supabase_db_' --format '{{.Names}}' | head -n 1)"
