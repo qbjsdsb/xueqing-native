@@ -1,7 +1,7 @@
 begin;
 set local search_path = public, extensions;
 
-select plan(18);
+select plan(19);
 
 select pg_catalog.set_config(
     'xq.test.assignment_count',
@@ -99,10 +99,16 @@ select is(
     'owner receives an authoritative admin target receipt'
 );
 
-select is(
-    (select pg_catalog.count(*) from public.student_teacher_assignments),
-    pg_catalog.current_setting('xq.test.assignment_count')::bigint,
-    'creating invitations never creates teaching assignments'
+select pg_catalog.set_config(
+    'xq.test.invitation_id',
+    public.create_organization_invitation_v1(
+        '91000000-0000-0000-0000-00000000c001'::uuid,
+        '20000000-0000-0000-0000-000000000001'::uuid,
+        'invite.admin@example.com',
+        'admin',
+        false
+    ) ->> 'invitation_id',
+    true
 );
 
 select is(
@@ -113,11 +119,7 @@ select is(
         'admin',
         false
     ) ->> 'invitation_id',
-    (
-        select receipt.result_payload ->> 'invitation_id'
-          from public.operation_receipts as receipt
-         where receipt.operation_id = '91000000-0000-0000-0000-00000000c001'::uuid
-    ),
+    pg_catalog.current_setting('xq.test.invitation_id'),
     'same operation and payload replays the original invitation receipt'
 );
 
@@ -178,6 +180,23 @@ select is(
     'teaching capability is explicit invitation intent and remains separate from assignment'
 );
 reset role;
+
+select is(
+    (select pg_catalog.count(*) from public.student_teacher_assignments),
+    pg_catalog.current_setting('xq.test.assignment_count')::bigint,
+    'creating invitations never creates teaching assignments'
+);
+
+select is(
+    (
+        select pg_catalog.count(*)
+          from public.operation_receipts
+         where operation_id = '91000000-0000-0000-0000-00000000c001'::uuid
+           and command_name = 'create_organization_invitation_v1'
+    ),
+    1::bigint,
+    'the successful invitation has exactly one durable operation receipt'
+);
 
 select set_config('request.jwt.claim.sub', 'a0000000-0000-0000-0000-000000000002', true);
 select set_config(
