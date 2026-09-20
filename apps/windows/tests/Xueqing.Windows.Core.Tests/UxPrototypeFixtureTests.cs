@@ -80,7 +80,7 @@ public sealed class UxPrototypeFixtureTests
     }
 
     [TestMethod]
-    public void Organization_fixture_exercises_dense_and_degraded_rows()
+    public void Organization_fixture_exercises_dense_rows_and_keeps_management_mutations_disabled()
     {
         var rows = UxPrototypeFixtureFactory.CreateOrganizationMembers();
 
@@ -89,8 +89,9 @@ public sealed class UxPrototypeFixtureTests
         Assert.IsTrue(rows.Any(row => row.DisplayName.Length > 12));
         Assert.IsTrue(rows.Any(row => row.RoleLabel.Contains("负责人", StringComparison.Ordinal)));
         Assert.IsTrue(rows.Any(row => row.StatusLabel == "已停用"));
-        Assert.IsTrue(rows.Any(row => row.CanUseBulkSafeAction));
-        Assert.IsTrue(rows.Any(row => !row.CanUseBulkSafeAction));
+        Assert.IsFalse(
+            rows.Any(row => row.CanUseBulkSafeAction),
+            "Organization prototype mutations must stay disabled until the authoritative write-command gate exists.");
     }
 
     [TestMethod]
