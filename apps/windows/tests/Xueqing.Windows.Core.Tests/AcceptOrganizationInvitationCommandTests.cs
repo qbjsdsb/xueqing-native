@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text;
+using System.Text.Json;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Xueqing.Windows.Core.Models;
 using Xueqing.Windows.Infrastructure.Remote;
@@ -24,7 +25,10 @@ public sealed class AcceptOrganizationInvitationCommandTests
         Assert.AreEqual(request.InvitationId, result.Receipt.InvitationId);
         Assert.AreEqual(OrganizationMembershipRole.Teacher, result.Receipt.MembershipRole);
         Assert.IsTrue(result.Receipt.CanTeach);
-        StringAssert.Contains(handler.LastBody ?? string.Empty, "新教师");
+        using var requestJson = JsonDocument.Parse(handler.LastBody ?? "{}");
+        Assert.AreEqual(
+            "新教师",
+            requestJson.RootElement.GetProperty("p_display_name").GetString());
         Assert.AreEqual("Bearer invitee-token", handler.LastAuthorization);
     }
 
