@@ -75,7 +75,7 @@ public sealed class CaseLifecycleCommandTests
         var invalid = await CloseCommand(
             new Handler(_ => Reply(
                 HttpStatusCode.BadRequest,
-                "{"message":"XQ_CASE_NOT_STABLE"}")))
+                """{"message":"XQ_CASE_NOT_STABLE"}""")))
             .ExecuteAsync(Close(), Actor);
         Assert.AreEqual(
             CaseLifecycleFailureKind.InvalidTransition,
@@ -85,7 +85,7 @@ public sealed class CaseLifecycleCommandTests
         var conflict = await TransitionCommand(
             new Handler(_ => Reply(
                 HttpStatusCode.BadRequest,
-                "{"message":"XQ_CASE_VERSION_CONFLICT"}")))
+                """{"message":"XQ_CASE_VERSION_CONFLICT"}""")))
             .ExecuteAsync(Transition(), Actor);
         Assert.AreEqual(
             CaseLifecycleFailureKind.VersionConflict,
@@ -102,8 +102,8 @@ public sealed class CaseLifecycleCommandTests
         Assert.IsTrue(unavailable.MustRetrySameOperation);
 
         var wrongVersionJson = TransitionReceipt().Replace(
-            ""case_version":5",
-            ""case_version":99",
+            "\"case_version\":5",
+            "\"case_version\":99",
             StringComparison.Ordinal);
         var invalidReceipt = await TransitionCommand(
             new Handler(_ => Reply(HttpStatusCode.OK, wrongVersionJson)))
