@@ -100,6 +100,12 @@ jobs:
           set -euo pipefail
           bash backend/supabase/tests/provider_projection_conformance.sh
 
+      - name: Prove provider-neutral Attachment Storage authority across real external identities
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash backend/supabase/tests/provider_storage_conformance.sh
+
       - name: Prove Organization invitation locks live management authority
         shell: bash
         run: |
