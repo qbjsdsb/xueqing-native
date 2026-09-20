@@ -1,7 +1,7 @@
 schema_version: 1
 project: xueqing-native
 phase: phase-1
-milestone: windows-organization-invitation-product-closure
+milestone: production-provider-region-data-residency-gate
 status: active
 architecture_baseline: v1-accepted
 
@@ -56,7 +56,6 @@ completed_gates:
   - provider-adapter-conformance-spike
 
 open_gates:
-  - windows-organization-invitation-product-closure
   - production-provider-region-data-residency-gate
   - backup-storage-restore-gate
   - signing-and-recovery-gate
@@ -64,9 +63,8 @@ open_gates:
 next_execution:
   parallel_limit: 1
   lines:
-    - windows-organization-invitation-product-closure
-  after_current_green:
     - production-provider-region-data-residency-gate
+  after_current_green:
     - backup-storage-restore-gate
     - signing-and-recovery-gate
 
