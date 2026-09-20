@@ -14,8 +14,8 @@ case_operation_id='9a000000-0000-4000-8000-00000000c002'
 suffix="${GITHUB_RUN_ID:-local}-${GITHUB_RUN_ATTEMPT:-0}"
 email_a="projection-a-${suffix}@example.com"
 email_b="projection-b-${suffix}@example.com"
-password_a="$(python3 -c 'import secrets,string; a=string.ascii_letters+string.digits; print("Xq!"+"" .join(secrets.choice(a) for _ in range(24)))')"
-password_b="$(python3 -c 'import secrets,string; a=string.ascii_letters+string.digits; print("Xq!"+"" .join(secrets.choice(a) for _ in range(24)))')"
+password_a="$(python3 -c 'import secrets,string; a=string.ascii_letters+string.digits; print("Xq!"+"".join(secrets.choice(a) for _ in range(24)))')"
+password_b="$(python3 -c 'import secrets,string; a=string.ascii_letters+string.digits; print("Xq!"+"".join(secrets.choice(a) for _ in range(24)))')"
 
 status_env="$(mktemp)"
 supabase status --workdir backend -o env > "$status_env"
