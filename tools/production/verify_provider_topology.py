@@ -23,7 +23,57 @@ def load(path: Path) -> dict:
     return value
 
 
-def validate(value: dict, require_accepted: bool) -> None:
+def validate_repository_evidence(value: dict, repo_root: Path) -> None:
+    evidence = value.get("repository_evidence")
+    require(isinstance(evidence, dict), "repository_evidence must be an object")
+
+    migration = repo_root / str(evidence.get("private_attachment_bucket_migration", ""))
+    require(migration.is_file(), "private Attachment bucket migration evidence is missing")
+    migration_text = migration.read_text(encoding="utf-8")
+    require(
+        "'teaching-attachments-v1'" in migration_text
+        and "set public = false" in migration_text
+        and re.search(r"['\"]teaching-attachments-v1['\"][\s\S]{0,160}?false", migration_text),
+        "Attachment bucket must remain explicitly private",
+    )
+
+    edge_adapter = repo_root / str(evidence.get("invitation_delivery_server_adapter", ""))
+    require(edge_adapter.is_file(), "invitation Delivery server adapter evidence is missing")
+    edge_text = edge_adapter.read_text(encoding="utf-8")
+    require(
+        "SUPABASE_SECRET_KEYS" in edge_text or "SUPABASE_SECRET_KEY" in edge_text,
+        "trusted Delivery adapter must keep provider secret access server-side",
+    )
+
+    roots = evidence.get("production_client_source_roots")
+    require(isinstance(roots, list) and roots, "production client source roots are required")
+    forbidden = re.compile(
+        r"SUPABASE_(?:SERVICE_ROLE|SECRET)(?:_KEYS?|_KEY)?|SERVICE_ROLE_KEY|service_role",
+        re.IGNORECASE,
+    )
+    offenders: list[str] = []
+    suffixes = {".cs", ".kt", ".kts", ".java", ".xml", ".json", ".properties"}
+    for root_value in roots:
+        root = repo_root / str(root_value)
+        require(root.is_dir(), f"client source root is missing: {root_value}")
+        for path in root.rglob("*"):
+            if not path.is_file() or path.suffix.lower() not in suffixes:
+                continue
+            try:
+                text = path.read_text(encoding="utf-8")
+            except UnicodeDecodeError:
+                continue
+            if forbidden.search(text):
+                offenders.append(str(path.relative_to(repo_root)))
+
+    require(
+        offenders == [],
+        "production client source contains provider admin/secret identifiers: "
+        + ", ".join(offenders),
+    )
+
+
+def validate(value: dict, require_accepted: bool, repo_root: Path) -> None:
     require(value.get("schema_version") == 1, "schema_version must be 1")
     require(
         value.get("gate") == "production-provider-region-data-residency",
@@ -86,6 +136,8 @@ def validate(value: dict, require_accepted: bool) -> None:
         "provider evidence references must be recorded",
     )
 
+    validate_repository_evidence(value, repo_root)
+
     if not require_accepted:
         return
 
@@ -135,11 +187,12 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("manifest", type=Path)
     parser.add_argument("--require-accepted", action="store_true")
+    parser.add_argument("--repo-root", type=Path, default=Path("."))
     args = parser.parse_args()
 
     try:
         value = load(args.manifest)
-        validate(value, args.require_accepted)
+        validate(value, args.require_accepted, args.repo_root.resolve())
     except (OSError, json.JSONDecodeError, ValueError) as exc:
         print(f"provider-topology validation failed: {exc}", file=sys.stderr)
         return 1
