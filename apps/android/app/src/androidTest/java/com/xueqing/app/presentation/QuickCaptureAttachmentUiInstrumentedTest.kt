@@ -1,6 +1,5 @@
 package com.xueqing.app.presentation
 
-import androidx.compose.ui.test.assertExists
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertTextContains
