@@ -13,6 +13,7 @@ class ObservationOutboxDrainer(
     private val environmentId: String,
     private val clock: () -> Long = System::currentTimeMillis,
     private val leaseDurationMillis: Long = DEFAULT_LEASE_MILLIS,
+    private val attachmentCommitOperationIdFactory: () -> java.util.UUID = java.util.UUID::randomUUID,
 ) {
     data class Result(
         val processedCount: Int,
@@ -95,11 +96,37 @@ class ObservationOutboxDrainer(
 
             when (val remoteResult = observationRemote.createObservation(request)) {
                 is ObservationCommandResult.Accepted -> {
-                    dao.acknowledge(
+                    if (remoteResult.receipt.actorAppUserId.toString() != appUserId) {
+                        dao.deadLetter(
+                            localSequence = claimed.localSequence,
+                            leaseId = leaseId,
+                            errorClass = "Protocol:ReceiptActorMismatch",
+                        )
+                        continue
+                    }
+
+                    val acknowledgedAt = clock()
+                    val promotions = dao.readWaitingAttachmentsForObservation(claimed.operationId)
+                        .map { attachment ->
+                            AttachmentObservationPromotion(
+                                attachmentId = attachment.attachmentId,
+                                authoritativeObservationId = remoteResult.receipt.observationId.toString(),
+                                remoteObjectName = canonicalObjectName(
+                                    attachment = attachment,
+                                    observationId = remoteResult.receipt.observationId.toString(),
+                                ),
+                                attachmentCommitOperationId =
+                                    attachmentCommitOperationIdFactory().toString(),
+                            )
+                        }
+
+                    dao.acknowledgeObservationAndPromoteAttachments(
                         localSequence = claimed.localSequence,
                         leaseId = leaseId,
-                        acknowledgedAtEpochMillis = clock(),
+                        acknowledgedAtEpochMillis = acknowledgedAt,
                         serverReceiptJson = ObservationOutboxCodec.encodeReceipt(remoteResult.receipt),
+                        parentObservationOperationId = claimed.operationId,
+                        promotions = promotions,
                     )
                 }
 
@@ -153,6 +180,16 @@ class ObservationOutboxDrainer(
             nextWakeAtEpochMillis = dao.readNextWakeAt(environmentId, appUserId),
         )
     }
+
+    private fun canonicalObjectName(
+        attachment: AttachmentStagingEntity,
+        observationId: String,
+    ): String =
+        "v1/org/${attachment.organizationId}" +
+            "/student/${attachment.studentId}" +
+            "/profile/${attachment.subjectProfileId}" +
+            "/observation/$observationId" +
+            "/attachment/${attachment.attachmentId}"
 
     private fun retryDelayMillis(attemptCount: Int): Long {
         val exponent = (attemptCount - 1).coerceIn(0, 6)

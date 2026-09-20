@@ -133,6 +133,95 @@ class ObservationOutboxDrainerInstrumentedTest {
     }
 
     @Test
+    fun acceptedReceiptPromotesWaitingAttachmentWithStableRemoteIdentity() = runBlocking {
+        val operationId = UUID.fromString("70000000-0000-0000-0000-000000000111")
+        val attachmentId = "71000000-0000-0000-0000-000000000111"
+        val observationId = UUID.fromString("72000000-0000-0000-0000-000000000111")
+        val commitOperationId = UUID.fromString("73000000-0000-0000-0000-000000000111")
+        val scope = DraftScope(
+            environmentId = ENVIRONMENT_ID,
+            appUserId = appUserA.toString(),
+            organizationId = organizationId.toString(),
+            studentId = studentId.toString(),
+            subjectId = subjectProfileId.toString(),
+            contextId = "quick-capture",
+        )
+        val session = draftStore.open(scope)
+        database.attachmentStagingDao().insert(
+            AttachmentStagingEntity(
+                attachmentId = attachmentId,
+                scopeKey = scope.storageKey,
+                draftEpoch = session.epoch,
+                environmentId = scope.environmentId,
+                appUserId = scope.appUserId,
+                organizationId = scope.organizationId,
+                studentId = scope.studentId,
+                subjectProfileId = scope.subjectId,
+                assignmentId = assignmentId.toString(),
+                localEncryptedFileName = "$attachmentId.xqas",
+                contentType = "image/jpeg",
+                byteSize = 256,
+                state = AttachmentStagingState.Staged,
+                parentObservationOperationId = null,
+                authoritativeObservationId = null,
+                remoteObjectName = null,
+                attachmentCommitOperationId = null,
+                lastErrorClass = null,
+                createdAtEpochMillis = now,
+                updatedAtEpochMillis = now,
+            ),
+        )
+        val request = request(operationId, "Observation receipt 必须稳定提升附件远端身份")
+        enqueue(appUserA, request)
+
+        val remote = ObservationCommandRemote {
+            ObservationCommandResult.Accepted(
+                it.operationId,
+                receipt(it).copy(observationId = observationId),
+            )
+        }
+        drainer(
+            actorAppUserId = appUserA,
+            remote = remote,
+            attachmentCommitOperationIdFactory = { commitOperationId },
+        ).drainReady()
+
+        val row = requireNotNull(database.attachmentStagingDao().read(attachmentId))
+        assertEquals(AttachmentStagingState.UploadPending, row.state)
+        assertEquals(observationId.toString(), row.authoritativeObservationId)
+        assertEquals(
+            "v1/org/$organizationId/student/$studentId/profile/$subjectProfileId/" +
+                "observation/$observationId/attachment/$attachmentId",
+            row.remoteObjectName,
+        )
+        assertEquals(commitOperationId.toString(), row.attachmentCommitOperationId)
+        assertEquals(
+            ObservationOutboxStatus.Acknowledged,
+            dao.readByOperationId(operationId.toString())?.queueStatus,
+        )
+    }
+
+    @Test
+    fun mismatchedReceiptActorDeadLettersObservationWithoutPromotingAttachment() = runBlocking {
+        val operationId = UUID.fromString("70000000-0000-0000-0000-000000000112")
+        val request = request(operationId, "错误 actor receipt 不能推进附件")
+        enqueue(appUserA, request)
+        val remote = ObservationCommandRemote {
+            ObservationCommandResult.Accepted(
+                it.operationId,
+                receipt(it).copy(actorAppUserId = appUserB),
+            )
+        }
+
+        drainer(appUserA, remote).drainReady()
+
+        val rejected = requireNotNull(dao.readByOperationId(operationId.toString()))
+        assertEquals(ObservationOutboxStatus.DeadLetter, rejected.queueStatus)
+        assertEquals("Protocol:ReceiptActorMismatch", rejected.lastErrorClass)
+        assertEquals(request.rawText, ObservationOutboxCodec.decodeRequest(rejected.payloadJson).rawText)
+    }
+
+    @Test
     fun authenticationFailureKeepsIntentRetryableWithSameOperation() = runBlocking {
         val request = request(UUID.randomUUID(), "401 后不能生成新 operation")
         enqueue(appUserA, request)
@@ -191,6 +280,7 @@ class ObservationOutboxDrainerInstrumentedTest {
     private fun drainer(
         actorAppUserId: UUID,
         remote: ObservationCommandRemote,
+        attachmentCommitOperationIdFactory: () -> UUID = UUID::randomUUID,
     ): ObservationOutboxDrainer = ObservationOutboxDrainer(
         dao = dao,
         bootstrapRemote = bootstrapRemote(actorAppUserId),
@@ -198,6 +288,7 @@ class ObservationOutboxDrainerInstrumentedTest {
         environmentId = ENVIRONMENT_ID,
         clock = { now },
         leaseDurationMillis = 1_000,
+        attachmentCommitOperationIdFactory = attachmentCommitOperationIdFactory,
     )
 
     private fun bootstrapRemote(actorAppUserId: UUID) = PersonalBootstrapRemote {

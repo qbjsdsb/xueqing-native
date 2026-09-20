@@ -13,6 +13,13 @@ data class DraftDiscardResult(
     val attachmentFileNames: List<String>,
 )
 
+data class AttachmentObservationPromotion(
+    val attachmentId: String,
+    val authoritativeObservationId: String,
+    val remoteObjectName: String,
+    val attachmentCommitOperationId: String,
+)
+
 @Dao
 interface DurableIntentDao {
     @Insert(onConflict = OnConflictStrategy.IGNORE)
@@ -83,6 +90,47 @@ interface DurableIntentDao {
         scopeKey: String,
         draftEpoch: Long,
         stagedState: String = AttachmentStagingState.Staged,
+    ): Int
+
+    @Query(
+        """
+        SELECT * FROM attachment_staging
+        WHERE parent_observation_operation_id = :operationId
+          AND state = :waitingState
+        ORDER BY attachment_id ASC
+        """,
+    )
+    suspend fun readWaitingAttachmentsForObservation(
+        operationId: String,
+        waitingState: String = AttachmentStagingState.WaitingForObservation,
+    ): List<AttachmentStagingEntity>
+
+    @Query(
+        """
+        UPDATE attachment_staging
+        SET state = :uploadPendingState,
+            authoritative_observation_id = :authoritativeObservationId,
+            remote_object_name = :remoteObjectName,
+            attachment_commit_operation_id = :attachmentCommitOperationId,
+            last_error_class = NULL,
+            updated_at_epoch_millis = :updatedAtEpochMillis
+        WHERE attachment_id = :attachmentId
+          AND parent_observation_operation_id = :parentObservationOperationId
+          AND state = :waitingState
+          AND authoritative_observation_id IS NULL
+          AND remote_object_name IS NULL
+          AND attachment_commit_operation_id IS NULL
+        """,
+    )
+    suspend fun promoteWaitingAttachment(
+        attachmentId: String,
+        parentObservationOperationId: String,
+        authoritativeObservationId: String,
+        remoteObjectName: String,
+        attachmentCommitOperationId: String,
+        updatedAtEpochMillis: Long,
+        waitingState: String = AttachmentStagingState.WaitingForObservation,
+        uploadPendingState: String = AttachmentStagingState.UploadPending,
     ): Int
 
     @Query("SELECT * FROM observation_outbox WHERE operation_id = :operationId LIMIT 1")
@@ -234,6 +282,42 @@ interface DurableIntentDao {
         leaseId: String,
         errorClass: String,
     ): Int
+
+    @Transaction
+    suspend fun acknowledgeObservationAndPromoteAttachments(
+        localSequence: Long,
+        leaseId: String,
+        acknowledgedAtEpochMillis: Long,
+        serverReceiptJson: String,
+        parentObservationOperationId: String,
+        promotions: List<AttachmentObservationPromotion>,
+    ): Int {
+        val acknowledged = acknowledge(
+            localSequence = localSequence,
+            leaseId = leaseId,
+            acknowledgedAtEpochMillis = acknowledgedAtEpochMillis,
+            serverReceiptJson = serverReceiptJson,
+        )
+        if (acknowledged != 1) {
+            return acknowledged
+        }
+
+        promotions.forEach { promotion ->
+            if (
+                promoteWaitingAttachment(
+                    attachmentId = promotion.attachmentId,
+                    parentObservationOperationId = parentObservationOperationId,
+                    authoritativeObservationId = promotion.authoritativeObservationId,
+                    remoteObjectName = promotion.remoteObjectName,
+                    attachmentCommitOperationId = promotion.attachmentCommitOperationId,
+                    updatedAtEpochMillis = acknowledgedAtEpochMillis,
+                ) != 1
+            ) {
+                error("Attachment promotion changed during Observation acknowledgement")
+            }
+        }
+        return acknowledged
+    }
 
     @Transaction
     suspend fun discardDraft(
