@@ -94,6 +94,12 @@ jobs:
           set -euo pipefail
           bash backend/supabase/tests/provider_adapter_conformance.sh
 
+      - name: Prove Organization invitation locks live management authority
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash backend/supabase/tests/organization_invitation_concurrency.sh
+
       - name: Prove Observation Attachment Storage RLS and immutable commit boundary
         shell: bash
         run: |
