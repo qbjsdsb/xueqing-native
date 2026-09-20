@@ -1,7 +1,7 @@
 schema_version: 1
 project: xueqing-native
 phase: phase-1
-milestone: organization-invitation-delivery
+milestone: provider-projection-conformance
 status: active
 architecture_baseline: v1-accepted
 
@@ -50,6 +50,7 @@ completed_gates:
   - evidence-attachment-staging
   - organization-management-vertical-slice
   - organization-invitation-acceptance
+  - organization-invitation-delivery
 
 open_gates:
   - provider-adapter-conformance-spike
@@ -60,13 +61,11 @@ open_gates:
 next_execution:
   parallel_limit: 1
   lines:
-    - organization-invitation-delivery
-  after_current_green:
     - provider-projection-conformance
+  after_current_green:
     - provider-storage-conformance
 
 later:
-  - provider-projection-conformance
   - provider-storage-conformance
   - generic-change-list-or-cursor-sync
   - large-history-full-text-search
