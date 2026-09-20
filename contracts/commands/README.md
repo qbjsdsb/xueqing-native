@@ -29,3 +29,5 @@ Creation commands without an existing aggregate version still require the releva
 Mutable Case/Action commands must reject stale expected versions. Last-write-wins is not a valid domain conflict strategy.
 
 Client retries must reuse the same `operation_id`. Unknown-result recovery must never create a replacement intent.
+
+- `COMMIT_OBSERVATION_ATTACHMENT_V1.md` — commit immutable private image metadata after Storage upload; Attachment is not automatically finalized Evidence.
