@@ -46,7 +46,7 @@ jobs:
           supabase start --workdir backend
           supabase db reset --workdir backend
 
-      - name: Create ephemeral fictional teacher JWT
+      - name: Create ephemeral fictional owner and invitee JWTs
         shell: bash
         run: |
           set -euo pipefail
@@ -58,7 +58,8 @@ jobs:
           : "${JWT_SECRET:?JWT_SECRET missing from local Supabase status}"
           : "${ANON_KEY:?ANON_KEY missing from local Supabase status}"
 
-          access_token="$(python3 - <<'PY'
+          make_jwt() {
+            JWT_SUBJECT="$1" JWT_EMAIL="$2" python3 - <<'PY'
           import base64
           import hashlib
           import hmac
@@ -70,29 +71,43 @@ jobs:
               return base64.urlsafe_b64encode(value).rstrip(b'=').decode('ascii')
 
           now = int(time.time())
-          header = {"alg": "HS256", "typ": "JWT"}
           payload = {
               "iss": "supabase-demo",
-              "sub": "a0000000-0000-0000-0000-000000000001",
+              "sub": os.environ["JWT_SUBJECT"],
               "aud": "authenticated",
               "role": "authenticated",
               "iat": now,
               "exp": now + 3600,
           }
+          email = os.environ.get("JWT_EMAIL", "")
+          if email:
+              payload["email"] = email
+              payload["is_anonymous"] = False
+
+          header = {"alg": "HS256", "typ": "JWT"}
           encoded_header = b64url(json.dumps(header, separators=(',', ':')).encode())
           encoded_payload = b64url(json.dumps(payload, separators=(',', ':')).encode())
           signing_input = f"{encoded_header}.{encoded_payload}".encode()
-          signature = hmac.new(os.environ["JWT_SECRET"].encode(), signing_input, hashlib.sha256).digest()
+          signature = hmac.new(
+              os.environ["JWT_SECRET"].encode(),
+              signing_input,
+              hashlib.sha256,
+          ).digest()
           print(f"{encoded_header}.{encoded_payload}.{b64url(signature)}")
           PY
-          )"
+          }
+
+          access_token="$(make_jwt 'a0000000-0000-0000-0000-000000000001' '')"
+          invitee_access_token="$(make_jwt 'b0000000-0000-0000-0000-00000000e201' 'windows.acceptance@example.com')"
 
           echo "::add-mask::$ANON_KEY"
           echo "::add-mask::$access_token"
+          echo "::add-mask::$invitee_access_token"
           {
             echo "XUEQING_REFERENCE_PROVIDER_URL=http://127.0.0.1:54321/"
             echo "XUEQING_REFERENCE_API_KEY=$ANON_KEY"
             echo "XUEQING_REFERENCE_ACCESS_TOKEN=$access_token"
+            echo "XUEQING_REFERENCE_INVITEE_ACCESS_TOKEN=$invitee_access_token"
           } >> "$GITHUB_ENV"
 
       - name: Build Windows reference-provider E2E
@@ -115,13 +130,13 @@ jobs:
             --progress off \
             --output Detailed
 
-      - name: Run Bootstrap, Organization, Invitation, Observation, Learning and Action progression E2E
+      - name: Run Bootstrap, Organization, Invitation Acceptance, Observation, Learning and Action progression E2E
         shell: bash
         run: |
           set -euo pipefail
           output=apps/windows/tests/Xueqing.Windows.ReferenceProviderE2E/bin/Release/net10.0
           "$output/Xueqing.Windows.ReferenceProviderE2E" \
-            --minimum-expected-tests 5 \
+            --minimum-expected-tests 8 \
             --no-banner \
             --progress off \
             --output Detailed
