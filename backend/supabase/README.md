@@ -42,6 +42,16 @@ legal responsible teacher + exactly one pending primary Action
 
 No client repair step is permitted between completion and next-Action creation; both are one database transaction.
 
+### Organization invitations
+
+The management/onboarding path keeps three boundaries distinct:
+
+- `CreateOrganizationInvitation v1` persists authorized Organization intent only;
+- `AcceptOrganizationInvitation v1` performs provider-neutral identity onboarding + Membership acceptance atomically;
+- `DeliverOrganizationInvitation v1` claims a durable provider side effect before email dispatch and requires trusted server-side completion.
+
+Delivery never creates Membership or teaching assignments. A `dispatching` delivery with an unknown provider result is not automatically retried, preventing duplicate email caused by a lost response. Supabase Auth email delivery is a replaceable Infrastructure adapter; local CI verifies it through Mailpit without hosted-project credentials.
+
 ### Organization business date + personal read models
 
 - explicit validated Organization timezone;
@@ -59,7 +69,7 @@ Clients must not recompute overdue/today/future from the device timezone.
 
 Organization management authority alone never causes another teacher's Case or Action to appear in personal projections.
 
-Case stable/close/reopen, responsibility reassignment, attachments, realtime and generic sync cursors remain separate later slices.
+Responsibility reassignment, realtime and generic sync cursors remain separate later slices.
 
 The Git migrations are schema truth. `seed.sql` contains deterministic fictional fixtures only. Database tests live under `tests/` and run through `supabase test db` / pgTAP.
 
