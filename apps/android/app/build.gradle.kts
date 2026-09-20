@@ -87,6 +87,8 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
+    // Provides the test-only ComponentActivity host required by isolated Compose UI tests.
+    debugImplementation("androidx.compose.ui:ui-test-manifest")
 
     testImplementation("junit:junit:4.13.2")
 

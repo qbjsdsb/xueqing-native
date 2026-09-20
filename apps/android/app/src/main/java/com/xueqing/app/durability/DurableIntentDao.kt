@@ -8,6 +8,18 @@ import androidx.room.Transaction
 import java.util.UUID
 import kotlinx.coroutines.flow.Flow
 
+data class DraftDiscardResult(
+    val nextEpoch: Long,
+    val attachmentFileNames: List<String>,
+)
+
+data class AttachmentObservationPromotion(
+    val attachmentId: String,
+    val authoritativeObservationId: String,
+    val remoteObjectName: String,
+    val attachmentCommitOperationId: String,
+)
+
 @Dao
 interface DurableIntentDao {
     @Insert(onConflict = OnConflictStrategy.IGNORE)
@@ -27,6 +39,99 @@ interface DurableIntentDao {
 
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insertOutbox(entity: ObservationOutboxEntity): Long
+
+    @Query(
+        """
+        UPDATE attachment_staging
+        SET state = :waitingState,
+            parent_observation_operation_id = :operationId,
+            updated_at_epoch_millis = :updatedAtEpochMillis
+        WHERE scope_key = :scopeKey
+          AND draft_epoch = :draftEpoch
+          AND state = :stagedState
+          AND parent_observation_operation_id IS NULL
+        """,
+    )
+    suspend fun bindStagedAttachmentsToObservation(
+        scopeKey: String,
+        draftEpoch: Long,
+        operationId: String,
+        stagedState: String = AttachmentStagingState.Staged,
+        waitingState: String = AttachmentStagingState.WaitingForObservation,
+        updatedAtEpochMillis: Long,
+    ): Int
+
+    @Query(
+        """
+        SELECT local_encrypted_file_name FROM attachment_staging
+        WHERE scope_key = :scopeKey
+          AND draft_epoch = :draftEpoch
+          AND state = :stagedState
+          AND parent_observation_operation_id IS NULL
+        ORDER BY attachment_id ASC
+        """,
+    )
+    suspend fun readUnboundAttachmentFileNamesForDraft(
+        scopeKey: String,
+        draftEpoch: Long,
+        stagedState: String = AttachmentStagingState.Staged,
+    ): List<String>
+
+    @Query(
+        """
+        DELETE FROM attachment_staging
+        WHERE scope_key = :scopeKey
+          AND draft_epoch = :draftEpoch
+          AND state = :stagedState
+          AND parent_observation_operation_id IS NULL
+        """,
+    )
+    suspend fun deleteUnboundAttachmentsForDraft(
+        scopeKey: String,
+        draftEpoch: Long,
+        stagedState: String = AttachmentStagingState.Staged,
+    ): Int
+
+    @Query(
+        """
+        SELECT * FROM attachment_staging
+        WHERE parent_observation_operation_id = :operationId
+          AND state = :waitingState
+        ORDER BY attachment_id ASC
+        """,
+    )
+    suspend fun readWaitingAttachmentsForObservation(
+        operationId: String,
+        waitingState: String = AttachmentStagingState.WaitingForObservation,
+    ): List<AttachmentStagingEntity>
+
+    @Query(
+        """
+        UPDATE attachment_staging
+        SET state = :uploadPendingState,
+            authoritative_observation_id = :authoritativeObservationId,
+            remote_object_name = :remoteObjectName,
+            attachment_commit_operation_id = :attachmentCommitOperationId,
+            last_error_class = NULL,
+            updated_at_epoch_millis = :updatedAtEpochMillis
+        WHERE attachment_id = :attachmentId
+          AND parent_observation_operation_id = :parentObservationOperationId
+          AND state = :waitingState
+          AND authoritative_observation_id IS NULL
+          AND remote_object_name IS NULL
+          AND attachment_commit_operation_id IS NULL
+        """,
+    )
+    suspend fun promoteWaitingAttachment(
+        attachmentId: String,
+        parentObservationOperationId: String,
+        authoritativeObservationId: String,
+        remoteObjectName: String,
+        attachmentCommitOperationId: String,
+        updatedAtEpochMillis: Long,
+        waitingState: String = AttachmentStagingState.WaitingForObservation,
+        uploadPendingState: String = AttachmentStagingState.UploadPending,
+    ): Int
 
     @Query("SELECT * FROM observation_outbox WHERE operation_id = :operationId LIMIT 1")
     suspend fun readByOperationId(operationId: String): ObservationOutboxEntity?
@@ -179,6 +284,73 @@ interface DurableIntentDao {
     ): Int
 
     @Transaction
+    suspend fun acknowledgeObservationAndPromoteAttachments(
+        localSequence: Long,
+        leaseId: String,
+        acknowledgedAtEpochMillis: Long,
+        serverReceiptJson: String,
+        parentObservationOperationId: String,
+        promotions: List<AttachmentObservationPromotion>,
+    ): Int {
+        val acknowledged = acknowledge(
+            localSequence = localSequence,
+            leaseId = leaseId,
+            acknowledgedAtEpochMillis = acknowledgedAtEpochMillis,
+            serverReceiptJson = serverReceiptJson,
+        )
+        if (acknowledged != 1) {
+            return acknowledged
+        }
+
+        promotions.forEach { promotion ->
+            if (
+                promoteWaitingAttachment(
+                    attachmentId = promotion.attachmentId,
+                    parentObservationOperationId = parentObservationOperationId,
+                    authoritativeObservationId = promotion.authoritativeObservationId,
+                    remoteObjectName = promotion.remoteObjectName,
+                    attachmentCommitOperationId = promotion.attachmentCommitOperationId,
+                    updatedAtEpochMillis = acknowledgedAtEpochMillis,
+                ) != 1
+            ) {
+                error("Attachment promotion changed during Observation acknowledgement")
+            }
+        }
+        return acknowledged
+    }
+
+    @Transaction
+    suspend fun discardDraft(
+        scopeKey: String,
+        expectedEpoch: Long,
+    ): DraftDiscardResult? {
+        ensureScopeState(DraftScopeStateEntity(scopeKey = scopeKey, epoch = 0))
+        if (readEpoch(scopeKey) != expectedEpoch) {
+            return null
+        }
+
+        val attachmentFileNames = readUnboundAttachmentFileNamesForDraft(
+            scopeKey = scopeKey,
+            draftEpoch = expectedEpoch,
+        )
+        deleteUnboundAttachmentsForDraft(
+            scopeKey = scopeKey,
+            draftEpoch = expectedEpoch,
+        )
+        deleteDraft(scopeKey)
+
+        val nextEpoch = Math.addExact(expectedEpoch, 1)
+        if (advanceEpoch(scopeKey, expectedEpoch, nextEpoch) != 1) {
+            error("Draft epoch changed during discard transaction")
+        }
+
+        return DraftDiscardResult(
+            nextEpoch = nextEpoch,
+            attachmentFileNames = attachmentFileNames,
+        )
+    }
+
+    @Transaction
     suspend fun submitObservation(
         scopeKey: String,
         expectedEpoch: Long,
@@ -208,6 +380,12 @@ interface DurableIntentDao {
             ),
         )
         insertOutbox(outbox)
+        bindStagedAttachmentsToObservation(
+            scopeKey = scopeKey,
+            draftEpoch = expectedEpoch,
+            operationId = outbox.operationId,
+            updatedAtEpochMillis = updatedAtEpochMillis,
+        )
         deleteDraft(scopeKey)
 
         val nextEpoch = Math.addExact(expectedEpoch, 1)

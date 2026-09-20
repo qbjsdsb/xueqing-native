@@ -1,6 +1,10 @@
 package com.xueqing.app.presentation
 
+import android.net.Uri
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -14,6 +18,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -28,14 +33,23 @@ internal fun QuickCaptureScreen(
     onTextChanged: (String) -> Unit,
     onClose: () -> Unit,
     onChooseStudent: () -> Unit,
+    onPhotoSelected: (Uri) -> Unit,
+    onRemovePhoto: () -> Unit,
     onDiscard: () -> Unit,
     onSubmit: () -> Unit,
 ) {
     BackHandler(onBack = onClose)
 
+    val photoPicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia(),
+    ) { uri ->
+        uri?.let(onPhotoSelected)
+    }
+
     val contextReady = state.teachingContextStatus == TeachingContextStatus.Ready
     val draftLoaded = state.draftStatus != LocalDraftStatus.Loading
     val draftWritable = state.draftStatus != LocalDraftStatus.PersistenceFailed
+    val attachmentBusy = state.attachmentStatus == AttachmentDraftStatus.Protecting
 
     Column(
         modifier = Modifier
@@ -51,7 +65,7 @@ internal fun QuickCaptureScreen(
                 Text("返回")
             }
             TextButton(
-                enabled = contextReady && draftLoaded,
+                enabled = contextReady && draftLoaded && !attachmentBusy,
                 onClick = onDiscard,
             ) {
                 Text("丢弃草稿")
@@ -115,6 +129,49 @@ internal fun QuickCaptureScreen(
                 placeholder = { Text("例如：概括题仍然容易照抄原句，不能主动压缩信息。") },
             )
 
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                OutlinedButton(
+                    onClick = {
+                        photoPicker.launch(
+                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
+                        )
+                    },
+                    enabled = draftLoaded &&
+                        draftWritable &&
+                        !attachmentBusy &&
+                        state.attachmentCount == 0,
+                    modifier = Modifier.testTag("quick-capture-add-photo"),
+                ) {
+                    Text("添加照片")
+                }
+
+                if (state.attachmentCount > 0) {
+                    TextButton(
+                        onClick = onRemovePhoto,
+                        enabled = !attachmentBusy,
+                        modifier = Modifier.testTag("quick-capture-remove-photo"),
+                    ) {
+                        Text("移除照片")
+                    }
+                }
+            }
+
+            attachmentMessage(state)?.let { message ->
+                Text(
+                    text = message,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier
+                        .padding(top = 8.dp)
+                        .testTag("quick-capture-attachment-status"),
+                )
+            }
+
             Text(
                 text = when (state.draftStatus) {
                     LocalDraftStatus.Loading -> "正在读取本机草稿…"
@@ -146,7 +203,7 @@ internal fun QuickCaptureScreen(
 
             Button(
                 onClick = onSubmit,
-                enabled = draftLoaded && draftWritable && state.text.isNotBlank(),
+                enabled = draftLoaded && draftWritable && !attachmentBusy && state.text.isNotBlank(),
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(top = 28.dp),
@@ -173,5 +230,18 @@ private fun submissionMessage(state: QuickCaptureUiState): String? = when (state
     ObservationSubmissionStatus.Rejected -> when (state.submissionErrorCode) {
         "XQ_TEACHER_ASSIGNMENT_REQUIRED" -> "服务器拒绝 · 当前任课关系已变化，原记录仍保存在本机"
         else -> "服务器拒绝 · 原记录仍保存在本机"
+    }
+}
+
+
+private fun attachmentMessage(state: QuickCaptureUiState): String? = when (state.attachmentStatus) {
+    AttachmentDraftStatus.None -> null
+    AttachmentDraftStatus.Protecting -> "正在保护照片…"
+    AttachmentDraftStatus.SafeOnDevice -> "照片已安全保存在本机"
+    AttachmentDraftStatus.Failed -> when (state.attachmentErrorCode) {
+        "too_large" -> "照片处理失败 · 文件过大，请换一张"
+        "local_key_unavailable" -> "照片保护不可用 · 文字草稿不受影响"
+        "source_unavailable" -> "照片读取失败 · 文字草稿不受影响"
+        else -> "照片处理失败 · 文字草稿不受影响"
     }
 }

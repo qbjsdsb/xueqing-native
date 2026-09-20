@@ -6,26 +6,20 @@ import androidx.work.WorkerParameters
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-class ObservationDrainWorker(
+class AttachmentDrainWorker(
     appContext: Context,
     workerParameters: WorkerParameters,
 ) : CoroutineWorker(appContext, workerParameters) {
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
-        val drainer = ObservationSyncRuntime.createDrainer(applicationContext)
+        val drainer = AttachmentSyncRuntime.createDrainer(applicationContext)
             ?: return@withContext Result.success()
 
         val result = drainer.drainReady()
         result.nextWakeAtEpochMillis?.let { wakeAt ->
-            ObservationOutboxScheduler.scheduleAt(
+            AttachmentOutboxScheduler.scheduleAt(
                 context = applicationContext,
                 wakeAtEpochMillis = wakeAt,
             )
-        }
-        // An accepted Observation may atomically promote staged media into
-        // UploadPending. Kick the independent media worker after the text
-        // transaction has completed; attachment failure never changes text.
-        if (AttachmentSyncRuntime.isInstalled()) {
-            AttachmentOutboxScheduler.kick(applicationContext)
         }
         Result.success()
     }

@@ -11,8 +11,12 @@ import com.xueqing.app.application.bootstrap.PersonalBootstrapRemote
 import com.xueqing.app.application.bootstrap.PersonalBootstrapResult
 import com.xueqing.app.application.bootstrap.PersonalBootstrapUnknownReason
 import com.xueqing.app.application.bootstrap.PersonalTeachingContext
+import com.xueqing.app.durability.AttachmentStagingStore
 import com.xueqing.app.durability.DraftDatabase
 import com.xueqing.app.durability.DraftStore
+import com.xueqing.app.durability.ProtectedAttachmentFileStore
+import com.xueqing.app.infrastructure.media.ImageDerivativeFactory
+import com.xueqing.app.infrastructure.media.PhotoAttachmentStager
 import java.time.Instant
 import java.util.UUID
 import java.util.concurrent.CountDownLatch
@@ -109,9 +113,23 @@ class CaptureSelectionInstrumentedTest {
         val owner = ViewModelStore()
         try {
             val vm = withContext(Dispatchers.Main) {
+                val attachmentStore = AttachmentStagingStore(
+                    dao = database.attachmentStagingDao(),
+                    protectedFiles = ProtectedAttachmentFileStore(context),
+                )
                 QuickCaptureViewModel(
-                    DraftStore(database.draftDao()), database.durableIntentDao(),
-                    PersonalBootstrapRemote { result }, "selection-test", {},
+                    store = DraftStore(database.draftDao()),
+                    durableIntentDao = database.durableIntentDao(),
+                    attachmentStagingStore = attachmentStore,
+                    photoAttachmentStager = PhotoAttachmentStager(
+                        contentResolver = context.contentResolver,
+                        derivativeFactory = ImageDerivativeFactory(),
+                        attachmentStagingStore = attachmentStore,
+                    ),
+                    bootstrapRemote = PersonalBootstrapRemote { result },
+                    environmentId = "selection-test",
+                    onOutboxCommitted = {},
+                    onAttachmentCleanupNeeded = {},
                 ).also { owner.put("capture", it) }
             }
             withTimeout(10_000) {

@@ -24,6 +24,8 @@ on:
       - 'apps/android/app/src/androidTest/java/com/xueqing/app/infrastructure/remote/LearningReadReferenceProviderE2ETest.kt'
       - 'backend/supabase/**'
       - 'contracts/commands/CREATE_OBSERVATION_V1.md'
+      - 'contracts/commands/COMMIT_OBSERVATION_ATTACHMENT_V1.md'
+      - 'contracts/attachments/**'
       - 'contracts/commands/CREATE_LEARNING_CASE_V1.md'
       - 'contracts/errors/CREATE_OBSERVATION_ERRORS.md'
       - 'contracts/projections/PERSONAL_BOOTSTRAP_V1.md'
@@ -40,8 +42,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  room-v2-contract:
-    name: room-v2-contract
+  room-v3-contract:
+    name: room-v3-contract
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -91,13 +93,14 @@ jobs:
           set -euo pipefail
           gradle -p apps/android :app:compileDebugKotlin :app:compileDebugAndroidTestKotlin --no-daemon --stacktrace
 
-      - name: Verify committed Room v1 and v2 schemas are exact
+      - name: Verify committed Room v1, v2 and v3 schemas are exact
         shell: bash
         run: |
           set -euo pipefail
           schema_dir='apps/android/app/schemas/com.xueqing.app.durability.DraftDatabase'
           test -f "$schema_dir/1.json"
           test -f "$schema_dir/2.json"
+          test -f "$schema_dir/3.json"
           status="$(git status --porcelain -- apps/android/app/schemas)"
           if [ -n "$status" ]; then
             echo 'Room schema drift detected:' >&2
@@ -117,7 +120,7 @@ jobs:
 
   reference-provider-e2e:
     name: reference-provider-e2e
-    needs: room-v2-contract
+    needs: room-v3-contract
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
@@ -251,7 +254,7 @@ jobs:
           "$adb" shell input keyevent 82 || true
           "$adb" devices -l
 
-      - name: Run Android Observation and Learning read reference-provider E2E
+      - name: Run Android Observation, Attachment and Learning read reference-provider E2E
         shell: bash
         run: |
           set -euo pipefail
@@ -282,7 +285,7 @@ jobs:
               raise SystemExit('Expected exactly two successful, non-skipped reference-provider E2E tests.')
           PY
 
-      - name: Verify one authoritative Observation and receipt
+      - name: Verify one authoritative Observation, Attachment and receipts
         shell: bash
         run: |
           set -euo pipefail
@@ -296,6 +299,17 @@ jobs:
           actor_id="$(docker exec -i "$db_container" psql -U postgres -d postgres -Atc "select actor_app_user_id from public.observations where operation_id = '$operation_id'::uuid")"
           if [ "$observation_count" != '1' ] || [ "$receipt_count" != '1' ] || [ "$actor_id" != "$expected_actor" ]; then
             echo "Reference-provider mismatch: observations=$observation_count receipts=$receipt_count actor=$actor_id" >&2
+            exit 1
+          fi
+
+          attachment_id='71000000-0000-0000-0000-00000000e201'
+          attachment_operation_id='73000000-0000-0000-0000-00000000e201'
+          attachment_metadata_count="$(docker exec -i "$db_container" psql -U postgres -d postgres -Atc "select count(*) from public.observation_attachments where id = '$attachment_id'::uuid and operation_id = '$attachment_operation_id'::uuid")"
+          attachment_receipt_count="$(docker exec -i "$db_container" psql -U postgres -d postgres -Atc "select count(*) from public.operation_receipts where operation_id = '$attachment_operation_id'::uuid and command_name = 'commit_observation_attachment_v1'")"
+          attachment_object_name="$(docker exec -i "$db_container" psql -U postgres -d postgres -Atc "select object_name from public.observation_attachments where id = '$attachment_id'::uuid")"
+          storage_object_count="$(docker exec -i "$db_container" psql -U postgres -d postgres -Atc "select count(*) from storage.objects where bucket_id = 'teaching-attachments-v1' and name = '$attachment_object_name'")"
+          if [ "$attachment_metadata_count" != '1' ] || [ "$attachment_receipt_count" != '1' ] || [ "$storage_object_count" != '1' ]; then
+            echo "Attachment mismatch: metadata=$attachment_metadata_count receipts=$attachment_receipt_count objects=$storage_object_count path=$attachment_object_name" >&2
             exit 1
           fi
 
