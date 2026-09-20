@@ -24,10 +24,10 @@ source "$status_env"
 set +a
 rm -f "$status_env"
 
-: "\${API_URL:?API_URL missing from local Supabase status}"
-: "\${ANON_KEY:?ANON_KEY missing from local Supabase status}"
-: "\${SERVICE_ROLE_KEY:?SERVICE_ROLE_KEY missing from local Supabase status}"
-api_url="\${API_URL%/}"
+: "${API_URL:?API_URL missing from local Supabase status}"
+: "${ANON_KEY:?ANON_KEY missing from local Supabase status}"
+: "${SERVICE_ROLE_KEY:?SERVICE_ROLE_KEY missing from local Supabase status}"
+api_url="${API_URL%/}"
 
 echo "::add-mask::$ANON_KEY"
 echo "::add-mask::$SERVICE_ROLE_KEY"
@@ -84,7 +84,7 @@ assert_json() {
 
 create_auth_session() {
   local label="$1" actor_id="$2"
-  local email="attachment-$label-\${GITHUB_RUN_ID:-local}-\${GITHUB_RUN_ATTEMPT:-0}@example.com"
+  local email="attachment-$label-${GITHUB_RUN_ID:-local}-${GITHUB_RUN_ATTEMPT:-0}@example.com"
   local password
   password="$(python3 -c 'import secrets,string; a=string.ascii_letters+string.digits; print("Xq!"+"".join(secrets.choice(a) for _ in range(24)))')"
   echo "::add-mask::$password" >&2
@@ -252,11 +252,11 @@ printf '%s' 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAus
   | base64 -d > "$tmp_png"
 
 session_a="$(create_auth_session a "$actor_a")"
-user_a="\${session_a%%|*}"
-token_a="\${session_a#*|}"
+user_a="${session_a%%|*}"
+token_a="${session_a#*|}"
 session_b="$(create_auth_session b "$actor_b")"
-user_b="\${session_b%%|*}"
-token_b="\${session_b#*|}"
+user_b="${session_b%%|*}"
+token_b="${session_b#*|}"
 
 call_rpc "$token_a" create_observation \
   "{\"p_operation_id\":\"$observation_operation\",\"p_organization_id\":\"$organization_id\",\"p_student_id\":\"$student_id\",\"p_subject_profile_id\":\"$profile_id\",\"p_assignment_id\":\"$assignment_a\",\"p_raw_text\":\"Attachment Storage E2E fictional observation.\",\"p_client_capture_metadata\":{\"fixture\":true,\"source\":\"attachment-storage-e2e\"}}"
