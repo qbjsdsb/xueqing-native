@@ -68,6 +68,16 @@ internal static class LocalReferenceProviderTeachingWorkspaceFactory
             projectUri,
             apiKey,
             AccessTokenProvider);
+        var organizationInvitationDelivery =
+            new SupabaseOrganizationInvitationDeliveryCommand(
+                httpClient,
+                projectUri,
+                apiKey,
+                AccessTokenProvider);
+        var organizationInvitationRecovery =
+            new WindowsOrganizationInvitationRecoveryStore(
+                projectUri.GetLeftPart(UriPartial.Authority),
+                ApplicationData.Current);
         var recentReader = new PostgrestStudentRecentObservationsReader(
             httpClient,
             projectUri,
@@ -149,6 +159,8 @@ internal static class LocalReferenceProviderTeachingWorkspaceFactory
             caseLifecycleRecovery,
             organizationManagementReader,
             organizationInvitationCommand,
-            organizationInvitationAcceptance);
+            organizationInvitationAcceptance,
+            organizationInvitationDelivery,
+            organizationInvitationRecovery);
     }
 }

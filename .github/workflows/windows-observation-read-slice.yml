@@ -110,6 +110,48 @@ jobs:
             echo "XUEQING_REFERENCE_INVITEE_ACCESS_TOKEN=$invitee_access_token"
           } >> "$GITHUB_ENV"
 
+      - name: Start invitation delivery reference adapter
+        shell: bash
+        run: |
+          set -euo pipefail
+          env_file="$RUNNER_TEMP/invitation-delivery.env"
+          log_file="$RUNNER_TEMP/invitation-delivery.log"
+          pid_file="$RUNNER_TEMP/invitation-delivery.pid"
+
+          cat > "$env_file" <<'EOF'
+          XUEQING_INVITATION_REDIRECT_URL=http://127.0.0.1:3000/invitation
+          EOF
+
+          nohup supabase functions serve organization-invitation-delivery \
+            --workdir backend \
+            --env-file "$env_file" \
+            >"$log_file" 2>&1 &
+          echo "$!" > "$pid_file"
+
+          ready=false
+          for _ in $(seq 1 60); do
+            status="$(curl --silent --output /dev/null --write-out '%{http_code}' \
+              -X OPTIONS \
+              http://127.0.0.1:54321/functions/v1/organization-invitation-delivery || true)"
+            if [[ "$status" == "200" ]]; then
+              ready=true
+              break
+            fi
+
+            if ! kill -0 "$(cat "$pid_file")" >/dev/null 2>&1; then
+              cat "$log_file" >&2
+              echo "Invitation delivery function exited before becoming ready." >&2
+              exit 1
+            fi
+            sleep 1
+          done
+
+          if [[ "$ready" != "true" ]]; then
+            cat "$log_file" >&2
+            echo "Invitation delivery function did not become ready." >&2
+            exit 1
+          fi
+
       - name: Build Windows reference-provider E2E
         shell: bash
         run: |
@@ -152,4 +194,7 @@ jobs:
         if: always()
         shell: bash
         run: |
+          if [[ -f "$RUNNER_TEMP/invitation-delivery.pid" ]]; then
+            kill "$(cat "$RUNNER_TEMP/invitation-delivery.pid")" >/dev/null 2>&1 || true
+          fi
           supabase stop --workdir backend || true

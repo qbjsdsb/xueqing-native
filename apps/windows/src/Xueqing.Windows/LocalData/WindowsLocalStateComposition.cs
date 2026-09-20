@@ -100,6 +100,11 @@ internal static class WindowsLocalStatePaths
         WindowsLocalDataScope scope) =>
         GetScopedDatabasePath(localFolder, scope, "case-lifecycle-recovery.db");
 
+    public static string GetOrganizationInvitationRecoveryDatabasePath(
+        StorageFolder localFolder,
+        WindowsLocalDataScope scope) =>
+        GetScopedDatabasePath(localFolder, scope, "organization-invitation-recovery.db");
+
     public static string GetOnlineCommandRecoveryIndexDatabasePath(
         StorageFolder localFolder,
         WindowsActorLocalDataScope scope)

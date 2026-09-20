@@ -120,7 +120,9 @@ Organization Invitation Delivery 已完成并合入主线：邀请发送先持�
 
 Provider Projection Conformance 已完成并合入主线：两个独立真实外部 Auth 身份通过 `IdentityLink` 映射到同一 application-owned AppUser 后，PersonalBootstrap、Recent Observation、Current Focus、Case history、Personal Today 与 Organization Management 保持相同业务 payload；provider/session 字段不得泄漏，最终迁移后的业务 projection 不得直接调用 `auth.jwt()` / `auth.uid()`，真实 provider session 在跨机构/缺失 Assignment/teacher-only management 场景继续 fail closed。该 Gate 已通过 exact-head Backend、Windows 与 Android reference-provider 回归。
 
-当前唯一执行线已切换到 **Provider Storage Conformance**。这一阶段不新增 Attachment 功能，而是冻结 private Storage 的 provider-neutral 授权语义：不同真实外部身份只通过 `IdentityLink` 解析到 application-owned AppUser，Storage upload/read 必须遵循同一 Teaching Fact / Assignment 边界；IdentityLink revoke 必须立即影响对应 provider identity；旧 `auth_subject` 不得重新成为 Storage 权限来源。Supabase bucket/REST 仍只允许存在于 Infrastructure/reference-provider 边界。
+Provider Storage Conformance 也已完成并合入主线：两个独立真实外部 Auth 身份只通过 `IdentityLink` 解析到同一 application-owned AppUser 后，private Attachment upload/read/cross-commit 保持同一教学权限语义；单个 IdentityLink revoke 只撤销对应 provider identity；匿名读取继续拒绝；最终迁移后的 Storage authorization helper 不得直接依赖 `auth.jwt()` / `auth.uid()`。Session/Auth、IdentityLink、Projection 与 Storage 四层证据因此共同关闭原先更宽泛的 Provider Adapter Conformance Spike。
+
+当前唯一执行线已切换到 **Windows Organization Invitation Product Closure**。后端 Create → Delivery → Authentication → Acceptance → Membership 链已经有真实 provider 证据；本阶段不再扩张领域模型，而是把邀请发起端安全接入 WinUI：输入邮箱/角色/任教能力，创建权威 Invitation，调用可信 Delivery adapter，并在 ResultUnknown 时持久化原 operation/intent 只允许确认同一次操作。resend/revoke、角色变更、Owner transfer 与复杂成员治理继续保持独立后续 Gate。
 
 动态工程状态以 `docs/project/PROJECT_STATE.yaml` 为准。
 

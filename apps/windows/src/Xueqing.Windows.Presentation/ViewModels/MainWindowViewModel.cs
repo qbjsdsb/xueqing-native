@@ -42,6 +42,15 @@ public sealed record ActionProgressionRetryResult(
     bool IsSuccess,
     ActionProgressionFailure? Failure);
 
+public sealed record OrganizationInvitationRoleOption(
+    OrganizationInvitationTargetRole Role,
+    string DisplayName);
+
+public sealed record OrganizationInvitationRecoveryLookup(
+    bool IsAvailable,
+    OrganizationInvitationRecoveryIntent? Intent,
+    bool HasMultiple);
+
 public sealed record PendingActionProgressionRecoveryItem(
     ActionProgressionRecoveryIntent Intent,
     string StudentDisplayName,
@@ -91,6 +100,7 @@ public sealed class MainWindowViewModel : ObservableObject
     private readonly CaseLifecycleCommandCoordinator? _caseLifecycle;
     private readonly ICaseLifecycleRecoveryStore? _caseLifecycleRecovery;
     private readonly IOrganizationManagementReader? _organizationManagement;
+    private readonly OrganizationInvitationWorkflowCoordinator? _organizationInvitationWorkflow;
     private readonly bool _isPrototypeMode;
     private readonly List<StudentSummary> _allStudents;
     private readonly Dictionary<string, PersonalStudentWorkspaceItem> _authoritativeStudents = new(StringComparer.Ordinal);
@@ -131,6 +141,15 @@ public sealed class MainWindowViewModel : ObservableObject
         _caseLifecycle = teachingWorkspace?.CaseLifecycle;
         _caseLifecycleRecovery = teachingWorkspace?.CaseLifecycleRecovery;
         _organizationManagement = teachingWorkspace?.OrganizationManagement;
+        _organizationInvitationWorkflow =
+            teachingWorkspace?.OrganizationInvitations is not null &&
+            teachingWorkspace.OrganizationInvitationDelivery is not null &&
+            teachingWorkspace.OrganizationInvitationRecovery is not null
+                ? new OrganizationInvitationWorkflowCoordinator(
+                    teachingWorkspace.OrganizationInvitations,
+                    teachingWorkspace.OrganizationInvitationDelivery,
+                    teachingWorkspace.OrganizationInvitationRecovery)
+                : null;
         _isPrototypeMode = teachingWorkspace is null;
         _allStudents = _personalWorkspace is null
             ? SyntheticDataFactory.CreateStudents(1_000).ToList()
@@ -202,6 +221,48 @@ public sealed class MainWindowViewModel : ObservableObject
 
     public bool CanUseOrganizationWorkspace =>
         _isPrototypeMode || _organizationManagementSnapshot is not null;
+
+    public bool CanInviteOrganizationMembers =>
+        !_isPrototypeMode &&
+        _organizationInvitationWorkflow is not null &&
+        _organizationManagementSnapshot is { Capabilities: var capabilities } &&
+        (capabilities.CanInviteOwner ||
+         capabilities.CanInviteAdmin ||
+         capabilities.CanInviteTeacher);
+
+    public IReadOnlyList<OrganizationInvitationRoleOption> OrganizationInvitationRoleOptions
+    {
+        get
+        {
+            var capabilities = _organizationManagementSnapshot?.Capabilities;
+            if (capabilities is null)
+            {
+                return Array.Empty<OrganizationInvitationRoleOption>();
+            }
+
+            var options = new List<OrganizationInvitationRoleOption>(3);
+            if (capabilities.CanInviteOwner)
+            {
+                options.Add(new(
+                    OrganizationInvitationTargetRole.Owner,
+                    "负责人"));
+            }
+            if (capabilities.CanInviteAdmin)
+            {
+                options.Add(new(
+                    OrganizationInvitationTargetRole.Admin,
+                    "管理员"));
+            }
+            if (capabilities.CanInviteTeacher)
+            {
+                options.Add(new(
+                    OrganizationInvitationTargetRole.Teacher,
+                    "老师"));
+            }
+
+            return options;
+        }
+    }
 
     public string OrganizationName
     {
@@ -344,6 +405,8 @@ public sealed class MainWindowViewModel : ObservableObject
         OrganizationMembers.Clear();
         OrganizationName = string.Empty;
         OnPropertyChanged(nameof(CanUseOrganizationWorkspace));
+        OnPropertyChanged(nameof(CanInviteOrganizationMembers));
+        OnPropertyChanged(nameof(OrganizationInvitationRoleOptions));
 
         if (_organizationManagement is null)
         {
@@ -421,8 +484,158 @@ public sealed class MainWindowViewModel : ObservableObject
         OrganizationManagementStatusText =
             $"{snapshot.OrganizationName} · " +
             $"{(snapshot.ActorMembershipRole == OrganizationMembershipRole.Owner ? "负责人" : "管理员")} · " +
-            "成员只读";
+            (CanInviteOrganizationMembers ? "可邀请成员" : "成员只读");
         OnPropertyChanged(nameof(CanUseOrganizationWorkspace));
+        OnPropertyChanged(nameof(CanInviteOrganizationMembers));
+        OnPropertyChanged(nameof(OrganizationInvitationRoleOptions));
+    }
+
+    public async Task<OrganizationInvitationRecoveryLookup> FindOrganizationInvitationRecoveryAsync(
+        CancellationToken cancellationToken = default)
+    {
+        var snapshot = _organizationManagementSnapshot;
+        var workflow = _organizationInvitationWorkflow;
+        if (snapshot is null || workflow is null)
+        {
+            return new OrganizationInvitationRecoveryLookup(false, null, false);
+        }
+
+        try
+        {
+            var pending = await workflow.ListAsync(
+                snapshot.ActorAppUserId,
+                snapshot.OrganizationId,
+                cancellationToken);
+
+            if (pending.Count == 0)
+            {
+                return new OrganizationInvitationRecoveryLookup(true, null, false);
+            }
+
+            return new OrganizationInvitationRecoveryLookup(
+                true,
+                pending[0],
+                pending.Count > 1);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch
+        {
+            return new OrganizationInvitationRecoveryLookup(false, null, false);
+        }
+    }
+
+    public async Task<OrganizationInvitationWorkflowResult> StartOrganizationInvitationAsync(
+        string invitedEmail,
+        OrganizationInvitationTargetRole targetRole,
+        bool targetCanTeach,
+        CancellationToken cancellationToken = default)
+    {
+        var snapshot = RequireInvitationSnapshot();
+        var workflow = _organizationInvitationWorkflow
+            ?? throw new InvalidOperationException(
+                "Organization invitation workflow is not configured.");
+
+        var request = new CreateOrganizationInvitationRequest(
+            Guid.NewGuid(),
+            snapshot.OrganizationId,
+            invitedEmail,
+            targetRole,
+            targetCanTeach);
+
+        OrganizationManagementStatusText = "正在创建并发送邀请…";
+        var result = await workflow.StartAsync(
+            request,
+            Guid.NewGuid(),
+            snapshot.ActorAppUserId,
+            cancellationToken);
+
+        ApplyOrganizationInvitationResultStatus(result);
+        await RefreshManagementAfterInvitationResultAsync(result, cancellationToken);
+        return result;
+    }
+
+    public async Task<OrganizationInvitationWorkflowResult> ResumeOrganizationInvitationAsync(
+        OrganizationInvitationRecoveryIntent intent,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(intent);
+        var snapshot = RequireInvitationSnapshot();
+        if (intent.OrganizationId != snapshot.OrganizationId)
+        {
+            throw new InvalidOperationException(
+                "Invitation recovery does not belong to the active Organization.");
+        }
+
+        var workflow = _organizationInvitationWorkflow
+            ?? throw new InvalidOperationException(
+                "Organization invitation workflow is not configured.");
+
+        OrganizationManagementStatusText = "正在重新确认上次邀请…";
+        var result = await workflow.ResumeAsync(
+            intent,
+            snapshot.ActorAppUserId,
+            cancellationToken);
+
+        ApplyOrganizationInvitationResultStatus(result);
+        await RefreshManagementAfterInvitationResultAsync(result, cancellationToken);
+        return result;
+    }
+
+    private OrganizationManagementSnapshot RequireInvitationSnapshot()
+    {
+        var snapshot = _organizationManagementSnapshot
+            ?? throw new InvalidOperationException(
+                "Organization management authority is not available.");
+
+        if (!CanInviteOrganizationMembers)
+        {
+            throw new InvalidOperationException(
+                "Current Organization management capability does not allow invitations.");
+        }
+
+        return snapshot;
+    }
+
+    private void ApplyOrganizationInvitationResultStatus(
+        OrganizationInvitationWorkflowResult result)
+    {
+        OrganizationManagementStatusText = result.Outcome switch
+        {
+            OrganizationInvitationWorkflowOutcome.Sent =>
+                "邀请已发送，等待受邀者接受后才会创建成员关系。",
+            OrganizationInvitationWorkflowOutcome.CreatePendingConfirmation =>
+                "邀请创建结果待确认；原操作已安全保存，不会新建第二份邀请。",
+            OrganizationInvitationWorkflowOutcome.DeliveryPendingConfirmation =>
+                "邮件投递结果待确认；原投递操作已保留，不会重复发送。",
+            OrganizationInvitationWorkflowOutcome.DeliveryBlocked =>
+                "登录状态或机构权限已经变化；原邀请操作仍保留。",
+            OrganizationInvitationWorkflowOutcome.DeliveryFailed =>
+                "邀请已创建，但邮件投递被明确拒绝；不会自动重新发送。",
+            OrganizationInvitationWorkflowOutcome.Rejected =>
+                "服务端明确拒绝本次邀请，未创建成员关系。",
+            OrganizationInvitationWorkflowOutcome.LocalDurabilityFailure =>
+                "本机安全状态无法确认；不会生成新的邀请操作。",
+            _ => "邀请状态无法安全确认。",
+        };
+    }
+
+    private async Task RefreshManagementAfterInvitationResultAsync(
+        OrganizationInvitationWorkflowResult result,
+        CancellationToken cancellationToken)
+    {
+        if (result.IsSuccess ||
+            result.CreateFailure?.Kind is
+                CreateOrganizationInvitationFailureKind.AuthenticationRequired or
+                CreateOrganizationInvitationFailureKind.AuthorityChanged ||
+            result.DeliveryFailure?.Kind is
+                DeliverOrganizationInvitationFailureKind.AuthenticationRequired or
+                DeliverOrganizationInvitationFailureKind.AuthorityChanged)
+        {
+            await RefreshOrganizationManagementAsync(cancellationToken);
+        }
     }
 
     public async Task RefreshAuthoritativeStudentsAsync(CancellationToken cancellationToken = default)

@@ -32,9 +32,12 @@
             <Button
                 Grid.Column="1"
                 VerticalAlignment="Bottom"
+                AutomationProperties.AutomationId="InviteOrganizationMemberButton"
+                AutomationProperties.Name="邀请机构成员"
                 Content="邀请成员"
-                IsEnabled="False"
-                ToolTipService.ToolTip="邀请命令将在下一管理写入 Gate 接入" />
+                IsEnabled="{Binding CanInviteOrganizationMembers}"
+                Click="InviteMember_Click"
+                ToolTipService.ToolTip="通过邮箱邀请机构成员" />
         </Grid>
 
         <TextBox
