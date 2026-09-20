@@ -51,6 +51,7 @@ completed_gates:
   - organization-management-vertical-slice
   - organization-invitation-acceptance
   - organization-invitation-delivery
+  - provider-projection-conformance
 
 open_gates:
   - provider-adapter-conformance-spike
