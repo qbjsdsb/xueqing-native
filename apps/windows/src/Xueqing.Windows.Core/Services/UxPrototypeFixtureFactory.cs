@@ -96,7 +96,7 @@ public static class UxPrototypeFixtureFactory
     {
         ArgumentOutOfRangeException.ThrowIfNegative(count);
         var roles = new[] { "负责人", "管理员", "老师" };
-        var statuses = new[] { "正常", "正常", "正常", "成员已停用" };
+        var statuses = new[] { "正常", "正常", "正常", "已停用" };
 
         var rows = new OrganizationMemberRow[count];
         for (var index = 0; index < count; index++)
