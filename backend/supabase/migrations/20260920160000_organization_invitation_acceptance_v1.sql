@@ -22,7 +22,7 @@ as $$
     select pg_catalog.lower(pg_catalog.btrim(auth.jwt() ->> 'email'))
     where nullif(auth.jwt() ->> 'sub', '') is not null
       and auth.jwt() ->> 'role' = 'authenticated'
-      and pg_catalog.coalesce(auth.jwt() ->> 'is_anonymous', 'false') = 'false'
+      and coalesce(auth.jwt() ->> 'is_anonymous', 'false') = 'false'
       and nullif(pg_catalog.btrim(auth.jwt() ->> 'email'), '') is not null;
 $$;
 
