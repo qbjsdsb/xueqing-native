@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text;
+using System.Text.Json.Nodes;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Xueqing.Windows.Core.Models;
 using Xueqing.Windows.Core.Services;
@@ -50,53 +51,40 @@ public sealed class StudentLearningCasesReadTests
     [TestMethod]
     public void Parser_rejects_responsibility_marker_that_conflicts_with_ids()
     {
-        var json = ValidJson().Replace(
-            "\"is_current_actor_responsibility\":true",
-            "\"is_current_actor_responsibility\":false",
-            StringComparison.Ordinal);
+        var root = JsonNode.Parse(ValidJson())!.AsObject();
+        root["cases"]!.AsArray()[0]!["is_current_actor_responsibility"] = false;
 
         ExpectThrows<InvalidDataException>(
-            () => StudentLearningCasesJsonParser.Parse(json, Scope, ActorId));
+            () => StudentLearningCasesJsonParser.Parse(root.ToJsonString(), Scope, ActorId));
     }
 
     [TestMethod]
     public void Parser_rejects_current_action_on_closed_case()
     {
-        var json = ValidJson().Replace(
-            "\"primary_action\":null",
+        var root = JsonNode.Parse(ValidJson())!.AsObject();
+        root["cases"]!.AsArray()[1]!["primary_action"] = JsonNode.Parse(
             """
-            "primary_action":{
+            {
               "action_id":"71000000-0000-0000-0000-000000000002",
               "action_text":"不应存在",
               "due_on":null,
               "due_bucket":"undated",
               "action_version":2
             }
-            """,
-            StringComparison.Ordinal);
+            """);
 
         ExpectThrows<InvalidDataException>(
-            () => StudentLearningCasesJsonParser.Parse(json, Scope, ActorId));
+            () => StudentLearningCasesJsonParser.Parse(root.ToJsonString(), Scope, ActorId));
     }
 
     [TestMethod]
     public void Parser_rejects_missing_action_on_open_case()
     {
-        var json = ValidJson().Replace(
-            """
-            "primary_action":{
-              "action_id":"71000000-0000-0000-0000-000000000001",
-              "action_text":"今天复核限制条件",
-              "due_on":"2026-09-20",
-              "due_bucket":"today",
-              "action_version":3
-            }
-            """,
-            "\"primary_action\":null",
-            StringComparison.Ordinal);
+        var root = JsonNode.Parse(ValidJson())!.AsObject();
+        root["cases"]!.AsArray()[0]!["primary_action"] = null;
 
         ExpectThrows<InvalidDataException>(
-            () => StudentLearningCasesJsonParser.Parse(json, Scope, ActorId));
+            () => StudentLearningCasesJsonParser.Parse(root.ToJsonString(), Scope, ActorId));
     }
 
     [TestMethod]
