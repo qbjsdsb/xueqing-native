@@ -31,6 +31,7 @@ psql_db() {
 holder_pid=''
 writer_one_pid=''
 writer_two_pid=''
+last_writer_pid=''
 
 terminate_test_sessions() {
   psql_db -Atc "select pg_catalog.pg_terminate_backend(pid) from pg_catalog.pg_stat_activity where application_name in ('$holder_app', '$writer_one_app', '$writer_two_app') and pid <> pg_catalog.pg_backend_pid()" >/dev/null 2>&1 || true
@@ -168,11 +169,13 @@ select public.accept_organization_invitation_v1(
     '多身份并发验收用户'
 );
 SQL
-  echo $!
+  last_writer_pid=$!
 }
 
-writer_one_pid="$(start_writer "$writer_one_app" "$subject_one" "$email_one" "$accept_operation_one" "$invitation_one" /tmp/xueqing-accept-writer-one.log)"
-writer_two_pid="$(start_writer "$writer_two_app" "$subject_two" "$email_two" "$accept_operation_two" "$invitation_two" /tmp/xueqing-accept-writer-two.log)"
+start_writer "$writer_one_app" "$subject_one" "$email_one" "$accept_operation_one" "$invitation_one" /tmp/xueqing-accept-writer-one.log
+writer_one_pid="$last_writer_pid"
+start_writer "$writer_two_app" "$subject_two" "$email_two" "$accept_operation_two" "$invitation_two" /tmp/xueqing-accept-writer-two.log
+writer_two_pid="$last_writer_pid"
 
 waiting=0
 for _ in $(seq 1 100); do
