@@ -239,5 +239,6 @@ class AttachmentTooLargeException(
     val maxBytes: Long,
 ) : IOException("Attachment exceeds protected staging limit")
 
-class LocalAttachmentKeyUnavailableException :
-    IOException("Protected attachment key is unavailable")
+class LocalAttachmentKeyUnavailableException(
+    message: String = "Protected attachment key is unavailable",
+) : IOException(message)
