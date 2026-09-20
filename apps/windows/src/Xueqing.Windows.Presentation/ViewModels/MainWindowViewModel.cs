@@ -16,6 +16,16 @@ public sealed record LearningFocusDisplayItem(
     string NextAction,
     string DueLabel);
 
+public sealed record LearningCaseHistoryDisplayItem(
+    Guid CaseId,
+    string Title,
+    string StateLabel,
+    string ResponsibilityLabel,
+    string NextAction,
+    string DueLabel,
+    bool IsCurrentActorResponsibility,
+    bool IsClosed);
+
 public sealed record LearningCaseRecoveryLookup(
     bool IsAvailable,
     CreateLearningCaseRequest? Request);
@@ -69,6 +79,7 @@ public sealed class MainWindowViewModel : ObservableObject
 {
     private readonly PersonalStudentWorkspaceCoordinator? _personalWorkspace;
     private readonly StudentLearningFocusCoordinator? _learningFocus;
+    private readonly StudentLearningCasesCoordinator? _caseHistory;
     private readonly PersonalTodayActionsCoordinator? _today;
     private readonly ICreateLearningCaseCommand? _createLearningCase;
     private readonly ICreateLearningCaseRecoveryStore? _createLearningCaseRecovery;
@@ -78,11 +89,14 @@ public sealed class MainWindowViewModel : ObservableObject
     private readonly Dictionary<string, PersonalStudentWorkspaceItem> _authoritativeStudents = new(StringComparer.Ordinal);
     private readonly Dictionary<Guid, ActionProgressionTarget> _authoritativeTodayActionTargets = new();
     private readonly Dictionary<Guid, ActionProgressionTarget> _authoritativeFocusTargets = new();
+    private readonly Dictionary<Guid, StudentLearningCaseSummary> _authoritativeCaseHistory = new();
     private StudentSummary? _selectedStudent;
     private TeachingContextOption? _selectedTeachingContext;
     private string _recentObservationsStatusText = string.Empty;
     private string _recentHistoryMoreText = string.Empty;
     private string _currentFocusStatusText = string.Empty;
+    private string _caseHistoryStatusText = string.Empty;
+    private string _caseHistoryMoreText = string.Empty;
     private string _todayStatusText = string.Empty;
     private string _pendingLearningCaseRecoveryStatusText = string.Empty;
     private string _pendingActionProgressionRecoveryStatusText = string.Empty;
@@ -97,6 +111,7 @@ public sealed class MainWindowViewModel : ObservableObject
     {
         _personalWorkspace = teachingWorkspace?.Students;
         _learningFocus = teachingWorkspace?.LearningFocus;
+        _caseHistory = teachingWorkspace?.CaseHistory;
         _today = teachingWorkspace?.Today;
         _createLearningCase = teachingWorkspace?.CreateLearningCase;
         _createLearningCaseRecovery = teachingWorkspace?.CreateLearningCaseRecovery;
@@ -110,6 +125,7 @@ public sealed class MainWindowViewModel : ObservableObject
         SelectedTeachingContexts = new ObservableCollection<TeachingContextOption>();
         RecentObservations = new ObservableCollection<StudentRecentObservation>();
         CurrentFocus = new ObservableCollection<LearningFocusDisplayItem>();
+        CaseHistory = new ObservableCollection<LearningCaseHistoryDisplayItem>();
         PendingLearningCaseRecoveries = new ObservableCollection<PendingLearningCaseRecoveryItem>();
         PendingActionProgressionRecoveries = new ObservableCollection<PendingActionProgressionRecoveryItem>();
         TodayActions = _personalWorkspace is null
@@ -123,12 +139,14 @@ public sealed class MainWindowViewModel : ObservableObject
         {
             _recentObservationsStatusText = "UX 原型记录，仅用于布局与交互验证。";
             _currentFocusStatusText = "UX 原型关注项，仅用于布局与交互验证。";
+            _caseHistoryStatusText = string.Empty;
             _todayStatusText = string.Empty;
         }
         else
         {
             _recentObservationsStatusText = "正在准备当前任教学员…";
             _currentFocusStatusText = "正在准备当前关注…";
+            _caseHistoryStatusText = "选择学科后可按需查看全部 Case。";
             _todayStatusText = "正在准备今日行动…";
         }
     }
@@ -146,6 +164,8 @@ public sealed class MainWindowViewModel : ObservableObject
     public ObservableCollection<StudentRecentObservation> RecentObservations { get; }
 
     public ObservableCollection<LearningFocusDisplayItem> CurrentFocus { get; }
+
+    public ObservableCollection<LearningCaseHistoryDisplayItem> CaseHistory { get; }
 
     public ObservableCollection<PendingLearningCaseRecoveryItem> PendingLearningCaseRecoveries { get; }
 
@@ -181,14 +201,21 @@ public sealed class MainWindowViewModel : ObservableObject
             {
                 RecentObservations.Clear();
                 CurrentFocus.Clear();
+                CaseHistory.Clear();
                 _authoritativeFocusTargets.Clear();
+                _authoritativeCaseHistory.Clear();
+                _caseHistory?.Reset();
                 RecentHistoryMoreText = string.Empty;
+                CaseHistoryMoreText = string.Empty;
                 RecentObservationsStatusText = value is null
                     ? (SelectedTeachingContexts.Count > 1 ? "选择学科后读取最近记录。" : "暂无可读取的教学上下文。")
                     : "可读取最近记录。";
                 CurrentFocusStatusText = value is null
                     ? (SelectedTeachingContexts.Count > 1 ? "选择学科后读取当前关注。" : "暂无可读取的教学上下文。")
                     : "可读取当前关注。";
+                CaseHistoryStatusText = value is null
+                    ? (SelectedTeachingContexts.Count > 1 ? "选择学科后可查看全部 Case。" : "暂无可读取的教学上下文。")
+                    : "按需查看全部 Case。";
             }
         }
     }
@@ -209,6 +236,18 @@ public sealed class MainWindowViewModel : ObservableObject
     {
         get => _currentFocusStatusText;
         private set => SetProperty(ref _currentFocusStatusText, value);
+    }
+
+    public string CaseHistoryStatusText
+    {
+        get => _caseHistoryStatusText;
+        private set => SetProperty(ref _caseHistoryStatusText, value);
+    }
+
+    public string CaseHistoryMoreText
+    {
+        get => _caseHistoryMoreText;
+        private set => SetProperty(ref _caseHistoryMoreText, value);
     }
 
     public string TodayStatusText
@@ -252,18 +291,23 @@ public sealed class MainWindowViewModel : ObservableObject
 
         RecentObservationsStatusText = "正在重新验证当前教学权限…";
         CurrentFocusStatusText = "正在重新验证当前教学权限…";
+        CaseHistoryStatusText = "正在重新验证当前教学权限…";
         TodayStatusText = "正在重新验证今日行动权限…";
         RecentHistoryMoreText = string.Empty;
+        CaseHistoryMoreText = string.Empty;
         RecentObservations.Clear();
         CurrentFocus.Clear();
+        CaseHistory.Clear();
         TodayActions.Clear();
         _authoritativeFocusTargets.Clear();
+        _authoritativeCaseHistory.Clear();
         _authoritativeTodayActionTargets.Clear();
         PendingLearningCaseRecoveries.Clear();
         PendingLearningCaseRecoveryStatusText = string.Empty;
         PendingActionProgressionRecoveries.Clear();
         PendingActionProgressionRecoveryStatusText = string.Empty;
         _learningFocus?.Reset();
+        _caseHistory?.Reset();
         _today?.Reset();
         SelectedTeachingContexts.Clear();
         SelectedTeachingContext = null;
@@ -278,6 +322,7 @@ public sealed class MainWindowViewModel : ObservableObject
             var failureText = WorkspaceFailureText(state.Status);
             RecentObservationsStatusText = failureText;
             CurrentFocusStatusText = failureText;
+            CaseHistoryStatusText = failureText;
             TodayStatusText = failureText;
             return;
         }
@@ -310,6 +355,7 @@ public sealed class MainWindowViewModel : ObservableObject
         {
             RecentObservationsStatusText = "当前账号暂无有效任教学员。";
             CurrentFocusStatusText = "当前账号暂无有效任教学员。";
+            CaseHistoryStatusText = "当前账号暂无有效任教学员。";
         }
 
         await RefreshPendingLearningCaseRecoveriesAsync(state.Bootstrap, cancellationToken);
@@ -365,6 +411,51 @@ public sealed class MainWindowViewModel : ObservableObject
         {
             ApplyFocusState(focusState);
         }
+    }
+
+    public async Task LoadSelectedCaseHistoryAsync(CancellationToken cancellationToken = default)
+    {
+        if (_personalWorkspace is null ||
+            _caseHistory is null ||
+            SelectedTeachingContext is null)
+        {
+            return;
+        }
+
+        var bootstrap = _personalWorkspace.Current.Status == PersonalStudentWorkspaceStatus.Ready
+            ? _personalWorkspace.Current.Bootstrap
+            : null;
+        if (bootstrap is null)
+        {
+            return;
+        }
+
+        var selected = SelectedTeachingContext;
+        if (!ContainsExactContext(bootstrap, selected.Context))
+        {
+            CaseHistory.Clear();
+            _authoritativeCaseHistory.Clear();
+            CaseHistoryStatusText = "当前教学上下文已变化，请重新选择。";
+            CaseHistoryMoreText = string.Empty;
+            return;
+        }
+
+        CaseHistory.Clear();
+        _authoritativeCaseHistory.Clear();
+        CaseHistoryStatusText = "正在读取全部 Case…";
+        CaseHistoryMoreText = string.Empty;
+
+        var state = await _caseHistory.LoadAsync(
+            ToLearningScope(selected.Context),
+            bootstrap.ActorAppUserId,
+            cancellationToken);
+
+        if (!ReferenceEquals(selected, SelectedTeachingContext) && selected != SelectedTeachingContext)
+        {
+            return;
+        }
+
+        ApplyCaseHistoryState(state);
     }
 
     public async Task<LearningCaseRecoveryLookup> FindPendingLearningCaseForObservationAsync(
@@ -1269,6 +1360,49 @@ public sealed class MainWindowViewModel : ObservableObject
         }
     }
 
+    private void ApplyCaseHistoryState(StudentLearningCasesViewState state)
+    {
+        CaseHistory.Clear();
+        _authoritativeCaseHistory.Clear();
+        CaseHistoryMoreText = string.Empty;
+
+        switch (state.Status)
+        {
+            case StudentLearningCasesViewStatus.Data when state.Snapshot is not null:
+                foreach (var learningCase in state.Snapshot.Cases)
+                {
+                    _authoritativeCaseHistory.Add(learningCase.CaseId, learningCase);
+                    CaseHistory.Add(ToCaseHistoryDisplayItem(learningCase));
+                }
+                CaseHistoryStatusText = "全部 Case";
+                CaseHistoryMoreText = state.Snapshot.HasMore
+                    ? "仅显示最近更新的 50 个 Case。"
+                    : string.Empty;
+                break;
+            case StudentLearningCasesViewStatus.Empty:
+                CaseHistoryStatusText = "当前学科还没有 Case 历史。";
+                break;
+            case StudentLearningCasesViewStatus.AuthenticationRequired:
+                CaseHistoryStatusText = "登录状态已失效，未显示旧 Case。";
+                break;
+            case StudentLearningCasesViewStatus.AccessDenied:
+                CaseHistoryStatusText = "当前教学权限已变化，未显示旧 Case。";
+                break;
+            case StudentLearningCasesViewStatus.ServerInvariant:
+                CaseHistoryStatusText = "Case 数据需要服务器校验，已停止展示。";
+                break;
+            case StudentLearningCasesViewStatus.TransientFailure:
+                CaseHistoryStatusText = "暂时无法读取全部 Case，可稍后重试。";
+                break;
+            case StudentLearningCasesViewStatus.ProtocolFailure:
+                CaseHistoryStatusText = "服务器返回无法验证，已拒绝显示 Case。";
+                break;
+            default:
+                CaseHistoryStatusText = "按需查看全部 Case。";
+                break;
+        }
+    }
+
     private void ApplyFocusState(StudentLearningFocusViewState state)
     {
         CurrentFocus.Clear();
@@ -1415,6 +1549,45 @@ public sealed class MainWindowViewModel : ObservableObject
                     : learningCase.PrimaryAction.DueOn.Value.ToString("MM月dd日"),
                 _ => string.Empty,
             });
+
+    private static LearningCaseHistoryDisplayItem ToCaseHistoryDisplayItem(
+        StudentLearningCaseSummary learningCase)
+    {
+        var stateLabel = learningCase.State switch
+        {
+            LearningCaseState.New => "新建",
+            LearningCaseState.Confirmed => "已确认",
+            LearningCaseState.Intervening => "跟进中",
+            LearningCaseState.PendingVerification => "待验证",
+            LearningCaseState.Stable => "稳定",
+            LearningCaseState.Closed => "已关闭",
+            _ => string.Empty,
+        };
+
+        var action = learningCase.PrimaryAction;
+        var dueLabel = action?.DueBucket switch
+        {
+            ActionDueBucket.Overdue => action.DueOn is null
+                ? "逾期"
+                : $"逾期 · {action.DueOn.Value:MM月dd日}",
+            ActionDueBucket.Today => "今天",
+            ActionDueBucket.Undated => "待安排",
+            ActionDueBucket.Future => action.DueOn is null
+                ? "之后"
+                : action.DueOn.Value.ToString("MM月dd日"),
+            _ => string.Empty,
+        };
+
+        return new LearningCaseHistoryDisplayItem(
+            learningCase.CaseId,
+            learningCase.Title,
+            stateLabel,
+            learningCase.IsCurrentActorResponsibility ? "当前负责" : "历史责任",
+            action?.ActionText ?? "已关闭 · 无待办行动",
+            dueLabel,
+            learningCase.IsCurrentActorResponsibility,
+            learningCase.State == LearningCaseState.Closed);
+    }
 
     private static TodayActionItem ToTodayActionItem(PersonalTodayAction action) =>
         new(

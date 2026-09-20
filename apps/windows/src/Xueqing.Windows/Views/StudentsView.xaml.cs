@@ -87,6 +87,14 @@ public sealed partial class StudentsView : UserControl
         }
     }
 
+    private async void LoadCaseHistory_Click(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is MainWindowViewModel viewModel)
+        {
+            await viewModel.LoadSelectedCaseHistoryAsync();
+        }
+    }
+
     private void ActionProgressionButton_Loaded(object sender, RoutedEventArgs e)
     {
         if (sender is Button button &&

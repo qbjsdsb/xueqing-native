@@ -12,6 +12,7 @@ public enum LearningCaseState
     Intervening,
     PendingVerification,
     Stable,
+    Closed,
 }
 
 public enum ActionDueBucket
