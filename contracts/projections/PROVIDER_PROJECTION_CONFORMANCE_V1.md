@@ -63,6 +63,8 @@ Projection payloads must not expose provider/session internals such as:
 
 The provider transport may use those values internally. They are not Xueqing business projection fields.
 
+After all migrations are applied, CI also inspects PostgreSQL's final function definitions for the six accepted projections. Those public business projections must not call reference-provider helpers such as `auth.jwt()` or `auth.uid()` directly. Historical migration text may contain superseded definitions; conformance is evaluated against the final migrated database definition so the gate protects the active architecture without falsifying immutable migration history.
+
 ## Authorization boundary
 
 This gate does not weaken the existing per-projection authorization rules.
