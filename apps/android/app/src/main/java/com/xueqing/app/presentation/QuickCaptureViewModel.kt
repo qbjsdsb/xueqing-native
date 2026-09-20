@@ -7,6 +7,7 @@ import com.xueqing.app.application.bootstrap.PersonalBootstrapRemote
 import com.xueqing.app.application.bootstrap.PersonalBootstrapResult
 import com.xueqing.app.application.bootstrap.PersonalTeachingContext
 import com.xueqing.app.application.observation.CreateObservationRequest
+import com.xueqing.app.durability.AttachmentStagingRecoveryScheduler
 import com.xueqing.app.durability.DraftDatabase
 import com.xueqing.app.durability.DraftScope
 import com.xueqing.app.durability.DraftStore
@@ -503,6 +504,11 @@ class QuickCaptureViewModel(
         ): QuickCaptureViewModel {
             val appContext = context.applicationContext
             val database = DraftDatabase.get(appContext)
+            // Reconcile protected attachment files only after the app has
+            // established the same Durable Intent database lifecycle used by
+            // Quick Capture. This avoids a cold-start worker racing explicit
+            // database/key purge or test recovery setup.
+            AttachmentStagingRecoveryScheduler.kick(appContext)
             return QuickCaptureViewModel(
                 store = DraftStore(database.draftDao()),
                 durableIntentDao = database.durableIntentDao(),

@@ -110,8 +110,35 @@ abstract class DraftDatabase : RoomDatabase() {
         @Volatile
         private var sqlCipherLoaded = false
 
-        fun create(context: Context): DraftDatabase {
+        fun create(context: Context): DraftDatabase = synchronized(this) {
+            createLocked(context.applicationContext)
+        }
+
+        fun get(context: Context): DraftDatabase =
+            instance ?: synchronized(this) {
+                instance ?: createLocked(context.applicationContext).also { created ->
+                    instance = created
+                }
+            }
+
+        fun purgeLocalEncryptedData(context: Context) {
             val appContext = context.applicationContext
+            synchronized(this) {
+                // Creation and purge share one monitor so a background worker
+                // cannot provision/open a database between closing the current
+                // instance and deleting its SQLCipher key material.
+                instance?.close()
+                instance = null
+
+                val databaseFile = appContext.getDatabasePath(DATABASE_NAME)
+                appContext.deleteDatabase(DATABASE_NAME)
+                EncryptedDatabaseKeyManager.databaseFiles(databaseFile).forEach(File::delete)
+                EncryptedDatabaseKeyManager.deleteKeyMaterial(appContext)
+                ProtectedAttachmentFileStore.purgeAll(appContext)
+            }
+        }
+
+        private fun createLocked(appContext: Context): DraftDatabase {
             val databaseFile = appContext.getDatabasePath(DATABASE_NAME)
             val databaseKey = EncryptedDatabaseKeyManager.obtainDatabaseKey(appContext, databaseFile)
             loadSqlCipher()
@@ -129,25 +156,6 @@ abstract class DraftDatabase : RoomDatabase() {
                 .openHelperFactory(factory)
                 .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                 .build()
-        }
-
-        fun get(context: Context): DraftDatabase =
-            instance ?: synchronized(this) {
-                instance ?: create(context).also { created -> instance = created }
-            }
-
-        fun purgeLocalEncryptedData(context: Context) {
-            val appContext = context.applicationContext
-            synchronized(this) {
-                instance?.close()
-                instance = null
-            }
-
-            val databaseFile = appContext.getDatabasePath(DATABASE_NAME)
-            appContext.deleteDatabase(DATABASE_NAME)
-            EncryptedDatabaseKeyManager.databaseFiles(databaseFile).forEach(File::delete)
-            EncryptedDatabaseKeyManager.deleteKeyMaterial(appContext)
-            ProtectedAttachmentFileStore.purgeAll(appContext)
         }
 
         private fun loadSqlCipher() {
