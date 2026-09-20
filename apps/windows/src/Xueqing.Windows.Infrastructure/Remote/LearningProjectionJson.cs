@@ -120,7 +120,7 @@ internal static class LearningProjectionJson
         return property.GetBoolean();
     }
 
-    public static LearningCaseState GetOpenCaseState(JsonElement element, string propertyName) =>
+    public static LearningCaseState GetCaseState(JsonElement element, string propertyName) =>
         GetRequiredString(element, propertyName) switch
         {
             "new" => LearningCaseState.New,
@@ -128,9 +128,20 @@ internal static class LearningProjectionJson
             "intervening" => LearningCaseState.Intervening,
             "pending_verification" => LearningCaseState.PendingVerification,
             "stable" => LearningCaseState.Stable,
-            "closed" => throw new InvalidDataException("Personal open-learning projection must not contain a closed Case."),
+            "closed" => LearningCaseState.Closed,
             _ => throw new InvalidDataException("Projection contains an unsupported Learning Case state."),
         };
+
+    public static LearningCaseState GetOpenCaseState(JsonElement element, string propertyName)
+    {
+        var state = GetCaseState(element, propertyName);
+        if (state == LearningCaseState.Closed)
+        {
+            throw new InvalidDataException("Personal open-learning projection must not contain a closed Case.");
+        }
+
+        return state;
+    }
 
     public static ActionDueBucket GetDueBucket(JsonElement element, string propertyName) =>
         GetRequiredString(element, propertyName) switch
