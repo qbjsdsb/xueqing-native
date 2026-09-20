@@ -104,13 +104,15 @@ Phase 0 已完成并接受 **Architecture Baseline v1**。广泛架构研究已�
 
 Windows 已经从 Native UX Reference 进入真实业务闭环：Personal Student / recent Observation、Observation → Learning Case、Current Focus、Personal Today，以及 **Primary Action 改期 / Verification + atomic Next Action** 均已接入真实 reference provider。正式 Action 写入采用 exact Case/Action version、server-side Teaching Fact Gate、operation receipt 与加密 Durable Intent；ResultUnknown / Transient / unverifiable response 会保留原 operation 与原 payload，只允许 same-operation retry。该链已经通过 Windows Core、真实 Supabase E2E、WinUI cloud build、MSIX 原位升级、加密 LocalState 与 Native UX smoke 的 exact-head 证明。
 
-Android 已完成稳定 API 36 的 Kotlin + Compose 基线、PersonalBootstrap-backed 学生目录、Student → Quick Capture、Room Draft Engine、process-death recovery、SQLCipher + Android Keystore Durable Intent、Observation Outbox + WorkManager，以及真实 **Quick Capture → reference provider → authoritative Observation** 写入链。Offline Access Lease 的 72 小时上限、同 boot monotonic expiry 与 wall-clock rollback 检测也已形成可执行安全基线。
+Android 已完成稳定 API 36 的 Kotlin + Compose 基线、PersonalBootstrap-backed 学生目录、Student → Quick Capture、Room Draft Engine、process-death recovery、SQLCipher + Android Keystore Durable Intent、Observation Outbox + WorkManager，以及真实 **Quick Capture → reference provider → authoritative Observation** 写入链。Observation Attachment 也已完成系统 Photo Picker、受保护本地 staging、图片衍生与 EXIF/GPS 清理、process-death 恢复、private Storage 上传、稳定 attachment/commit identity、CommitObservationAttachment receipt 与真实 reference-provider E2E。Offline Access Lease 的 72 小时上限、同 boot monotonic expiry 与 wall-clock rollback 检测也已形成可执行安全基线。
 
 Provider Session/Auth 与 **IdentityLink 身份映射** conformance 已完成。应用业务身份由 application-owned `AppUser` 持有；provider-specific identity、SDK 与 transport 继续限制在 Infrastructure Adapter 边界。Projection / Storage 等更广的 provider conformance 仍按独立 Gate 推进，不提前宣称完成。
 
 Windows 的 authoritative Case workspace 已完成：Student Detail 按需完整 Case history、Current Focus、Today、Action progression，以及正式 Learning Case lifecycle（confirm / intervene / pending verification / stable / close / reopen）均已接入真实 reference provider。Lifecycle 写入使用 exact Case/Action version、server-side authorization、operation receipt 与加密 Durable Intent；ResultUnknown 只允许复用原 operation_id 继续确认。该链已经通过 Windows Core、真实 Supabase E2E、WinUI cloud build、MSIX 原位升级、加密 LocalState 与 Native UX smoke 的 exact-head 证明。
 
-当前唯一执行线已切换到 **Evidence / Attachment staging**。目标不是先加“上传图片”按钮，而是先冻结文本安全、本地附件 staging、上传状态、Storage 权限、失败重试和远端提交边界；Android 作为 Capture 端优先承担 Photo Picker / Camera / process-death / upload-failure 证据，Windows 后续承担 Evidence 阅读与整理。
+Evidence / Attachment staging 已在 Android 端完成第一条端到端闭环，并通过 exact-head 的 Foundation、Android device/durability 与真实 Supabase reference-provider 门禁。
+
+当前唯一执行线已切换到 **Organization Management vertical slice**。这一阶段坚持 server-first：先冻结 owner / admin / teacher 的管理可见性、成员投影与高风险命令边界，再把 Windows 现有“机构工作区”原型接到权威数据。个人教学工作区与机构管理工作区继续严格分离；管理可见性绝不自动成为教学责任或 StudentTeacherAssignment。
 
 动态工程状态以 `docs/project/PROJECT_STATE.yaml` 为准。
 

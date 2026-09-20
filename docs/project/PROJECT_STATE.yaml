@@ -1,7 +1,7 @@
 schema_version: 1
 project: xueqing-native
 phase: phase-1
-milestone: evidence-attachment-staging
+milestone: organization-management-vertical-slice
 status: active
 architecture_baseline: v1-accepted
 
@@ -47,6 +47,7 @@ completed_gates:
   - case-lifecycle-backend
   - architecture-boundary-guard
   - native-presentation-evolvability-foundation
+  - evidence-attachment-staging
 
 open_gates:
   - provider-adapter-conformance-spike
@@ -57,12 +58,12 @@ open_gates:
 next_execution:
   parallel_limit: 1
   lines:
-    - evidence-attachment-staging
-  after_current_green:
     - organization-management-vertical-slice
+  after_current_green:
+    - provider-projection-conformance
+    - provider-storage-conformance
 
 later:
-  - organization-management-vertical-slice
   - provider-projection-conformance
   - provider-storage-conformance
   - generic-change-list-or-cursor-sync

@@ -27,11 +27,11 @@ insert into public.memberships (
     status,
     can_teach
 ) values
-    ('20000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001', 'teacher', 'active', true),
+    ('20000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001', 'owner', 'active', true),
     -- Teacher A is deliberately also a valid member of Org B so the cross-org
     -- test proves entity isolation rather than merely "not a member" rejection.
     ('20000000-0000-0000-0000-000000000002', '10000000-0000-0000-0000-000000000001', 'teacher', 'active', true),
-    ('20000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000002', 'teacher', 'active', true),
+    ('20000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000002', 'admin', 'active', true),
     ('20000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000003', 'teacher', 'disabled', true);
 
 insert into public.students (id, organization_id, display_name, active) values

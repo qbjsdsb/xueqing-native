@@ -53,6 +53,16 @@ internal static class LocalReferenceProviderTeachingWorkspaceFactory
             projectUri,
             apiKey,
             AccessTokenProvider);
+        var organizationManagementReader = new PostgrestOrganizationManagementReader(
+            httpClient,
+            projectUri,
+            apiKey,
+            AccessTokenProvider);
+        var organizationInvitationCommand = new PostgrestOrganizationInvitationCommand(
+            httpClient,
+            projectUri,
+            apiKey,
+            AccessTokenProvider);
         var recentReader = new PostgrestStudentRecentObservationsReader(
             httpClient,
             projectUri,
@@ -131,6 +141,8 @@ internal static class LocalReferenceProviderTeachingWorkspaceFactory
             actionProgression,
             actionProgressionRecovery,
             caseLifecycle,
-            caseLifecycleRecovery);
+            caseLifecycleRecovery,
+            organizationManagementReader,
+            organizationInvitationCommand);
     }
 }

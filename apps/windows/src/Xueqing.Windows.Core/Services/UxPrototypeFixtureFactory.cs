@@ -95,8 +95,8 @@ public static class UxPrototypeFixtureFactory
     public static IReadOnlyList<OrganizationMemberRow> CreateOrganizationMembers(int count = 80)
     {
         ArgumentOutOfRangeException.ThrowIfNegative(count);
-        var roles = new[] { "负责人 / 任课教师", "管理员", "语文教师", "数学教师" };
-        var statuses = new[] { "正常", "邀请待接受", "权限已调整", "已停用" };
+        var roles = new[] { "负责人", "管理员", "老师" };
+        var statuses = new[] { "正常", "正常", "正常", "已停用" };
 
         var rows = new OrganizationMemberRow[count];
         for (var index = 0; index < count; index++)
@@ -107,8 +107,8 @@ public static class UxPrototypeFixtureFactory
                 DisplayName: index % 11 == 0 ? $"虚构教师姓名较长用于列宽降级验证{ordinal:00}" : $"虚构教师{ordinal:00}",
                 RoleLabel: roles[index % roles.Length],
                 StatusLabel: statuses[index % statuses.Length],
-                RecentActivity: $"2026-09-{17 - index % 12:00} · 更新虚构教学责任范围",
-                CanUseBulkSafeAction: index % 3 == 0);
+                RecentActivity: index % 4 == 0 ? "无任教权限" : "可任教",
+                CanUseBulkSafeAction: false);
         }
 
         return rows;

@@ -27,9 +27,14 @@
                 <TextBlock
                     AutomationProperties.AutomationId="OrganizationManagementSurface"
                     Opacity="0.68"
-                    Text="成员与责任操作 · 密集但不牺牲可读性" />
+                    Text="{Binding OrganizationManagementStatusText}" />
             </StackPanel>
-            <Button Grid.Column="1" VerticalAlignment="Bottom" Content="邀请成员" />
+            <Button
+                Grid.Column="1"
+                VerticalAlignment="Bottom"
+                Content="邀请成员"
+                IsEnabled="False"
+                ToolTipService.ToolTip="邀请命令将在下一管理写入 Gate 接入" />
         </Grid>
 
         <TextBox
@@ -58,7 +63,7 @@
                         <TextBlock FontSize="12" Opacity="0.62" Text="姓名" />
                         <TextBlock Grid.Column="1" FontSize="12" Opacity="0.62" Text="角色" />
                         <TextBlock Grid.Column="2" FontSize="12" Opacity="0.62" Text="状态" />
-                        <TextBlock Grid.Column="3" FontSize="12" Opacity="0.62" Text="最近活动" />
+                        <TextBlock Grid.Column="3" FontSize="12" Opacity="0.62" Text="任教能力" />
                         <TextBlock Grid.Column="4" FontSize="12" Opacity="0.62" Text="操作" />
                     </Grid>
                 </ListView.Header>
@@ -76,7 +81,7 @@
                             <TextBlock Grid.Column="1" Text="{Binding RoleLabel}" TextWrapping="Wrap" />
                             <TextBlock Grid.Column="2" Text="{Binding StatusLabel}" TextWrapping="Wrap" />
                             <TextBlock Grid.Column="3" Opacity="0.72" Text="{Binding RecentActivity}" TextWrapping="Wrap" />
-                            <Button Grid.Column="4" Content="更多" />
+                            <Button Grid.Column="4" Content="更多" IsEnabled="False" />
                         </Grid>
                     </DataTemplate>
                 </ListView.ItemTemplate>
@@ -100,7 +105,7 @@
                                 <TextBlock Opacity="0.72" Text="{Binding RoleLabel}" TextWrapping="Wrap" />
                                 <TextBlock FontSize="12" Opacity="0.62" Text="{Binding StatusLabel}" />
                             </StackPanel>
-                            <Button Grid.Column="1" Margin="16,0,0,0" VerticalAlignment="Top" Content="更多" />
+                            <Button Grid.Column="1" Margin="16,0,0,0" VerticalAlignment="Top" Content="更多" IsEnabled="False" />
                         </Grid>
                     </DataTemplate>
                 </ListView.ItemTemplate>

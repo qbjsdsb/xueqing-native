@@ -8,6 +8,7 @@ on:
       - 'apps/windows/tests/Xueqing.Windows.ReferenceProviderE2E/**'
       - 'backend/supabase/**'
       - 'contracts/projections/**'
+      - 'contracts/commands/**'
       - '.github/workflows/windows-observation-read-slice.yml'
   workflow_dispatch:
 
@@ -114,13 +115,13 @@ jobs:
             --progress off \
             --output Detailed
 
-      - name: Run Bootstrap, Observation, Learning and Action progression E2E
+      - name: Run Bootstrap, Organization, Invitation, Observation, Learning and Action progression E2E
         shell: bash
         run: |
           set -euo pipefail
           output=apps/windows/tests/Xueqing.Windows.ReferenceProviderE2E/bin/Release/net10.0
           "$output/Xueqing.Windows.ReferenceProviderE2E" \
-            --minimum-expected-tests 3 \
+            --minimum-expected-tests 5 \
             --no-banner \
             --progress off \
             --output Detailed
