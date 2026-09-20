@@ -253,7 +253,7 @@ internal static class CaseLifecycleDialogFlow
             return;
         }
 
-        var dueOn = duePicker.Date is { } selectedDate
+        DateOnly? dueOn = duePicker.Date is { } selectedDate
             ? DateOnly.FromDateTime(selectedDate.DateTime)
             : null;
         var result = await viewModel.ReopenLearningCaseAsync(
