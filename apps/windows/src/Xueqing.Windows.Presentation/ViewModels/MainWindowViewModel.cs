@@ -484,7 +484,7 @@ public sealed class MainWindowViewModel : ObservableObject
         OrganizationManagementStatusText =
             $"{snapshot.OrganizationName} · " +
             $"{(snapshot.ActorMembershipRole == OrganizationMembershipRole.Owner ? "负责人" : "管理员")} · " +
-            "成员只读";
+            (CanInviteOrganizationMembers ? "可邀请成员" : "成员只读");
         OnPropertyChanged(nameof(CanUseOrganizationWorkspace));
         OnPropertyChanged(nameof(CanInviteOrganizationMembers));
         OnPropertyChanged(nameof(OrganizationInvitationRoleOptions));
@@ -545,12 +545,14 @@ public sealed class MainWindowViewModel : ObservableObject
             targetRole,
             targetCanTeach);
 
+        OrganizationManagementStatusText = "正在创建并发送邀请…";
         var result = await workflow.StartAsync(
             request,
             Guid.NewGuid(),
             snapshot.ActorAppUserId,
             cancellationToken);
 
+        ApplyOrganizationInvitationResultStatus(result);
         await RefreshManagementAfterInvitationResultAsync(result, cancellationToken);
         return result;
     }
@@ -571,11 +573,13 @@ public sealed class MainWindowViewModel : ObservableObject
             ?? throw new InvalidOperationException(
                 "Organization invitation workflow is not configured.");
 
+        OrganizationManagementStatusText = "正在重新确认上次邀请…";
         var result = await workflow.ResumeAsync(
             intent,
             snapshot.ActorAppUserId,
             cancellationToken);
 
+        ApplyOrganizationInvitationResultStatus(result);
         await RefreshManagementAfterInvitationResultAsync(result, cancellationToken);
         return result;
     }
@@ -593,6 +597,29 @@ public sealed class MainWindowViewModel : ObservableObject
         }
 
         return snapshot;
+    }
+
+    private void ApplyOrganizationInvitationResultStatus(
+        OrganizationInvitationWorkflowResult result)
+    {
+        OrganizationManagementStatusText = result.Outcome switch
+        {
+            OrganizationInvitationWorkflowOutcome.Sent =>
+                "邀请已发送，等待受邀者接受后才会创建成员关系。",
+            OrganizationInvitationWorkflowOutcome.CreatePendingConfirmation =>
+                "邀请创建结果待确认；原操作已安全保存，不会新建第二份邀请。",
+            OrganizationInvitationWorkflowOutcome.DeliveryPendingConfirmation =>
+                "邮件投递结果待确认；原投递操作已保留，不会重复发送。",
+            OrganizationInvitationWorkflowOutcome.DeliveryBlocked =>
+                "登录状态或机构权限已经变化；原邀请操作仍保留。",
+            OrganizationInvitationWorkflowOutcome.DeliveryFailed =>
+                "邀请已创建，但邮件投递被明确拒绝；不会自动重新发送。",
+            OrganizationInvitationWorkflowOutcome.Rejected =>
+                "服务端明确拒绝本次邀请，未创建成员关系。",
+            OrganizationInvitationWorkflowOutcome.LocalDurabilityFailure =>
+                "本机安全状态无法确认；不会生成新的邀请操作。",
+            _ => "邀请状态无法安全确认。",
+        };
     }
 
     private async Task RefreshManagementAfterInvitationResultAsync(
