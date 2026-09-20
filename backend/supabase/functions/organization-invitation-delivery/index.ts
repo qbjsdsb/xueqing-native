@@ -86,6 +86,16 @@ function secretKey(): string {
   return value;
 }
 
+function enforceRequiredExecutionRegion(): void {
+  const required = optionalEnvironment("XUEQING_REQUIRED_EDGE_REGION");
+  if (!required) return;
+
+  const actual = optionalEnvironment("SB_REGION");
+  if (!actual || actual !== required) {
+    throw new DeliveryError("XQ_INVITATION_DELIVERY_REGION_UNAVAILABLE", 503);
+  }
+}
+
 function requiredBearer(request: Request): string {
   const header = request.headers.get("Authorization")?.trim() ?? "";
   if (!header.toLowerCase().startsWith("bearer ")) {
@@ -173,6 +183,11 @@ async function handle(request: Request): Promise<Response> {
   if (request.method !== "POST") {
     return response({ ok: false, error: "XQ_METHOD_NOT_ALLOWED" }, 405);
   }
+
+  // This guard runs before bearer parsing, request-body parsing, database reads,
+  // invitation lookup or provider dispatch. Production can therefore require
+  // a specific Supabase execution region and fail closed if routing drifts.
+  enforceRequiredExecutionRegion();
 
   const accessToken = requiredBearer(request);
   const supabaseUrl = requiredEnvironment("SUPABASE_URL");
