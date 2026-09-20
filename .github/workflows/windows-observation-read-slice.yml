@@ -114,13 +114,13 @@ jobs:
             --progress off \
             --output Detailed
 
-      - name: Run Bootstrap, Observation, Learning and Action progression E2E
+      - name: Run Bootstrap, Organization, Observation, Learning and Action progression E2E
         shell: bash
         run: |
           set -euo pipefail
           output=apps/windows/tests/Xueqing.Windows.ReferenceProviderE2E/bin/Release/net10.0
           "$output/Xueqing.Windows.ReferenceProviderE2E" \
-            --minimum-expected-tests 3 \
+            --minimum-expected-tests 4 \
             --no-banner \
             --progress off \
             --output Detailed

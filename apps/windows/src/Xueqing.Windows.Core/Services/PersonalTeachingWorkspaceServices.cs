@@ -10,4 +10,5 @@ public sealed record PersonalTeachingWorkspaceServices(
     ActionProgressionCommandCoordinator? ActionProgression = null,
     IActionProgressionRecoveryStore? ActionProgressionRecovery = null,
     CaseLifecycleCommandCoordinator? CaseLifecycle = null,
-    ICaseLifecycleRecoveryStore? CaseLifecycleRecovery = null);
+    ICaseLifecycleRecoveryStore? CaseLifecycleRecovery = null,
+    IOrganizationManagementReader? OrganizationManagement = null);

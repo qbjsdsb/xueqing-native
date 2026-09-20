@@ -22,6 +22,7 @@ public sealed partial class MainWindow : Window
         InitializeComponent();
         Title = "学情";
         RootGrid.DataContext = ViewModel;
+        ApplyOrganizationWorkspaceAccess();
     }
 
     private async void RootGrid_Loaded(object sender, RoutedEventArgs e)
@@ -29,6 +30,7 @@ public sealed partial class MainWindow : Window
         ApplyLayout(RootGrid.ActualWidth);
         ApplyWorkspace(isOrganization: false);
         await ViewModel.InitializeAsync();
+        ApplyOrganizationWorkspaceAccess();
     }
 
     private void RootGrid_SizeChanged(object sender, SizeChangedEventArgs e)
@@ -56,11 +58,31 @@ public sealed partial class MainWindow : Window
 
     private void OrganizationWorkspace_Click(object sender, RoutedEventArgs e)
     {
-        ApplyWorkspace(isOrganization: true);
+        if (ViewModel.CanUseOrganizationWorkspace)
+        {
+            ApplyWorkspace(isOrganization: true);
+        }
+    }
+
+    private void ApplyOrganizationWorkspaceAccess()
+    {
+        OrganizationWorkspaceMenuItem.Visibility = ViewModel.CanUseOrganizationWorkspace
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+
+        if (_organizationWorkspace && !ViewModel.CanUseOrganizationWorkspace)
+        {
+            ApplyWorkspace(isOrganization: false);
+        }
     }
 
     private void ApplyWorkspace(bool isOrganization)
     {
+        if (isOrganization && !ViewModel.CanUseOrganizationWorkspace)
+        {
+            isOrganization = false;
+        }
+
         _organizationWorkspace = isOrganization;
 
         WorkspaceSwitcherButton.Content = isOrganization
@@ -70,7 +92,10 @@ public sealed partial class MainWindow : Window
         TodayNav.Visibility = isOrganization ? Visibility.Collapsed : Visibility.Visible;
         StudentsNav.Visibility = isOrganization ? Visibility.Collapsed : Visibility.Visible;
         LearningNav.Visibility = isOrganization ? Visibility.Collapsed : Visibility.Visible;
-        OrganizationManagementNav.Visibility = isOrganization ? Visibility.Visible : Visibility.Collapsed;
+        OrganizationManagementNav.Visibility =
+            isOrganization && ViewModel.CanUseOrganizationWorkspace
+                ? Visibility.Visible
+                : Visibility.Collapsed;
 
         if (isOrganization)
         {

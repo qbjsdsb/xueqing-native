@@ -90,6 +90,8 @@ public sealed class MainWindowViewModel : ObservableObject
     private readonly IActionProgressionRecoveryStore? _actionProgressionRecovery;
     private readonly CaseLifecycleCommandCoordinator? _caseLifecycle;
     private readonly ICaseLifecycleRecoveryStore? _caseLifecycleRecovery;
+    private readonly IOrganizationManagementReader? _organizationManagement;
+    private readonly bool _isPrototypeMode;
     private readonly List<StudentSummary> _allStudents;
     private readonly Dictionary<string, PersonalStudentWorkspaceItem> _authoritativeStudents = new(StringComparer.Ordinal);
     private readonly Dictionary<Guid, ActionProgressionTarget> _authoritativeTodayActionTargets = new();
@@ -106,6 +108,9 @@ public sealed class MainWindowViewModel : ObservableObject
     private string _pendingLearningCaseRecoveryStatusText = string.Empty;
     private string _pendingActionProgressionRecoveryStatusText = string.Empty;
     private string _pendingCaseLifecycleRecoveryStatusText = string.Empty;
+    private string _organizationManagementStatusText = string.Empty;
+    private string _organizationName = string.Empty;
+    private OrganizationManagementSnapshot? _organizationManagementSnapshot;
     private bool _initialized;
 
     public MainWindowViewModel()
@@ -125,6 +130,8 @@ public sealed class MainWindowViewModel : ObservableObject
         _actionProgressionRecovery = teachingWorkspace?.ActionProgressionRecovery;
         _caseLifecycle = teachingWorkspace?.CaseLifecycle;
         _caseLifecycleRecovery = teachingWorkspace?.CaseLifecycleRecovery;
+        _organizationManagement = teachingWorkspace?.OrganizationManagement;
+        _isPrototypeMode = teachingWorkspace is null;
         _allStudents = _personalWorkspace is null
             ? SyntheticDataFactory.CreateStudents(1_000).ToList()
             : new List<StudentSummary>();
@@ -140,7 +147,9 @@ public sealed class MainWindowViewModel : ObservableObject
         TodayActions = _personalWorkspace is null
             ? new ObservableCollection<TodayActionItem>(UxPrototypeFixtureFactory.CreateTodayActions())
             : new ObservableCollection<TodayActionItem>();
-        OrganizationMembers = new ObservableCollection<OrganizationMemberRow>(UxPrototypeFixtureFactory.CreateOrganizationMembers());
+        OrganizationMembers = _isPrototypeMode
+            ? new ObservableCollection<OrganizationMemberRow>(UxPrototypeFixtureFactory.CreateOrganizationMembers())
+            : new ObservableCollection<OrganizationMemberRow>();
         LearningCase = UxPrototypeFixtureFactory.CreateLearningCase();
         _selectedStudent = Students.FirstOrDefault();
 
@@ -150,6 +159,8 @@ public sealed class MainWindowViewModel : ObservableObject
             _currentFocusStatusText = "UX 原型关注项，仅用于布局与交互验证。";
             _caseHistoryStatusText = string.Empty;
             _todayStatusText = string.Empty;
+            _organizationManagementStatusText = "UX 原型成员，仅用于布局与交互验证。";
+            _organizationName = "虚构机构";
         }
         else
         {
@@ -157,6 +168,9 @@ public sealed class MainWindowViewModel : ObservableObject
             _currentFocusStatusText = "正在准备当前关注…";
             _caseHistoryStatusText = "选择学科后可按需查看全部 Case。";
             _todayStatusText = "正在准备今日行动…";
+            _organizationManagementStatusText = _organizationManagement is null
+                ? "机构管理服务尚未配置。"
+                : "正在验证机构管理权限…";
         }
     }
 
@@ -183,6 +197,23 @@ public sealed class MainWindowViewModel : ObservableObject
     public ObservableCollection<PendingCaseLifecycleRecoveryItem> PendingCaseLifecycleRecoveries { get; }
 
     public bool IsAuthoritativeStudentWorkspace => _personalWorkspace is not null;
+
+    public bool IsOrganizationManagementAuthoritative => !_isPrototypeMode;
+
+    public bool CanUseOrganizationWorkspace =>
+        _isPrototypeMode || _organizationManagementSnapshot is not null;
+
+    public string OrganizationName
+    {
+        get => _organizationName;
+        private set => SetProperty(ref _organizationName, value);
+    }
+
+    public string OrganizationManagementStatusText
+    {
+        get => _organizationManagementStatusText;
+        private set => SetProperty(ref _organizationManagementStatusText, value);
+    }
 
     public bool SupportsActionProgression =>
         _actionProgression is not null && _actionProgressionRecovery is not null;
@@ -300,6 +331,98 @@ public sealed class MainWindowViewModel : ObservableObject
         {
             await RefreshAuthoritativeStudentsAsync(cancellationToken);
         }
+
+        if (!_isPrototypeMode)
+        {
+            await RefreshOrganizationManagementAsync(cancellationToken);
+        }
+    }
+
+    private async Task RefreshOrganizationManagementAsync(CancellationToken cancellationToken)
+    {
+        _organizationManagementSnapshot = null;
+        OrganizationMembers.Clear();
+        OrganizationName = string.Empty;
+        OnPropertyChanged(nameof(CanUseOrganizationWorkspace));
+
+        if (_organizationManagement is null)
+        {
+            OrganizationManagementStatusText = "机构管理服务尚未配置。";
+            return;
+        }
+
+        var bootstrap = _personalWorkspace?.Current.Bootstrap;
+        if (bootstrap is null)
+        {
+            OrganizationManagementStatusText = "当前身份尚未通过验证，未开放机构工作区。";
+            return;
+        }
+
+        OrganizationManagementStatusText = "正在验证机构管理权限…";
+        foreach (var organization in bootstrap.Organizations)
+        {
+            var result = await _organizationManagement.ReadAsync(
+                organization.OrganizationId,
+                cancellationToken);
+
+            if (result.IsSuccess && result.Snapshot is not null)
+            {
+                ApplyOrganizationManagement(result.Snapshot);
+                return;
+            }
+
+            if (result.Failure?.Kind == OrganizationManagementFailureKind.AccessDenied)
+            {
+                continue;
+            }
+
+            OrganizationManagementStatusText = result.Failure?.Kind switch
+            {
+                OrganizationManagementFailureKind.AuthenticationRequired =>
+                    "登录状态已失效，未开放机构工作区。",
+                OrganizationManagementFailureKind.Transient =>
+                    "暂时无法验证机构管理权限，未显示旧成员数据。",
+                OrganizationManagementFailureKind.InvalidResponse =>
+                    "机构管理数据无法验证，已拒绝显示。",
+                _ => "机构管理权限尚未就绪。",
+            };
+            return;
+        }
+
+        OrganizationManagementStatusText = "当前账号没有机构管理权限。";
+    }
+
+    private void ApplyOrganizationManagement(OrganizationManagementSnapshot snapshot)
+    {
+        _organizationManagementSnapshot = snapshot;
+        OrganizationName = snapshot.OrganizationName;
+        OrganizationMembers.Clear();
+        foreach (var member in snapshot.Members)
+        {
+            OrganizationMembers.Add(new OrganizationMemberRow(
+                Id: member.AppUserId.ToString("D"),
+                DisplayName: member.DisplayName,
+                RoleLabel: member.MembershipRole switch
+                {
+                    OrganizationMembershipRole.Owner => "负责人",
+                    OrganizationMembershipRole.Admin => "管理员",
+                    OrganizationMembershipRole.Teacher => "老师",
+                    _ => string.Empty,
+                },
+                StatusLabel: !member.AppUserEnabled
+                    ? "账号已停用"
+                    : member.MembershipStatus == OrganizationMembershipStatus.Disabled
+                        ? "成员已停用"
+                        : "正常",
+                RecentActivity: member.CanTeach ? "可任教" : "无任教权限",
+                CanUseBulkSafeAction: false));
+        }
+
+        OrganizationManagementStatusText =
+            $"{snapshot.OrganizationName} · " +
+            $"{(snapshot.ActorMembershipRole == OrganizationMembershipRole.Owner ? "负责人" : "管理员")} · " +
+            "成员只读";
+        OnPropertyChanged(nameof(CanUseOrganizationWorkspace));
     }
 
     public async Task RefreshAuthoritativeStudentsAsync(CancellationToken cancellationToken = default)
