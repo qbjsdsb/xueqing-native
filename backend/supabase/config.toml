@@ -23,6 +23,9 @@ sql_paths = ["./seed.sql"]
 [auth]
 enabled = true
 site_url = "http://127.0.0.1:3000"
-additional_redirect_urls = []
+additional_redirect_urls = ["http://127.0.0.1:3000/invitation"]
 jwt_expiry = 3600
 enable_signup = true
+
+[functions.organization-invitation-delivery]
+verify_jwt = true
