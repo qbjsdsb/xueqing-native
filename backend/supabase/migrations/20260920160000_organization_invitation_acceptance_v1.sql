@@ -221,6 +221,17 @@ begin
             message = 'XQ_OPERATION_REUSED_WITH_DIFFERENT_PAYLOAD';
     end if;
 
+    -- Membership may not exist yet, so a row lock alone cannot serialize
+    -- two different external identities that resolve to the same AppUser.
+    perform pg_catalog.pg_advisory_xact_lock(
+        pg_catalog.hashtextextended(
+            'organization-membership:' ||
+            v_invitation.organization_id::text || ':' ||
+            v_actor_id::text,
+            0
+        )
+    );
+
     select membership.*
       into v_existing_membership
       from public.memberships as membership

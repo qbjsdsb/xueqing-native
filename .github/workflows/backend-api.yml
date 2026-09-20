@@ -100,6 +100,12 @@ jobs:
           set -euo pipefail
           bash backend/supabase/tests/organization_invitation_concurrency.sh
 
+      - name: Prove multi-identity invitation acceptance serializes Membership
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash backend/supabase/tests/organization_invitation_acceptance_concurrency.sh
+
       - name: Prove Observation Attachment Storage RLS and immutable commit boundary
         shell: bash
         run: |
