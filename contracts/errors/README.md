@@ -17,3 +17,14 @@ Expected families include:
 - primary_action_required / closed_case_has_pending_action.
 
 Provider exception strings must not leak through as product contracts.
+## Observation Attachment families
+
+- attachment_context_required;
+- observation_attachment_parent_required;
+- attachment_object_required;
+- attachment_content_type_invalid;
+- attachment_storage_metadata_invalid;
+- attachment_size_invalid;
+- attachment_already_committed.
+
+Storage upload denial remains an authorization/RLS outcome. Uploaded bytes without a committed application metadata row are not domain-visible.
