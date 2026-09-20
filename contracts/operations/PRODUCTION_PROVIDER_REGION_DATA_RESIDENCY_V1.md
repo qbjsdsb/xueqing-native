@@ -92,6 +92,14 @@ If the provider globally distributes functions or routes to the nearest edge by 
 
 Client-supplied region hints are not by themselves a server-enforced residency guarantee.
 
+Xueqing therefore supports a two-sided Invitation Delivery control:
+
+- Infrastructure may request the configured region using the provider's regional invocation mechanism;
+- the trusted server function may set `XUEQING_REQUIRED_EDGE_REGION`;
+- before bearer parsing, request-body parsing, database access or invitation lookup, the function compares the runtime `SB_REGION` against that required region and fails closed on mismatch.
+
+This proves the function's execution region when configured. It does not prove that the provider's global ingress/API gateway has no cross-jurisdiction transit; that remains explicit topology evidence.
+
 ## Logs / diagnostics
 
 Production logs are a separate data surface.
@@ -105,6 +113,14 @@ Rules:
 - production diagnostics must not be uploaded to public GitHub Actions artifacts.
 
 Unknown provider-log residency is a blocker when the selected requirement applies to logs.
+
+## Zero-paid production constraint
+
+Xueqing retains a zero-paid-dependency goal, but cost cannot override durability.
+
+For the current Supabase Hosted candidate, Free-plan documentation does not include automatic backups, PITR or Log Drains, and low-activity projects may be paused. Therefore a Free hosted project MUST NOT be accepted as Xueqing's sole production durability/recovery mechanism.
+
+A zero-paid production topology can proceed only if the later Backup/Restore gate independently proves database + private Storage object backup, encryption, retention, restore into a fresh environment and integrity checks outside the live project. Public GitHub/CI artifacts are not an allowed production-backup destination.
 
 ## Backup dependency
 
