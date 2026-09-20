@@ -11,7 +11,7 @@ create table public.organization_invitations (
     invited_email text not null
         check (pg_catalog.char_length(invited_email) between 3 and 320)
         check (invited_email = pg_catalog.lower(pg_catalog.btrim(invited_email)))
-        check (invited_email ~ '^[^[:space:]@]+@[^[:space:]@]+
+        check (invited_email ~ '^[^[:space:]@]+@[^[:space:]@]+$'),
     target_role text not null
         check (target_role in ('owner', 'admin', 'teacher')),
     target_can_teach boolean not null,
