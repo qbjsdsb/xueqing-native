@@ -53,7 +53,7 @@ psql_db() {
 # adapter; accepted business projections must not call Supabase auth helpers
 # directly.
 psql_db >/dev/null <<'SQL'
-do $
+do $$
 declare
     v_signature text;
     v_definition text;
@@ -75,7 +75,7 @@ begin
         end if;
     end loop;
 end;
-$;
+$$;
 SQL
 
 json_get() {
