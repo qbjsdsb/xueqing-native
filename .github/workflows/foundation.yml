@@ -90,8 +90,18 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python3 tools/production/verify_provider_topology.py \
-            docs/production/PROVIDER_TOPOLOGY.json
+          manifest=docs/production/PROVIDER_TOPOLOGY.json
+          python3 tools/production/verify_provider_topology.py "$manifest"
+
+          status="$(python3 -c 'import json; print(json.load(open("docs/production/PROVIDER_TOPOLOGY.json", encoding="utf-8"))["status"])')"
+          if [[ "$status" == "accepted" ]]; then
+            python3 tools/production/verify_provider_topology.py "$manifest" --require-accepted
+          else
+            if python3 tools/production/verify_provider_topology.py "$manifest" --require-accepted; then
+              echo "Blocked production topology unexpectedly passed accepted-state validation." >&2
+              exit 1
+            fi
+          fi
 
       - name: Reject obvious secret/private-data file types
         shell: bash
