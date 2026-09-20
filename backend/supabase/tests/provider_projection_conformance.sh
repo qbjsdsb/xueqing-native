@@ -48,6 +48,36 @@ psql_db() {
   docker exec -i "$db_container" psql -U postgres -d postgres -v ON_ERROR_STOP=1 "$@"
 }
 
+# Inspect the final migrated database definitions, not historical migration text.
+# Provider-specific Auth extraction is allowed only behind the internal identity
+# adapter; accepted business projections must not call Supabase auth helpers
+# directly.
+psql_db >/dev/null <<'SQL'
+do $
+declare
+    v_signature text;
+    v_definition text;
+begin
+    foreach v_signature in array array[
+        'public.get_personal_bootstrap_v1()',
+        'public.get_student_recent_observations_v1(uuid,uuid,uuid)',
+        'public.get_student_learning_focus_v1(uuid,uuid,uuid)',
+        'public.get_student_learning_cases_v1(uuid,uuid,uuid)',
+        'public.get_personal_today_actions_v1()',
+        'public.get_organization_management_v1(uuid)'
+    ]
+    loop
+        select pg_catalog.pg_get_functiondef(v_signature::pg_catalog.regprocedure)
+          into v_definition;
+
+        if v_definition ~* 'auth[.](jwt|uid)[[:space:]]*[(]' then
+            raise exception 'XQ_PROVIDER_PROJECTION_DIRECT_AUTH_DEPENDENCY: %', v_signature;
+        end if;
+    end loop;
+end;
+$;
+SQL
+
 json_get() {
   local expression="$1"
   python3 -c '
