@@ -108,6 +108,36 @@ A zero-paid Xueqing production topology may still use a Free hosted runtime only
 
 Otherwise the production provider must change or the zero-paid constraint must be revisited explicitly.
 
+## Secondary candidate: Tencent CloudBase
+
+CloudBase is retained as a **candidate**, not an accepted provider.
+
+Current Tencent Cloud documentation states:
+
+- CloudBase primary supported region is Shanghai (`ap-shanghai`);
+- a CloudBase environment can be created with PostgreSQL as its database type;
+- Shanghai PostgreSQL environments can also use Cloud Functions, Cloud Storage, HTTP Gateway and Identity Authentication;
+- the Free Experience tier currently includes PostgreSQL but does not include database rollback;
+- Free Experience Cloud Functions have a fixed 3-second timeout;
+- CloudBase Storage integrates CDN by default, so "Shanghai bucket" is not by itself proof that every Attachment response remains only in Shanghai.
+
+Implication for Xueqing:
+
+- if production policy requires primary data to remain in mainland China, CloudBase Shanghai is a materially more plausible hosted candidate than current Supabase Hosted region availability;
+- **no compatibility is claimed yet**;
+- before selection, a dedicated provider-conformance spike must prove PostgreSQL semantics required by Xueqing, application-owned IdentityLink mapping, authorization/RLS-equivalent enforcement, command idempotency/locking, private Attachment authorization, provider-neutral projections, and backup/restore behavior;
+- existing Supabase conformance evidence remains useful as a semantic contract but cannot be copied as proof for CloudBase;
+- the zero-paid constraint still requires an independent backup/restore strategy because the current free experience does not include data rollback.
+
+A CloudBase provider spike is justified only after the target jurisdiction makes mainland-hosted infrastructure materially necessary. Do not maintain two production adapters speculatively.
+
+References:
+
+- https://cloud.tencent.com/document/product/876/51107
+- https://cloud.tencent.com/document/product/876/127357
+- https://cloud.tencent.com/document/product/876/121347
+- https://cloud.tencent.com/document/product/876/46898
+
 ## References
 
 - https://supabase.com/docs/guides/platform/regions
