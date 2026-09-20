@@ -137,7 +137,7 @@ if [[ "$unauthenticated_status" != '401' ]]; then
 fi
 
 deliver() {
-  curl --fail-with-body --silent --show-error     -X POST "$function_url"     -H "apikey: $ANON_KEY"     -H "Authorization: Bearer $owner_token"     -H 'Content-Type: application/json'     --data "{\"operation_id\":\"$delivery_operation\",\"invitation_id\":\"$invitation_id\"}"
+  curl --silent --show-error     -X POST "$function_url"     -H "apikey: $ANON_KEY"     -H "Authorization: Bearer $owner_token"     -H 'Content-Type: application/json'     --data "{\"operation_id\":\"$delivery_operation\",\"invitation_id\":\"$invitation_id\"}"
 }
 
 first_response="$(deliver)"
