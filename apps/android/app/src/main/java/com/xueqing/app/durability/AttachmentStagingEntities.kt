@@ -11,6 +11,7 @@ object AttachmentStagingState {
     const val UploadPending = "UploadPending"
     const val Uploading = "Uploading"
     const val UploadedUncommitted = "UploadedUncommitted"
+    const val UploadRejected = "UploadRejected"
     const val CommitPending = "CommitPending"
     const val CommitResultUnknown = "CommitResultUnknown"
     const val CommitRejected = "CommitRejected"
