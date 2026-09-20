@@ -418,6 +418,83 @@
                             Background="{ThemeResource SystemControlForegroundBaseLowBrush}" />
 
                         <StackPanel Spacing="8">
+                            <Grid ColumnSpacing="12">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock
+                                    FontSize="16"
+                                    FontWeight="SemiBold"
+                                    Text="全部 Case" />
+                                <Button
+                                    Grid.Column="1"
+                                    AutomationProperties.AutomationId="LoadCaseHistory"
+                                    AutomationProperties.Name="查看当前学科全部 Case"
+                                    Click="LoadCaseHistory_Click"
+                                    Content="查看全部" />
+                            </Grid>
+
+                            <TextBlock
+                                AutomationProperties.AutomationId="CaseHistoryStatus"
+                                Opacity="0.62"
+                                Text="{Binding CaseHistoryStatusText}"
+                                TextWrapping="Wrap" />
+
+                            <ItemsControl ItemsSource="{Binding CaseHistory}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Grid Padding="0,7,0,9" ColumnSpacing="16">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel Spacing="3">
+                                                <TextBlock
+                                                    FontWeight="SemiBold"
+                                                    Text="{Binding Title}"
+                                                    TextWrapping="Wrap" />
+                                                <TextBlock
+                                                    Opacity="0.68"
+                                                    Text="{Binding NextAction}"
+                                                    TextWrapping="Wrap" />
+                                            </StackPanel>
+                                            <StackPanel
+                                                Grid.Column="1"
+                                                Margin="12,0,0,0"
+                                                HorizontalAlignment="Right"
+                                                Spacing="2">
+                                                <TextBlock
+                                                    HorizontalAlignment="Right"
+                                                    Opacity="0.72"
+                                                    Text="{Binding StateLabel}" />
+                                                <TextBlock
+                                                    HorizontalAlignment="Right"
+                                                    FontSize="12"
+                                                    Opacity="0.56"
+                                                    Text="{Binding ResponsibilityLabel}" />
+                                                <TextBlock
+                                                    HorizontalAlignment="Right"
+                                                    FontSize="12"
+                                                    Opacity="0.56"
+                                                    Text="{Binding DueLabel}" />
+                                            </StackPanel>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+
+                            <TextBlock
+                                Opacity="0.56"
+                                Text="{Binding CaseHistoryMoreText}"
+                                TextWrapping="Wrap" />
+                        </StackPanel>
+
+                        <Border
+                            Height="1"
+                            Background="{ThemeResource SystemControlForegroundBaseLowBrush}" />
+
+                        <StackPanel Spacing="8">
                             <TextBlock
                                 FontSize="16"
                                 FontWeight="SemiBold"
