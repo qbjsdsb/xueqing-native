@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace Xueqing.Windows.Core.Models;
 
 public enum OrganizationInvitationRecoveryStage
@@ -18,6 +20,7 @@ public sealed record OrganizationInvitationRecoveryIntent(
     OrganizationInvitationRecoveryStage Stage,
     string? TerminalFailureCode)
 {
+    [JsonIgnore]
     public CreateOrganizationInvitationRequest CreateRequest =>
         new(
             CreateOperationId,
@@ -26,6 +29,7 @@ public sealed record OrganizationInvitationRecoveryIntent(
             TargetRole,
             TargetCanTeach);
 
+    [JsonIgnore]
     public DeliverOrganizationInvitationRequest DeliveryRequest =>
         InvitationId is Guid invitationId && invitationId != Guid.Empty
             ? new(DeliveryOperationId, invitationId)
