@@ -1,7 +1,7 @@
 schema_version: 1
 project: xueqing-native
 phase: phase-1
-milestone: provider-projection-conformance
+milestone: provider-storage-conformance
 status: active
 architecture_baseline: v1-accepted
 
@@ -51,6 +51,7 @@ completed_gates:
   - organization-management-vertical-slice
   - organization-invitation-acceptance
   - organization-invitation-delivery
+  - provider-projection-conformance
 
 open_gates:
   - provider-adapter-conformance-spike
@@ -61,12 +62,13 @@ open_gates:
 next_execution:
   parallel_limit: 1
   lines:
-    - provider-projection-conformance
-  after_current_green:
     - provider-storage-conformance
+  after_current_green:
+    - production-provider-region-data-residency-gate
+    - signing-and-recovery-gate
+    - backup-storage-restore-gate
 
 later:
-  - provider-storage-conformance
   - generic-change-list-or-cursor-sync
   - large-history-full-text-search
   - realtime-freshness

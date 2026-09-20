@@ -118,7 +118,9 @@ Organization Invitation Acceptance 已完成并合入主线：已认证邀请人
 
 Organization Invitation Delivery 已完成并合入主线：邀请发送先持久化 provider-side delivery intent，再由受信任服务端适配器发送；same-operation replay 不会重复投递，provider/network ResultUnknown 保留为 `dispatching`，客户端不接触 secret，邮件成功也不会创建 Membership 或 StudentTeacherAssignment。该链已通过真实本地 Mailpit 单封邮件证明以及 Windows / Android reference-provider 回归。
 
-当前唯一执行线已切换到 **Provider Projection Conformance**。这一阶段不新增产品功能，而是冻结已接受读模型的 provider-neutral 语义：两个独立真实外部 Auth 身份通过 `IdentityLink` 映射到同一 application-owned AppUser 后，PersonalBootstrap、Recent Observation、Current Focus、Case history、Personal Today 与 Organization Management 必须产生相同业务 payload，并禁止 provider subject / issuer / token 等基础设施字段泄漏到业务投影。
+Provider Projection Conformance 已完成并合入主线：两个独立真实外部 Auth 身份通过 `IdentityLink` 映射到同一 application-owned AppUser 后，PersonalBootstrap、Recent Observation、Current Focus、Case history、Personal Today 与 Organization Management 保持相同业务 payload；provider/session 字段不得泄漏，最终迁移后的业务 projection 不得直接调用 `auth.jwt()` / `auth.uid()`，真实 provider session 在跨机构/缺失 Assignment/teacher-only management 场景继续 fail closed。该 Gate 已通过 exact-head Backend、Windows 与 Android reference-provider 回归。
+
+当前唯一执行线已切换到 **Provider Storage Conformance**。这一阶段不新增 Attachment 功能，而是冻结 private Storage 的 provider-neutral 授权语义：不同真实外部身份只通过 `IdentityLink` 解析到 application-owned AppUser，Storage upload/read 必须遵循同一 Teaching Fact / Assignment 边界；IdentityLink revoke 必须立即影响对应 provider identity；旧 `auth_subject` 不得重新成为 Storage 权限来源。Supabase bucket/REST 仍只允许存在于 Infrastructure/reference-provider 边界。
 
 动态工程状态以 `docs/project/PROJECT_STATE.yaml` 为准。
 
