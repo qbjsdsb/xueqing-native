@@ -44,6 +44,17 @@ def validate_repository_evidence(value: dict, repo_root: Path) -> None:
         "SUPABASE_SECRET_KEYS" in edge_text or "SUPABASE_SECRET_KEY" in edge_text,
         "trusted Delivery adapter must keep provider secret access server-side",
     )
+    require(
+        "XUEQING_REQUIRED_EDGE_REGION" in edge_text
+        and "SB_REGION" in edge_text
+        and "enforceRequiredExecutionRegion();" in edge_text,
+        "trusted Delivery adapter must support server-enforced execution region",
+    )
+    require(
+        edge_text.index("enforceRequiredExecutionRegion();")
+        < edge_text.index("const accessToken = requiredBearer(request);"),
+        "execution-region guard must run before auth/body/business processing",
+    )
 
     roots = evidence.get("production_client_source_roots")
     require(isinstance(roots, list) and roots, "production client source roots are required")
