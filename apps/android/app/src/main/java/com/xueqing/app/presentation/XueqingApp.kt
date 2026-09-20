@@ -52,6 +52,8 @@ internal fun XueqingApp(
                     navigation.closeQuickCapture()
                 },
                 onChooseStudent = navigation::chooseStudentFromQuickCapture,
+                onPhotoSelected = quickCaptureViewModel::onPhotoSelected,
+                onRemovePhoto = quickCaptureViewModel::removePhoto,
                 onDiscard = quickCaptureViewModel::discard,
                 onSubmit = quickCaptureViewModel::submit,
             )

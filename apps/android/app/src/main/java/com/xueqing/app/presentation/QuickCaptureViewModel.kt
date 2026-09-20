@@ -1,6 +1,7 @@
 package com.xueqing.app.presentation
 
 import android.content.Context
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.xueqing.app.application.bootstrap.PersonalBootstrapRemote
@@ -8,6 +9,9 @@ import com.xueqing.app.application.bootstrap.PersonalBootstrapResult
 import com.xueqing.app.application.bootstrap.PersonalTeachingContext
 import com.xueqing.app.application.observation.CreateObservationRequest
 import com.xueqing.app.durability.AttachmentStagingRecoveryScheduler
+import com.xueqing.app.durability.AttachmentStagingState
+import com.xueqing.app.durability.AttachmentStagingStore
+import com.xueqing.app.durability.AttachmentTooLargeException
 import com.xueqing.app.durability.DraftDatabase
 import com.xueqing.app.durability.DraftScope
 import com.xueqing.app.durability.DraftStore
@@ -15,7 +19,12 @@ import com.xueqing.app.durability.DurableIntentDao
 import com.xueqing.app.durability.ObservationOutboxCodec
 import com.xueqing.app.durability.ObservationOutboxEntity
 import com.xueqing.app.durability.ObservationOutboxScheduler
+import com.xueqing.app.durability.LocalAttachmentKeyUnavailableException
 import com.xueqing.app.durability.ObservationOutboxStatus
+import com.xueqing.app.durability.ProtectedAttachmentFileStore
+import com.xueqing.app.infrastructure.media.ImageDerivativeFactory
+import com.xueqing.app.infrastructure.media.ImageDerivativeTooLargeException
+import com.xueqing.app.infrastructure.media.PhotoAttachmentStager
 import java.time.Instant
 import java.util.UUID
 import kotlinx.coroutines.Dispatchers
@@ -45,6 +54,13 @@ enum class LocalDraftStatus {
     PersistenceFailed,
 }
 
+enum class AttachmentDraftStatus {
+    None,
+    Protecting,
+    SafeOnDevice,
+    Failed,
+}
+
 enum class ObservationSubmissionStatus {
     None,
     WaitingToSync,
@@ -62,6 +78,9 @@ data class QuickCaptureUiState(
     val subjectLabel: String = "",
     val draftStatus: LocalDraftStatus = LocalDraftStatus.Loading,
     val recoveredFromDisk: Boolean = false,
+    val attachmentStatus: AttachmentDraftStatus = AttachmentDraftStatus.None,
+    val attachmentCount: Int = 0,
+    val attachmentErrorCode: String? = null,
     val submissionStatus: ObservationSubmissionStatus = ObservationSubmissionStatus.None,
     val submissionErrorCode: String? = null,
 )
@@ -69,13 +88,18 @@ data class QuickCaptureUiState(
 class QuickCaptureViewModel(
     private val store: DraftStore,
     private val durableIntentDao: DurableIntentDao,
+    private val attachmentStagingStore: AttachmentStagingStore,
+    private val photoAttachmentStager: PhotoAttachmentStager,
     private val bootstrapRemote: PersonalBootstrapRemote,
     private val environmentId: String,
     private val onOutboxCommitted: () -> Unit,
+    private val onAttachmentCleanupNeeded: () -> Unit,
     private val clock: () -> Long = System::currentTimeMillis,
     private val operationIdFactory: () -> UUID = UUID::randomUUID,
+    private val attachmentIdFactory: () -> UUID = UUID::randomUUID,
 ) : ViewModel() {
     private val saveMutex = Mutex()
+    private val attachmentMutex = Mutex()
     private val _uiState = MutableStateFlow(QuickCaptureUiState())
     private var session: DraftStore.Session? = null
     private var scope: DraftScope? = null
@@ -141,9 +165,11 @@ class QuickCaptureViewModel(
         // the mutex. Keep the old text intact until its queued save completes.
         _uiState.update { it.copy(teachingContextStatus = TeachingContextStatus.Loading) }
         viewModelScope.launch {
-            saveMutex.withLock {
-                if (generation == selectionGeneration) {
-                    openContextLocked(verified, generation)
+            attachmentMutex.withLock {
+                saveMutex.withLock {
+                    if (generation == selectionGeneration) {
+                        openContextLocked(verified, generation)
+                    }
                 }
             }
         }
@@ -187,33 +213,185 @@ class QuickCaptureViewModel(
         )
     }
 
-    fun discard() {
+    fun onPhotoSelected(uri: Uri) {
+        val currentState = _uiState.value
+        val selectedSession = session ?: return
+        val selectedScope = scope ?: return
+        val selectedContext = teachingContext ?: return
+        val selectedGeneration = selectionGeneration
+
+        if (
+            currentState.teachingContextStatus != TeachingContextStatus.Ready ||
+            currentState.draftStatus == LocalDraftStatus.Loading ||
+            currentState.attachmentStatus == AttachmentDraftStatus.Protecting ||
+            currentState.attachmentCount > 0
+        ) {
+            return
+        }
+
+        _uiState.update {
+            it.copy(
+                attachmentStatus = AttachmentDraftStatus.Protecting,
+                attachmentErrorCode = null,
+            )
+        }
+
         viewModelScope.launch {
-            saveMutex.withLock {
-                val currentSession = session ?: return@withLock
-                val currentScope = scope ?: return@withLock
+            attachmentMutex.withLock attachmentLock@ {
+                if (
+                    selectedGeneration != selectionGeneration ||
+                    scope?.storageKey != selectedScope.storageKey ||
+                    session?.epoch != selectedSession.epoch
+                ) {
+                    return@attachmentLock
+                }
+
                 try {
-                    val nextEpoch = withContext(Dispatchers.IO) {
-                        store.discard(currentSession)
+                    photoAttachmentStager.stage(
+                        scope = selectedScope,
+                        draftEpoch = selectedSession.epoch,
+                        assignmentId = selectedContext.assignmentId.toString(),
+                        attachmentId = attachmentIdFactory(),
+                        uri = uri,
+                    )
+
+                    if (
+                        selectedGeneration == selectionGeneration &&
+                        scope?.storageKey == selectedScope.storageKey &&
+                        session?.epoch == selectedSession.epoch
+                    ) {
+                        _uiState.update {
+                            it.copy(
+                                attachmentStatus = AttachmentDraftStatus.SafeOnDevice,
+                                attachmentCount = 1,
+                                attachmentErrorCode = null,
+                            )
+                        }
                     }
-                    if (nextEpoch == null) {
-                        _uiState.update { it.copy(draftStatus = LocalDraftStatus.PersistenceFailed) }
-                        return@withLock
+                } catch (failure: Throwable) {
+                    if (
+                        selectedGeneration == selectionGeneration &&
+                        scope?.storageKey == selectedScope.storageKey &&
+                        session?.epoch == selectedSession.epoch
+                    ) {
+                        _uiState.update {
+                            it.copy(
+                                attachmentStatus = AttachmentDraftStatus.Failed,
+                                attachmentCount = 0,
+                                attachmentErrorCode = attachmentErrorCode(failure),
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    fun removePhoto() {
+        val selectedSession = session ?: return
+        val selectedScope = scope ?: return
+        val selectedGeneration = selectionGeneration
+        val currentState = _uiState.value
+        if (
+            currentState.teachingContextStatus != TeachingContextStatus.Ready ||
+            currentState.attachmentStatus == AttachmentDraftStatus.Protecting ||
+            currentState.attachmentCount == 0
+        ) {
+            return
+        }
+
+        viewModelScope.launch {
+            attachmentMutex.withLock attachmentLock@ {
+                if (
+                    selectedGeneration != selectionGeneration ||
+                    scope?.storageKey != selectedScope.storageKey ||
+                    session?.epoch != selectedSession.epoch
+                ) {
+                    return@attachmentLock
+                }
+
+                try {
+                    val filesDeleted = attachmentStagingStore.discardUnboundDraft(
+                        scope = selectedScope,
+                        draftEpoch = selectedSession.epoch,
+                    )
+                    if (!filesDeleted) {
+                        onAttachmentCleanupNeeded()
                     }
 
-                    session = withContext(Dispatchers.IO) {
-                        store.open(currentScope)
+                    if (
+                        selectedGeneration == selectionGeneration &&
+                        scope?.storageKey == selectedScope.storageKey &&
+                        session?.epoch == selectedSession.epoch
+                    ) {
+                        _uiState.update {
+                            it.copy(
+                                attachmentStatus = AttachmentDraftStatus.None,
+                                attachmentCount = 0,
+                                attachmentErrorCode = null,
+                            )
+                        }
                     }
-                    revision = Math.addExact(revision, 1)
-                    _uiState.update {
-                        it.copy(
-                            text = "",
-                            draftStatus = LocalDraftStatus.SafeOnDevice,
-                            recoveredFromDisk = false,
+                } catch (failure: Throwable) {
+                    if (
+                        selectedGeneration == selectionGeneration &&
+                        scope?.storageKey == selectedScope.storageKey &&
+                        session?.epoch == selectedSession.epoch
+                    ) {
+                        _uiState.update {
+                            it.copy(
+                                attachmentStatus = AttachmentDraftStatus.Failed,
+                                attachmentErrorCode = attachmentErrorCode(failure),
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    fun discard() {
+        viewModelScope.launch {
+            attachmentMutex.withLock attachmentLock@ {
+                saveMutex.withLock saveLock@ {
+                    val currentSession = session ?: return@saveLock
+                    val currentScope = scope ?: return@saveLock
+                    try {
+                        val result = withContext(Dispatchers.IO) {
+                            durableIntentDao.discardDraft(
+                                scopeKey = currentScope.storageKey,
+                                expectedEpoch = currentSession.epoch,
+                            )
+                        }
+                        if (result == null) {
+                            _uiState.update { it.copy(draftStatus = LocalDraftStatus.PersistenceFailed) }
+                            return@saveLock
+                        }
+
+                        val filesDeleted = attachmentStagingStore.deleteProtectedFilesBestEffort(
+                            result.attachmentFileNames,
                         )
+                        if (!filesDeleted) {
+                            onAttachmentCleanupNeeded()
+                        }
+
+                        session = withContext(Dispatchers.IO) {
+                            store.open(currentScope)
+                        }
+                        revision = Math.addExact(revision, 1)
+                        _uiState.update {
+                            it.copy(
+                                text = "",
+                                draftStatus = LocalDraftStatus.SafeOnDevice,
+                                recoveredFromDisk = false,
+                                attachmentStatus = AttachmentDraftStatus.None,
+                                attachmentCount = 0,
+                                attachmentErrorCode = null,
+                            )
+                        }
+                    } catch (_: Throwable) {
+                        _uiState.update { it.copy(draftStatus = LocalDraftStatus.PersistenceFailed) }
                     }
-                } catch (_: Throwable) {
-                    _uiState.update { it.copy(draftStatus = LocalDraftStatus.PersistenceFailed) }
                 }
             }
         }
@@ -221,12 +399,13 @@ class QuickCaptureViewModel(
 
     fun submit() {
         viewModelScope.launch {
-            saveMutex.withLock {
+            attachmentMutex.withLock attachmentLock@ {
+                saveMutex.withLock saveLock@ {
                 val currentState = _uiState.value
-                val currentSession = session ?: return@withLock
-                val currentScope = scope ?: return@withLock
-                val currentContext = teachingContext ?: return@withLock
-                val currentActor = actorAppUserId ?: return@withLock
+                val currentSession = session ?: return@saveLock
+                val currentScope = scope ?: return@saveLock
+                val currentContext = teachingContext ?: return@saveLock
+                val currentActor = actorAppUserId ?: return@saveLock
                 val finalText = currentState.text
 
                 if (
@@ -234,7 +413,7 @@ class QuickCaptureViewModel(
                     currentState.draftStatus == LocalDraftStatus.PersistenceFailed ||
                     finalText.isBlank()
                 ) {
-                    return@withLock
+                    return@saveLock
                 }
 
                 // Invalidate every autosave queued before this submit barrier.
@@ -282,7 +461,7 @@ class QuickCaptureViewModel(
                     }
                     if (nextEpoch == null) {
                         _uiState.update { it.copy(draftStatus = LocalDraftStatus.PersistenceFailed) }
-                        return@withLock
+                        return@saveLock
                     }
 
                     session = withContext(Dispatchers.IO) {
@@ -293,13 +472,18 @@ class QuickCaptureViewModel(
                             text = "",
                             draftStatus = LocalDraftStatus.SafeOnDevice,
                             recoveredFromDisk = false,
+                            attachmentStatus = AttachmentDraftStatus.None,
+                            attachmentCount = 0,
+                            attachmentErrorCode = null,
                         )
                     }
                     onOutboxCommitted()
                 } catch (_: Throwable) {
-                    // The Room transaction rolls back both Draft retirement and
-                    // Outbox insertion. Keep current UI text visible as well.
+                    // The Room transaction rolls back Draft retirement, Outbox
+                    // insertion and attachment binding together. Keep current
+                    // UI text and attachment state visible as well.
                     _uiState.update { it.copy(draftStatus = LocalDraftStatus.PersistenceFailed) }
+                }
                 }
             }
         }
@@ -385,8 +569,15 @@ class QuickCaptureViewModel(
         )
 
         try {
-            val opened = withContext(Dispatchers.IO) {
-                store.open(draftScope)
+            val (opened, stagedAttachments) = withContext(Dispatchers.IO) {
+                val openedSession = store.open(draftScope)
+                val attachments = attachmentStagingStore
+                    .readForDraft(draftScope, openedSession.epoch)
+                    .filter {
+                        it.state == AttachmentStagingState.Staged &&
+                            it.parentObservationOperationId == null
+                    }
+                openedSession to attachments
             }
             // Another selection may arrive while Room opens this draft.
             if (generation != selectionGeneration) return
@@ -398,6 +589,12 @@ class QuickCaptureViewModel(
                 subjectLabel = subjectLabel(context.subjectKey),
                 draftStatus = LocalDraftStatus.SafeOnDevice,
                 recoveredFromDisk = opened.recovered != null,
+                attachmentStatus = if (stagedAttachments.isEmpty()) {
+                    AttachmentDraftStatus.None
+                } else {
+                    AttachmentDraftStatus.SafeOnDevice
+                },
+                attachmentCount = stagedAttachments.size,
             )
             observeSubmission(draftScope)
         } catch (_: Throwable) {
@@ -492,6 +689,15 @@ class QuickCaptureViewModel(
         }
     }
 
+    private fun attachmentErrorCode(failure: Throwable): String = when (failure) {
+        is ImageDerivativeTooLargeException,
+        is AttachmentTooLargeException,
+        -> "too_large"
+        is LocalAttachmentKeyUnavailableException -> "local_key_unavailable"
+        is SecurityException -> "source_unavailable"
+        else -> "unavailable"
+    }
+
     private fun subjectLabel(subjectKey: String): String = subjectLabelForKey(subjectKey)
 
     companion object {
@@ -504,17 +710,25 @@ class QuickCaptureViewModel(
         ): QuickCaptureViewModel {
             val appContext = context.applicationContext
             val database = DraftDatabase.get(appContext)
-            // Reconcile protected attachment files only after the app has
-            // established the same Durable Intent database lifecycle used by
-            // Quick Capture. This avoids a cold-start worker racing explicit
-            // database/key purge or test recovery setup.
-            AttachmentStagingRecoveryScheduler.kick(appContext)
+            val attachmentStagingStore = AttachmentStagingStore(
+                dao = database.attachmentStagingDao(),
+                protectedFiles = ProtectedAttachmentFileStore(appContext),
+            )
             return QuickCaptureViewModel(
                 store = DraftStore(database.draftDao()),
                 durableIntentDao = database.durableIntentDao(),
+                attachmentStagingStore = attachmentStagingStore,
+                photoAttachmentStager = PhotoAttachmentStager(
+                    contentResolver = appContext.contentResolver,
+                    derivativeFactory = ImageDerivativeFactory(),
+                    attachmentStagingStore = attachmentStagingStore,
+                ),
                 bootstrapRemote = bootstrapRemote,
                 environmentId = environmentId,
                 onOutboxCommitted = { ObservationOutboxScheduler.kick(appContext) },
+                onAttachmentCleanupNeeded = {
+                    AttachmentStagingRecoveryScheduler.scheduleAfterGrace(appContext)
+                },
             )
         }
     }

@@ -308,12 +308,14 @@ jobs:
           set -euo pipefail
           adb="$ANDROID_HOME/platform-tools/adb"
           sentinel='进程重启证据：这条课堂观察必须从 Room 恢复。'
+          attachment_safe='照片已安全保存在本机'
 
           "$adb" shell am force-stop com.xueqing.app
           "$adb" shell am start -W \
             -n com.xueqing.app/.MainActivity \
             --ez com.xueqing.app.extra.OPEN_QUICK_CAPTURE true
 
+          draft_recovered=0
           for attempt in $(seq 1 30); do
             "$adb" shell uiautomator dump /sdcard/xueqing-window.xml >/dev/null 2>&1 || true
             "$adb" exec-out cat /sdcard/xueqing-window.xml > "$RUNNER_TEMP/xueqing-window.xml" || true
@@ -324,11 +326,27 @@ jobs:
               sleep 1
               continue
             fi
-            if grep -Fq "$sentinel" "$RUNNER_TEMP/xueqing-window.xml"; then
-              grep -Fq '已恢复本机草稿' "$RUNNER_TEMP/xueqing-window.xml"
-              echo 'Process-death recovery proved: encrypted persisted draft is visible after force-stop and relaunch.'
+            if grep -Fq "$sentinel" "$RUNNER_TEMP/xueqing-window.xml" &&
+               grep -Fq '已恢复本机草稿' "$RUNNER_TEMP/xueqing-window.xml"; then
+              draft_recovered=1
+              break
+            fi
+            sleep 1
+          done
+
+          if [ "$draft_recovered" -ne 1 ]; then
+            cat "$RUNNER_TEMP/xueqing-window.xml" >&2 || true
+            exit 1
+          fi
+
+          for attempt in $(seq 1 12); do
+            "$adb" shell uiautomator dump /sdcard/xueqing-window.xml >/dev/null 2>&1 || true
+            "$adb" exec-out cat /sdcard/xueqing-window.xml > "$RUNNER_TEMP/xueqing-window.xml" || true
+            if grep -Fq "$attachment_safe" "$RUNNER_TEMP/xueqing-window.xml"; then
+              echo 'Process-death recovery proved: encrypted draft and staged attachment are visible after force-stop and relaunch.'
               exit 0
             fi
+            "$adb" shell input swipe 540 1650 540 650 300 || true
             sleep 1
           done
 
