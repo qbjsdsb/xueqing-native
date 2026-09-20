@@ -1,7 +1,7 @@
 schema_version: 1
 project: xueqing-native
 phase: phase-1
-milestone: windows-authoritative-case-workspace
+milestone: evidence-attachment-staging
 status: active
 architecture_baseline: v1-accepted
 
@@ -57,12 +57,11 @@ open_gates:
 next_execution:
   parallel_limit: 1
   lines:
-    - windows-authoritative-case-workspace
+    - evidence-attachment-staging
   after_current_green:
-    - windows-case-lifecycle-ux
+    - organization-management-vertical-slice
 
 later:
-  - evidence-attachment-staging
   - organization-management-vertical-slice
   - provider-projection-conformance
   - provider-storage-conformance
