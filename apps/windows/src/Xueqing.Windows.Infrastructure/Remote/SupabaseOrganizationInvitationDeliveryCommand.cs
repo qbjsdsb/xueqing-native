@@ -17,12 +17,14 @@ public sealed class SupabaseOrganizationInvitationDeliveryCommand :
     private readonly Uri _functionUri;
     private readonly string _apiKey;
     private readonly Func<CancellationToken, ValueTask<string?>> _accessTokenProvider;
+    private readonly string? _functionRegion;
 
     public SupabaseOrganizationInvitationDeliveryCommand(
         HttpClient httpClient,
         Uri projectUri,
         string apiKey,
-        Func<CancellationToken, ValueTask<string?>> accessTokenProvider)
+        Func<CancellationToken, ValueTask<string?>> accessTokenProvider,
+        string? functionRegion = null)
     {
         _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
         ArgumentNullException.ThrowIfNull(projectUri);
@@ -39,6 +41,9 @@ public sealed class SupabaseOrganizationInvitationDeliveryCommand :
             : apiKey;
         _accessTokenProvider = accessTokenProvider ??
             throw new ArgumentNullException(nameof(accessTokenProvider));
+        _functionRegion = string.IsNullOrWhiteSpace(functionRegion)
+            ? null
+            : functionRegion.Trim();
     }
 
     public async Task<DeliverOrganizationInvitationResult> ExecuteAsync(
@@ -72,6 +77,10 @@ public sealed class SupabaseOrganizationInvitationDeliveryCommand :
         using var httpRequest = new HttpRequestMessage(HttpMethod.Post, _functionUri);
         httpRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
         httpRequest.Headers.TryAddWithoutValidation("apikey", _apiKey);
+        if (_functionRegion is not null)
+        {
+            httpRequest.Headers.TryAddWithoutValidation("x-region", _functionRegion);
+        }
         httpRequest.Content = JsonContent.Create(new
         {
             operation_id = request.OperationId,
