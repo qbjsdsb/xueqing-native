@@ -305,7 +305,8 @@ reset role;
 
 -- Expired invitation fails closed.
 update public.organization_invitations
-   set expires_at = pg_catalog.clock_timestamp() - interval '1 minute'
+   set created_at_server = pg_catalog.clock_timestamp() - interval '8 days',
+       expires_at = pg_catalog.clock_timestamp() - interval '1 minute'
  where id = pg_catalog.current_setting('xq.test.mismatch_invitation_id')::uuid;
 
 select set_config('request.jwt.claim.sub', 'b0000000-0000-0000-0000-00000000a004', true);
