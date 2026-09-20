@@ -237,7 +237,7 @@ public sealed class OrganizationInvitationWorkflowCoordinatorTests
             Guid expectedActorAppUserId,
             CancellationToken cancellationToken = default)
         {
-            Assert.AreEqual(ActorId, expectedActorAppUserId);
+            Assert.IsTrue(expectedActorAppUserId == ActorId);
             CallCount++;
             OperationIds.Add(request.OperationId);
             OnExecute?.Invoke();
