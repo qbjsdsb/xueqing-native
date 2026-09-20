@@ -28,4 +28,7 @@ jwt_expiry = 3600
 enable_signup = true
 
 [functions.organization-invitation-delivery]
-verify_jwt = true
+# The function performs no privileged action before the caller token reaches
+# the user-scoped, server-authoritative begin-delivery RPC. Keep gateway JWT
+# verification off so current asymmetric Supabase Auth JWTs are supported.
+verify_jwt = false
