@@ -38,6 +38,7 @@ public enum CaseLifecycleFailureKind
     AuthorityChanged,
     VersionConflict,
     InvalidTransition,
+    ServerInvariant,
     Validation,
     OperationConflict,
     LocalDurabilityFailure,

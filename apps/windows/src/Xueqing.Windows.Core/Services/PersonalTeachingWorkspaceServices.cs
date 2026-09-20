@@ -8,4 +8,6 @@ public sealed record PersonalTeachingWorkspaceServices(
     ICreateLearningCaseCommand CreateLearningCase,
     ICreateLearningCaseRecoveryStore CreateLearningCaseRecovery,
     ActionProgressionCommandCoordinator? ActionProgression = null,
-    IActionProgressionRecoveryStore? ActionProgressionRecovery = null);
+    IActionProgressionRecoveryStore? ActionProgressionRecovery = null,
+    CaseLifecycleCommandCoordinator? CaseLifecycle = null,
+    ICaseLifecycleRecoveryStore? CaseLifecycleRecovery = null);
