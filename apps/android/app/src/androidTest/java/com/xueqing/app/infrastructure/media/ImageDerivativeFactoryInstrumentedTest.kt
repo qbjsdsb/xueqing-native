@@ -33,7 +33,12 @@ class ImageDerivativeFactoryInstrumentedTest {
                 ExifInterface.TAG_ORIENTATION,
                 ExifInterface.ORIENTATION_ROTATE_90.toString(),
             )
-            setLatLong(24.48, 118.08)
+            setAttribute(ExifInterface.TAG_MAKE, "XUEQING_TEST_DEVICE")
+            setAttribute(ExifInterface.TAG_MODEL, "XUEQING_TEST_MODEL")
+            setAttribute(ExifInterface.TAG_GPS_LATITUDE_REF, "N")
+            setAttribute(ExifInterface.TAG_GPS_LATITUDE, "24/1,28/1,4800/100")
+            setAttribute(ExifInterface.TAG_GPS_LONGITUDE_REF, "E")
+            setAttribute(ExifInterface.TAG_GPS_LONGITUDE, "118/1,4/1,4800/100")
             saveAttributes()
         }
 
@@ -58,7 +63,10 @@ class ImageDerivativeFactoryInstrumentedTest {
         decoded.recycle()
 
         val derivativeExif = ExifInterface(ByteArrayInputStream(derivative.bytes))
-        assertNull(derivativeExif.latLong)
+        assertNull(derivativeExif.getAttribute(ExifInterface.TAG_MAKE))
+        assertNull(derivativeExif.getAttribute(ExifInterface.TAG_MODEL))
+        assertNull(derivativeExif.getAttribute(ExifInterface.TAG_GPS_LATITUDE))
+        assertNull(derivativeExif.getAttribute(ExifInterface.TAG_GPS_LONGITUDE))
         assertEquals(
             ExifInterface.ORIENTATION_NORMAL,
             derivativeExif.getAttributeInt(
