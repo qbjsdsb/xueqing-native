@@ -139,6 +139,23 @@ public sealed partial class TodayView : UserControl
             intent);
     }
 
+    private async void RetryPendingCaseLifecycle_Click(
+        object sender,
+        RoutedEventArgs e)
+    {
+        if (sender is not Button button ||
+            button.Tag is not CaseLifecycleRecoveryIntent intent ||
+            DataContext is not MainWindowViewModel viewModel)
+        {
+            return;
+        }
+
+        await CaseLifecycleDialogFlow.ShowPendingRecoveryAsync(
+            XamlRoot,
+            viewModel,
+            intent);
+    }
+
     private static string FailureText(CreateLearningCaseResult result) =>
         result.Failure?.Kind switch
         {

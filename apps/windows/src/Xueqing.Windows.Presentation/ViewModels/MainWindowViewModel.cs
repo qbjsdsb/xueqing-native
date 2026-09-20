@@ -24,7 +24,10 @@ public sealed record LearningCaseHistoryDisplayItem(
     string NextAction,
     string DueLabel,
     bool IsCurrentActorResponsibility,
-    bool IsClosed);
+    bool IsClosed,
+    string LifecycleActionLabel,
+    string LifecycleAutomationName,
+    bool CanRunLifecycleAction);
 
 public sealed record LearningCaseRecoveryLookup(
     bool IsAvailable,
@@ -85,6 +88,8 @@ public sealed class MainWindowViewModel : ObservableObject
     private readonly ICreateLearningCaseRecoveryStore? _createLearningCaseRecovery;
     private readonly ActionProgressionCommandCoordinator? _actionProgression;
     private readonly IActionProgressionRecoveryStore? _actionProgressionRecovery;
+    private readonly CaseLifecycleCommandCoordinator? _caseLifecycle;
+    private readonly ICaseLifecycleRecoveryStore? _caseLifecycleRecovery;
     private readonly List<StudentSummary> _allStudents;
     private readonly Dictionary<string, PersonalStudentWorkspaceItem> _authoritativeStudents = new(StringComparer.Ordinal);
     private readonly Dictionary<Guid, ActionProgressionTarget> _authoritativeTodayActionTargets = new();
@@ -100,6 +105,7 @@ public sealed class MainWindowViewModel : ObservableObject
     private string _todayStatusText = string.Empty;
     private string _pendingLearningCaseRecoveryStatusText = string.Empty;
     private string _pendingActionProgressionRecoveryStatusText = string.Empty;
+    private string _pendingCaseLifecycleRecoveryStatusText = string.Empty;
     private bool _initialized;
 
     public MainWindowViewModel()
@@ -117,6 +123,8 @@ public sealed class MainWindowViewModel : ObservableObject
         _createLearningCaseRecovery = teachingWorkspace?.CreateLearningCaseRecovery;
         _actionProgression = teachingWorkspace?.ActionProgression;
         _actionProgressionRecovery = teachingWorkspace?.ActionProgressionRecovery;
+        _caseLifecycle = teachingWorkspace?.CaseLifecycle;
+        _caseLifecycleRecovery = teachingWorkspace?.CaseLifecycleRecovery;
         _allStudents = _personalWorkspace is null
             ? SyntheticDataFactory.CreateStudents(1_000).ToList()
             : new List<StudentSummary>();
@@ -128,6 +136,7 @@ public sealed class MainWindowViewModel : ObservableObject
         CaseHistory = new ObservableCollection<LearningCaseHistoryDisplayItem>();
         PendingLearningCaseRecoveries = new ObservableCollection<PendingLearningCaseRecoveryItem>();
         PendingActionProgressionRecoveries = new ObservableCollection<PendingActionProgressionRecoveryItem>();
+        PendingCaseLifecycleRecoveries = new ObservableCollection<PendingCaseLifecycleRecoveryItem>();
         TodayActions = _personalWorkspace is null
             ? new ObservableCollection<TodayActionItem>(UxPrototypeFixtureFactory.CreateTodayActions())
             : new ObservableCollection<TodayActionItem>();
@@ -171,10 +180,15 @@ public sealed class MainWindowViewModel : ObservableObject
 
     public ObservableCollection<PendingActionProgressionRecoveryItem> PendingActionProgressionRecoveries { get; }
 
+    public ObservableCollection<PendingCaseLifecycleRecoveryItem> PendingCaseLifecycleRecoveries { get; }
+
     public bool IsAuthoritativeStudentWorkspace => _personalWorkspace is not null;
 
     public bool SupportsActionProgression =>
         _actionProgression is not null && _actionProgressionRecovery is not null;
+
+    public bool SupportsCaseLifecycle =>
+        _caseLifecycle is not null && _caseLifecycleRecovery is not null;
 
     public string SearchPlaceholderText => IsAuthoritativeStudentWorkspace
         ? "搜索姓名或学科"
@@ -268,6 +282,12 @@ public sealed class MainWindowViewModel : ObservableObject
         private set => SetProperty(ref _pendingActionProgressionRecoveryStatusText, value);
     }
 
+    public string PendingCaseLifecycleRecoveryStatusText
+    {
+        get => _pendingCaseLifecycleRecoveryStatusText;
+        private set => SetProperty(ref _pendingCaseLifecycleRecoveryStatusText, value);
+    }
+
     public async Task InitializeAsync(CancellationToken cancellationToken = default)
     {
         if (_initialized)
@@ -306,6 +326,8 @@ public sealed class MainWindowViewModel : ObservableObject
         PendingLearningCaseRecoveryStatusText = string.Empty;
         PendingActionProgressionRecoveries.Clear();
         PendingActionProgressionRecoveryStatusText = string.Empty;
+        PendingCaseLifecycleRecoveries.Clear();
+        PendingCaseLifecycleRecoveryStatusText = string.Empty;
         _learningFocus?.Reset();
         _caseHistory?.Reset();
         _today?.Reset();
@@ -360,6 +382,7 @@ public sealed class MainWindowViewModel : ObservableObject
 
         await RefreshPendingLearningCaseRecoveriesAsync(state.Bootstrap, cancellationToken);
         await RefreshPendingActionProgressionRecoveriesAsync(state.Bootstrap, cancellationToken);
+        await RefreshPendingCaseLifecycleRecoveriesAsync(state.Bootstrap, cancellationToken);
         await RefreshTodayAsync(state.Bootstrap.ActorAppUserId, cancellationToken);
     }
 
@@ -456,6 +479,287 @@ public sealed class MainWindowViewModel : ObservableObject
         }
 
         ApplyCaseHistoryState(state);
+    }
+
+
+    public async Task<CaseLifecycleRecoveryLookup> FindCaseLifecycleAsync(
+        LearningCaseHistoryDisplayItem displayItem,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(displayItem);
+
+        if (_personalWorkspace is null ||
+            _caseHistory is null ||
+            _caseLifecycleRecovery is null ||
+            !_authoritativeCaseHistory.TryGetValue(displayItem.CaseId, out var learningCase) ||
+            _caseHistory.Current.Snapshot is not { } snapshot)
+        {
+            return new CaseLifecycleRecoveryLookup(false, null, null);
+        }
+
+        CaseLifecycleTarget target;
+        try
+        {
+            target = CaseLifecycleTargetResolver.FromHistory(snapshot, learningCase);
+        }
+        catch (InvalidDataException)
+        {
+            return new CaseLifecycleRecoveryLookup(false, null, null);
+        }
+
+        var bootstrap = _personalWorkspace.Current.Status == PersonalStudentWorkspaceStatus.Ready
+            ? _personalWorkspace.Current.Bootstrap
+            : null;
+        if (bootstrap is null ||
+            !ContainsExactLifecycleTargetContext(bootstrap, target))
+        {
+            return new CaseLifecycleRecoveryLookup(false, null, null);
+        }
+
+        try
+        {
+            var pending = await _caseLifecycleRecovery.FindByCaseAsync(
+                bootstrap.ActorAppUserId,
+                target.OrganizationId,
+                target.CaseId,
+                cancellationToken);
+            return new CaseLifecycleRecoveryLookup(true, target, pending);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch
+        {
+            return new CaseLifecycleRecoveryLookup(false, null, null);
+        }
+    }
+
+    public async Task<CaseLifecycleResult<TransitionLearningCaseStateReceipt>> TransitionLearningCaseAsync(
+        CaseLifecycleTarget target,
+        LearningCaseState targetState,
+        Guid operationId,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(target);
+
+        if (_personalWorkspace is null || _caseLifecycle is null)
+        {
+            return CaseLifecycleResult<TransitionLearningCaseStateReceipt>.Failed(
+                CaseLifecycleFailureKind.AuthorityChanged,
+                "XQ_CLIENT_CASE_LIFECYCLE_UNAVAILABLE");
+        }
+
+        var bootstrap = _personalWorkspace.Current.Status == PersonalStudentWorkspaceStatus.Ready
+            ? _personalWorkspace.Current.Bootstrap
+            : null;
+        if (bootstrap is null)
+        {
+            return CaseLifecycleResult<TransitionLearningCaseStateReceipt>.Failed(
+                CaseLifecycleFailureKind.AuthenticationRequired,
+                "XQ_CLIENT_BOOTSTRAP_UNAVAILABLE");
+        }
+
+        if (!IsCurrentAuthoritativeCaseLifecycleTarget(target) ||
+            !ContainsExactLifecycleTargetContext(bootstrap, target))
+        {
+            return CaseLifecycleResult<TransitionLearningCaseStateReceipt>.Failed(
+                CaseLifecycleFailureKind.VersionConflict,
+                "XQ_CLIENT_CASE_LIFECYCLE_TARGET_STALE");
+        }
+
+        var result = await _caseLifecycle.TransitionAsync(
+            target.CreateTransitionRequest(operationId, targetState),
+            bootstrap.ActorAppUserId,
+            cancellationToken);
+
+        await HandleCaseLifecycleResultAsync(
+            bootstrap,
+            target,
+            null,
+            result.IsSuccess,
+            result.Failure,
+            cancellationToken);
+        return result;
+    }
+
+    public async Task<CaseLifecycleResult<CloseLearningCaseReceipt>> CloseLearningCaseAsync(
+        CaseLifecycleTarget target,
+        Guid operationId,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(target);
+
+        if (_personalWorkspace is null || _caseLifecycle is null)
+        {
+            return CaseLifecycleResult<CloseLearningCaseReceipt>.Failed(
+                CaseLifecycleFailureKind.AuthorityChanged,
+                "XQ_CLIENT_CASE_LIFECYCLE_UNAVAILABLE");
+        }
+
+        var bootstrap = _personalWorkspace.Current.Status == PersonalStudentWorkspaceStatus.Ready
+            ? _personalWorkspace.Current.Bootstrap
+            : null;
+        if (bootstrap is null)
+        {
+            return CaseLifecycleResult<CloseLearningCaseReceipt>.Failed(
+                CaseLifecycleFailureKind.AuthenticationRequired,
+                "XQ_CLIENT_BOOTSTRAP_UNAVAILABLE");
+        }
+
+        if (!IsCurrentAuthoritativeCaseLifecycleTarget(target) ||
+            !ContainsExactLifecycleTargetContext(bootstrap, target))
+        {
+            return CaseLifecycleResult<CloseLearningCaseReceipt>.Failed(
+                CaseLifecycleFailureKind.VersionConflict,
+                "XQ_CLIENT_CASE_LIFECYCLE_TARGET_STALE");
+        }
+
+        var result = await _caseLifecycle.CloseAsync(
+            target.CreateCloseRequest(operationId),
+            bootstrap.ActorAppUserId,
+            cancellationToken);
+
+        await HandleCaseLifecycleResultAsync(
+            bootstrap,
+            target,
+            null,
+            result.IsSuccess,
+            result.Failure,
+            cancellationToken);
+        return result;
+    }
+
+    public async Task<CaseLifecycleResult<ReopenLearningCaseReceipt>> ReopenLearningCaseAsync(
+        CaseLifecycleTarget target,
+        string newPrimaryActionText,
+        DateOnly? newPrimaryActionDueOn,
+        Guid operationId,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(target);
+
+        if (_personalWorkspace is null || _caseLifecycle is null)
+        {
+            return CaseLifecycleResult<ReopenLearningCaseReceipt>.Failed(
+                CaseLifecycleFailureKind.AuthorityChanged,
+                "XQ_CLIENT_CASE_LIFECYCLE_UNAVAILABLE");
+        }
+
+        var bootstrap = _personalWorkspace.Current.Status == PersonalStudentWorkspaceStatus.Ready
+            ? _personalWorkspace.Current.Bootstrap
+            : null;
+        if (bootstrap is null)
+        {
+            return CaseLifecycleResult<ReopenLearningCaseReceipt>.Failed(
+                CaseLifecycleFailureKind.AuthenticationRequired,
+                "XQ_CLIENT_BOOTSTRAP_UNAVAILABLE");
+        }
+
+        if (!IsCurrentAuthoritativeCaseLifecycleTarget(target) ||
+            !ContainsExactLifecycleTargetContext(bootstrap, target))
+        {
+            return CaseLifecycleResult<ReopenLearningCaseReceipt>.Failed(
+                CaseLifecycleFailureKind.VersionConflict,
+                "XQ_CLIENT_CASE_LIFECYCLE_TARGET_STALE");
+        }
+
+        var result = await _caseLifecycle.ReopenAsync(
+            target.CreateReopenRequest(
+                operationId,
+                newPrimaryActionText.Trim(),
+                newPrimaryActionDueOn),
+            bootstrap.ActorAppUserId,
+            cancellationToken);
+
+        await HandleCaseLifecycleResultAsync(
+            bootstrap,
+            target,
+            null,
+            result.IsSuccess,
+            result.Failure,
+            cancellationToken);
+        return result;
+    }
+
+    public async Task<CaseLifecycleRetryResult> RetryPendingCaseLifecycleAsync(
+        CaseLifecycleRecoveryIntent intent,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(intent);
+
+        if (_personalWorkspace is null || _caseLifecycle is null)
+        {
+            return new CaseLifecycleRetryResult(
+                false,
+                new CaseLifecycleFailure(
+                    CaseLifecycleFailureKind.AuthorityChanged,
+                    "XQ_CLIENT_CASE_LIFECYCLE_UNAVAILABLE"));
+        }
+
+        var bootstrap = _personalWorkspace.Current.Status == PersonalStudentWorkspaceStatus.Ready
+            ? _personalWorkspace.Current.Bootstrap
+            : null;
+        if (bootstrap is null)
+        {
+            return new CaseLifecycleRetryResult(
+                false,
+                new CaseLifecycleFailure(
+                    CaseLifecycleFailureKind.AuthenticationRequired,
+                    "XQ_CLIENT_BOOTSTRAP_UNAVAILABLE"));
+        }
+
+        bool success;
+        CaseLifecycleFailure? failure;
+        switch (intent)
+        {
+            case TransitionCaseRecoveryIntent transition:
+            {
+                var result = await _caseLifecycle.TransitionAsync(
+                    transition.Request,
+                    bootstrap.ActorAppUserId,
+                    cancellationToken);
+                success = result.IsSuccess;
+                failure = result.Failure;
+                break;
+            }
+            case CloseCaseRecoveryIntent close:
+            {
+                var result = await _caseLifecycle.CloseAsync(
+                    close.Request,
+                    bootstrap.ActorAppUserId,
+                    cancellationToken);
+                success = result.IsSuccess;
+                failure = result.Failure;
+                break;
+            }
+            case ReopenCaseRecoveryIntent reopen:
+            {
+                var result = await _caseLifecycle.ReopenAsync(
+                    reopen.Request,
+                    bootstrap.ActorAppUserId,
+                    cancellationToken);
+                success = result.IsSuccess;
+                failure = result.Failure;
+                break;
+            }
+            default:
+                return new CaseLifecycleRetryResult(
+                    false,
+                    new CaseLifecycleFailure(
+                        CaseLifecycleFailureKind.Validation,
+                        "XQ_CLIENT_CASE_LIFECYCLE_RECOVERY_KIND_INVALID"));
+        }
+
+        await HandleCaseLifecycleResultAsync(
+            bootstrap,
+            null,
+            intent,
+            success,
+            failure,
+            cancellationToken);
+
+        return new CaseLifecycleRetryResult(success, failure);
     }
 
     public async Task<LearningCaseRecoveryLookup> FindPendingLearningCaseForObservationAsync(
@@ -976,6 +1280,193 @@ public sealed class MainWindowViewModel : ObservableObject
             }
         }
     }
+
+
+    private async Task HandleCaseLifecycleResultAsync(
+        PersonalBootstrapSnapshot bootstrap,
+        CaseLifecycleTarget? target,
+        CaseLifecycleRecoveryIntent? recoveryIntent,
+        bool isSuccess,
+        CaseLifecycleFailure? failure,
+        CancellationToken cancellationToken)
+    {
+        if (failure?.Kind is
+            CaseLifecycleFailureKind.AuthenticationRequired or
+            CaseLifecycleFailureKind.AuthorityChanged)
+        {
+            await RefreshAuthoritativeStudentsAsync(cancellationToken);
+            return;
+        }
+
+        if (isSuccess ||
+            failure?.Kind is
+                CaseLifecycleFailureKind.VersionConflict or
+                CaseLifecycleFailureKind.InvalidTransition or
+                CaseLifecycleFailureKind.ServerInvariant)
+        {
+            await RefreshCaseLifecycleProjectionsAsync(
+                bootstrap.ActorAppUserId,
+                target,
+                recoveryIntent,
+                cancellationToken);
+        }
+
+        await RefreshPendingCaseLifecycleRecoveriesAsync(
+            bootstrap,
+            cancellationToken);
+    }
+
+    private async Task RefreshCaseLifecycleProjectionsAsync(
+        Guid actorAppUserId,
+        CaseLifecycleTarget? target,
+        CaseLifecycleRecoveryIntent? recoveryIntent,
+        CancellationToken cancellationToken)
+    {
+        var todayTask = RefreshTodayAsync(actorAppUserId, cancellationToken);
+        var selected = SelectedTeachingContext;
+
+        var organizationId = target?.OrganizationId ?? recoveryIntent?.OrganizationId;
+        var studentId = target?.StudentId ?? recoveryIntent?.StudentId;
+        var subjectProfileId = target?.SubjectProfileId ?? recoveryIntent?.SubjectProfileId;
+        var assignmentId = target?.OwnerAssignmentId ?? recoveryIntent?.OwnerAssignmentId;
+
+        Task<StudentLearningFocusViewState>? focusTask = null;
+        Task<StudentLearningCasesViewState>? historyTask = null;
+        if (selected is not null &&
+            organizationId is not null &&
+            studentId is not null &&
+            subjectProfileId is not null &&
+            assignmentId is not null &&
+            selected.Context.OrganizationId == organizationId.Value &&
+            selected.Context.StudentId == studentId.Value &&
+            selected.Context.SubjectProfileId == subjectProfileId.Value &&
+            selected.Context.AssignmentId == assignmentId.Value)
+        {
+            var scope = ToLearningScope(selected.Context);
+            if (_learningFocus is not null)
+            {
+                focusTask = _learningFocus.LoadAsync(
+                    scope,
+                    actorAppUserId,
+                    cancellationToken);
+            }
+
+            if (_caseHistory is not null)
+            {
+                historyTask = _caseHistory.LoadAsync(
+                    scope,
+                    actorAppUserId,
+                    cancellationToken);
+            }
+        }
+
+        await todayTask;
+
+        if (focusTask is not null)
+        {
+            var focusState = await focusTask;
+            if (ReferenceEquals(selected, SelectedTeachingContext) ||
+                selected == SelectedTeachingContext)
+            {
+                ApplyFocusState(focusState);
+            }
+        }
+
+        if (historyTask is not null)
+        {
+            var historyState = await historyTask;
+            if (ReferenceEquals(selected, SelectedTeachingContext) ||
+                selected == SelectedTeachingContext)
+            {
+                ApplyCaseHistoryState(historyState);
+            }
+        }
+    }
+
+    private async Task RefreshPendingCaseLifecycleRecoveriesAsync(
+        PersonalBootstrapSnapshot bootstrap,
+        CancellationToken cancellationToken)
+    {
+        PendingCaseLifecycleRecoveries.Clear();
+        PendingCaseLifecycleRecoveryStatusText = string.Empty;
+
+        if (_caseLifecycleRecovery is null)
+        {
+            return;
+        }
+
+        try
+        {
+            var currentOrganizationIds = bootstrap.Organizations
+                .Select(organization => organization.OrganizationId)
+                .Distinct()
+                .ToArray();
+            var pending = await _caseLifecycleRecovery.ListPendingAsync(
+                bootstrap.ActorAppUserId,
+                currentOrganizationIds,
+                cancellationToken);
+
+            foreach (var intent in pending)
+            {
+                var context = bootstrap.TeachingContexts.FirstOrDefault(candidate =>
+                    candidate.OrganizationId == intent.OrganizationId &&
+                    candidate.StudentId == intent.StudentId &&
+                    candidate.SubjectProfileId == intent.SubjectProfileId &&
+                    candidate.AssignmentId == intent.OwnerAssignmentId);
+
+                PendingCaseLifecycleRecoveries.Add(
+                    new PendingCaseLifecycleRecoveryItem(
+                        intent,
+                        context?.StudentDisplayName ?? "原任教学员",
+                        context is null
+                            ? "教学上下文已变化"
+                            : FormatSubjectKey(context.SubjectKey)));
+            }
+
+            if (PendingCaseLifecycleRecoveries.Count > 0)
+            {
+                PendingCaseLifecycleRecoveryStatusText =
+                    $"有 {PendingCaseLifecycleRecoveries.Count} 条 Case 生命周期操作结果尚未确认，请继续原操作确认结果。";
+            }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch
+        {
+            PendingCaseLifecycleRecoveries.Clear();
+            PendingCaseLifecycleRecoveryStatusText =
+                "本机待确认 Case 操作暂时无法读取。为避免重复状态变更，请先不要重新发起相同操作。";
+        }
+    }
+
+    private bool IsCurrentAuthoritativeCaseLifecycleTarget(CaseLifecycleTarget target)
+    {
+        if (_caseHistory?.Current.Snapshot is not { } snapshot ||
+            !_authoritativeCaseHistory.TryGetValue(target.CaseId, out var learningCase))
+        {
+            return false;
+        }
+
+        try
+        {
+            return CaseLifecycleTargetResolver.FromHistory(snapshot, learningCase) == target;
+        }
+        catch (InvalidDataException)
+        {
+            return false;
+        }
+    }
+
+    private static bool ContainsExactLifecycleTargetContext(
+        PersonalBootstrapSnapshot bootstrap,
+        CaseLifecycleTarget target) =>
+        bootstrap.TeachingContexts.Any(context =>
+            context.OrganizationId == target.OrganizationId &&
+            context.StudentId == target.StudentId &&
+            context.SubjectProfileId == target.SubjectProfileId &&
+            context.AssignmentId == target.OwnerAssignmentId);
 
     private async Task RefreshPendingActionProgressionRecoveriesAsync(
         PersonalBootstrapSnapshot bootstrap,
@@ -1578,6 +2069,30 @@ public sealed class MainWindowViewModel : ObservableObject
             _ => string.Empty,
         };
 
+        var lifecycleActionLabel = learningCase.IsCurrentActorResponsibility
+            ? learningCase.State switch
+            {
+                LearningCaseState.New => "确认",
+                LearningCaseState.Confirmed => "开始干预",
+                LearningCaseState.Intervening => "进入待验证",
+                LearningCaseState.PendingVerification => "标记稳定",
+                LearningCaseState.Stable => "关闭",
+                LearningCaseState.Closed => "重新打开",
+                _ => string.Empty,
+            }
+            : string.Empty;
+
+        var lifecycleAutomationName = learningCase.State switch
+        {
+            LearningCaseState.New => "确认当前 Case",
+            LearningCaseState.Confirmed => "开始当前 Case 的干预",
+            LearningCaseState.Intervening => "将当前 Case 进入待验证",
+            LearningCaseState.PendingVerification => "将当前 Case 标记为稳定",
+            LearningCaseState.Stable => "关闭当前 Case",
+            LearningCaseState.Closed => "重新打开当前 Case",
+            _ => "更改 Case 生命周期",
+        };
+
         return new LearningCaseHistoryDisplayItem(
             learningCase.CaseId,
             learningCase.Title,
@@ -1586,7 +2101,10 @@ public sealed class MainWindowViewModel : ObservableObject
             action?.ActionText ?? "已关闭 · 无待办行动",
             dueLabel,
             learningCase.IsCurrentActorResponsibility,
-            learningCase.State == LearningCaseState.Closed);
+            learningCase.State == LearningCaseState.Closed,
+            lifecycleActionLabel,
+            lifecycleAutomationName,
+            !string.IsNullOrEmpty(lifecycleActionLabel));
     }
 
     private static TodayActionItem ToTodayActionItem(PersonalTodayAction action) =>

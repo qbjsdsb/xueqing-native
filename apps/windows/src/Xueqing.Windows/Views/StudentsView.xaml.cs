@@ -106,6 +106,35 @@ public sealed partial class StudentsView : UserControl
         }
     }
 
+    private void CaseLifecycleButton_Loaded(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button button &&
+            button.DataContext is LearningCaseHistoryDisplayItem item &&
+            DataContext is MainWindowViewModel viewModel)
+        {
+            button.Visibility =
+                viewModel.SupportsCaseLifecycle && item.CanRunLifecycleAction
+                    ? Visibility.Visible
+                    : Visibility.Collapsed;
+        }
+    }
+
+    private async void CaseLifecycle_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button button ||
+            button.Tag is not LearningCaseHistoryDisplayItem item ||
+            DataContext is not MainWindowViewModel viewModel)
+        {
+            return;
+        }
+
+        var lookup = await viewModel.FindCaseLifecycleAsync(item);
+        await CaseLifecycleDialogFlow.ShowAsync(
+            XamlRoot,
+            viewModel,
+            lookup);
+    }
+
     private async void RescheduleFocusAction_Click(object sender, RoutedEventArgs e)
     {
         if (sender is not Button button ||
