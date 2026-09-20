@@ -1,0 +1,77 @@
+{
+  "schema_version": 1,
+  "gate": "production-provider-region-data-residency",
+  "status": "blocked",
+  "evaluated_at": "2026-09-21",
+  "provider_candidate": "supabase-hosted",
+  "target_jurisdiction": null,
+  "primary_project_region": {
+    "selection_policy": "specific-region-required-when-jurisdiction-matters",
+    "region": null,
+    "evidence": "provisioned-project-evidence-required"
+  },
+  "data_surfaces": {
+    "postgres": {
+      "authority": "server-authoritative-business-state",
+      "at_rest_region": "inherits-primary-project-region",
+      "accepted": false
+    },
+    "auth": {
+      "authority": "provider-identity-only-application-identity-via-identitylink",
+      "at_rest_region": "project-postgres-auth-schema",
+      "accepted": false
+    },
+    "storage": {
+      "bucket_model": "private",
+      "metadata_region": "project-postgres-storage-schema",
+      "object_origin_region": "inherits-primary-project-region",
+      "edge_cache_scope": "global-cdn-possible",
+      "signed_urls_used_by_xueqing_v1": false,
+      "accepted": false
+    },
+    "edge_invitation_delivery": {
+      "default_execution": "globally-distributed-nearest-request-region",
+      "production_execution_region": null,
+      "region_control": "unresolved",
+      "personal_data": "invitee-email-server-derived-from-authoritative-invitation",
+      "accepted": false
+    },
+    "logs_diagnostics": {
+      "application_pii_logging": "forbidden",
+      "provider_log_residency": null,
+      "log_drains": [],
+      "public_ci_production_data": "forbidden",
+      "accepted": false
+    },
+    "backups": {
+      "database_backup": "provider-plan-dependent",
+      "storage_objects_in_database_backup": false,
+      "backup_residency": null,
+      "independent_storage_object_backup_required": true,
+      "accepted": false
+    }
+  },
+  "production_credentials": {
+    "client_secret_keys_allowed": false,
+    "public_repository_secret_keys_allowed": false,
+    "public_ci_production_secrets_allowed": false,
+    "accepted": true
+  },
+  "blockers": [
+    "target_jurisdiction_not_selected",
+    "exact_production_project_region_not_provisioned_and_verified",
+    "private_storage_global_cdn_residency_not_accepted_or_eliminated",
+    "edge_function_transient_processing_region_not_frozen",
+    "provider_log_residency_not_evidenced",
+    "database_backup_residency_not_evidenced"
+  ],
+  "references": [
+    "https://supabase.com/docs/guides/platform/regions",
+    "https://supabase.com/docs/guides/auth/architecture",
+    "https://supabase.com/docs/guides/storage/cdn/fundamentals",
+    "https://supabase.com/docs/guides/storage/cdn/smart-cdn",
+    "https://supabase.com/docs/guides/functions/regional-invocation",
+    "https://supabase.com/docs/guides/platform/backups",
+    "https://supabase.com/docs/guides/observability/log-drains"
+  ]
+}
