@@ -114,7 +114,9 @@ Evidence / Attachment staging 已在 Android 端完成第一条端到端闭环�
 
 Organization Management vertical slice 已完成第一条真实闭环：Owner/Admin 的权威管理投影、Windows 机构工作区入口门控、成员列表，以及幂等 Organization Invitation intent 均已通过真实 reference-provider E2E；管理可见性与教学责任继续严格分离。
 
-当前唯一执行线已切换到 **Organization Invitation Acceptance**。这一阶段先证明已认证邀请人身份 → provider-neutral invite email → AppUser / IdentityLink onboarding → Membership 原子创建 → invitation acceptance + operation receipt 的幂等链。邮件投递作为独立 provider adapter 在 Acceptance 绿后接入，不让邮件副作用成为领域事实源。
+Organization Invitation Acceptance 已完成并合入主线：已认证邀请人身份通过 provider-neutral invite email 与锁定邀请匹配；新的外部身份可原子创建 application-owned AppUser + IdentityLink + Membership，已有活动 IdentityLink 则复用原 AppUser；邀请状态、Membership 与 operation receipt 同事务提交，重放幂等，并发创建被序列化，且接受邀请永不创建 StudentTeacherAssignment。该链已经通过 backend pgTAP/concurrency、Windows real-provider E2E、Windows real-app/MSIX/Native UX 与 Android device reference-provider exact-head 门禁。
+
+当前唯一执行线已切换到 **Organization Invitation Delivery**。这一阶段只建立可信服务端的通知投递边界与可审计 delivery-attempt 状态：邀请仍由 Xueqing Organization domain 持有，邮件/Auth provider 只负责传输，不成为 Membership、身份或邀请状态的事实源。Windows Invite UI、resend/revoke、角色变更和 Owner transfer 保持在后续独立 Gate，避免把 provider 副作用、领域事务和桌面交互绑成一个大 PR。
 
 动态工程状态以 `docs/project/PROJECT_STATE.yaml` 为准。
 
