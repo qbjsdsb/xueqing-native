@@ -108,7 +108,9 @@ Android 已完成稳定 API 36 的 Kotlin + Compose 基线、PersonalBootstrap-b
 
 Provider Session/Auth 与 **IdentityLink 身份映射** conformance 已完成。应用业务身份由 application-owned `AppUser` 持有；provider-specific identity、SDK 与 transport 继续限制在 Infrastructure Adapter 边界。Projection / Storage 等更广的 provider conformance 仍按独立 Gate 推进，不提前宣称完成。
 
-当前唯一执行线是 **Windows authoritative Case workspace**。服务端已完成 forward-only Learning Case lifecycle、显式 close/reopen、bounded Student Case history，以及 298 项数据库/并发/权限证据；下一步在 Windows 把 Student Detail 的按需完整 Case 列表与 authoritative Learning Case 工作面接起来，再接正式 lifecycle command/recovery。Android 继续保持 Capture-first，不为了桌面组织能力重复建设一整套正式 Case 写入 UI。
+Windows 的 authoritative Case workspace 已完成：Student Detail 按需完整 Case history、Current Focus、Today、Action progression，以及正式 Learning Case lifecycle（confirm / intervene / pending verification / stable / close / reopen）均已接入真实 reference provider。Lifecycle 写入使用 exact Case/Action version、server-side authorization、operation receipt 与加密 Durable Intent；ResultUnknown 只允许复用原 operation_id 继续确认。该链已经通过 Windows Core、真实 Supabase E2E、WinUI cloud build、MSIX 原位升级、加密 LocalState 与 Native UX smoke 的 exact-head 证明。
+
+当前唯一执行线已切换到 **Evidence / Attachment staging**。目标不是先加“上传图片”按钮，而是先冻结文本安全、本地附件 staging、上传状态、Storage 权限、失败重试和远端提交边界；Android 作为 Capture 端优先承担 Photo Picker / Camera / process-death / upload-failure 证据，Windows 后续承担 Evidence 阅读与整理。
 
 动态工程状态以 `docs/project/PROJECT_STATE.yaml` 为准。
 
