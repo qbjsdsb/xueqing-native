@@ -8,6 +8,9 @@ organization_id='20000000-0000-0000-0000-000000000001'
 student_id='30000000-0000-0000-0000-000000000001'
 profile_id='40000000-0000-0000-0000-000000000001'
 assignment_id='50000000-0000-0000-0000-000000000001'
+other_organization_id='20000000-0000-0000-0000-000000000002'
+other_student_id='30000000-0000-0000-0000-000000000002'
+other_profile_id='40000000-0000-0000-0000-000000000002'
 observation_operation_id='9a000000-0000-4000-8000-00000000c001'
 case_operation_id='9a000000-0000-4000-8000-00000000c002'
 
@@ -150,6 +153,19 @@ expect_success() {
   local label="$1"
   if [[ ! "$rpc_status" =~ ^2 ]]; then
     echo "$label expected success, got HTTP $rpc_status: $rpc_body" >&2
+    exit 1
+  fi
+}
+
+expect_error_message() {
+  local label="$1" expected="$2" actual
+  if [[ "$rpc_status" =~ ^2 ]]; then
+    echo "$label unexpectedly succeeded: $rpc_body" >&2
+    exit 1
+  fi
+  actual="$(printf '%s' "$rpc_body" | json_get 'message')"
+  if [[ "$actual" != "$expected" ]]; then
+    echo "$label expected '$expected', got '$actual': $rpc_body" >&2
     exit 1
   fi
 }
@@ -317,4 +333,19 @@ compare_projection   'Personal Today Actions v1'   'get_personal_today_actions_v
 
 compare_projection   'OrganizationManagement v1'   'get_organization_management_v1'   "$management_payload"   'organization_management_v1'   'actor.app_user_id'   'members'
 
-echo 'Provider Projection conformance passed: six accepted projections preserve application-owned semantics across independent real external identities.'
+# Provider equivalence must not turn a real external identity into broader
+# business authority. Teacher A is deliberately an active teaching-capable
+# member of Organization B, but has no assignment there and is not a manager.
+cross_teaching_payload="{\"p_organization_id\":\"$other_organization_id\",\"p_student_id\":\"$other_student_id\",\"p_subject_profile_id\":\"$other_profile_id\"}"
+cross_management_payload="{\"p_organization_id\":\"$other_organization_id\"}"
+
+call_rpc "$token_a" 'get_student_recent_observations_v1' "$cross_teaching_payload"
+expect_error_message 'Identity A cross-Organization teaching projection' 'XQ_TEACHING_CONTEXT_UNAVAILABLE'
+
+call_rpc "$token_b" 'get_student_learning_focus_v1' "$cross_teaching_payload"
+expect_error_message 'Identity B cross-Organization learning projection' 'XQ_TEACHING_CONTEXT_UNAVAILABLE'
+
+call_rpc "$token_a" 'get_organization_management_v1' "$cross_management_payload"
+expect_error_message 'Identity A teacher-only Organization Management projection' 'XQ_ORGANIZATION_MANAGEMENT_REQUIRED'
+
+echo 'Provider Projection conformance passed: six accepted projections preserve application-owned semantics across independent real external identities and real provider sessions remain fail-closed outside live business scope.'
