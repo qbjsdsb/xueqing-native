@@ -52,6 +52,8 @@ completed_gates:
   - organization-invitation-acceptance
   - organization-invitation-delivery
   - provider-projection-conformance
+  - provider-storage-conformance
+  - provider-adapter-conformance-spike
 
 open_gates:
   - windows-organization-invitation-product-closure
