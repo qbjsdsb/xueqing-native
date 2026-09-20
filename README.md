@@ -122,7 +122,9 @@ Provider Projection Conformance 已完成并合入主线：两个独立真实外
 
 Provider Storage Conformance 也已完成并合入主线：两个独立真实外部 Auth 身份只通过 `IdentityLink` 解析到同一 application-owned AppUser 后，private Attachment upload/read/cross-commit 保持同一教学权限语义；单个 IdentityLink revoke 只撤销对应 provider identity；匿名读取继续拒绝；最终迁移后的 Storage authorization helper 不得直接依赖 `auth.jwt()` / `auth.uid()`。Session/Auth、IdentityLink、Projection 与 Storage 四层证据因此共同关闭原先更宽泛的 Provider Adapter Conformance Spike。
 
-当前唯一执行线已切换到 **Windows Organization Invitation Product Closure**。后端 Create → Delivery → Authentication → Acceptance → Membership 链已经有真实 provider 证据；本阶段不再扩张领域模型，而是把邀请发起端安全接入 WinUI：输入邮箱/角色/任教能力，创建权威 Invitation，调用可信 Delivery adapter，并在 ResultUnknown 时持久化原 operation/intent 只允许确认同一次操作。resend/revoke、角色变更、Owner transfer 与复杂成员治理继续保持独立后续 Gate。
+Windows Organization Invitation Product Closure 已完成并合入主线：负责人/管理员现在可以从真实 Organization Management capability 打开原生 WinUI 邀请流程，输入邮箱、角色与任教能力；Create 与 Delivery 使用各自稳定 operation id，并先写入 SQLite3MC + DPAPI 加密 recovery，再执行任何结果可能不确定的网络操作。CreatePending / DeliveryPending 只允许 same-operation 确认，明确 provider 拒绝不会自动 resend，管理权限变化和本机持久化失败均 fail closed。Windows reference-provider E2E 已继续穿过真实 Delivery Edge adapter，并通过 MSIX 安装升级与 Native UX smoke 的 exact-head 证明。
+
+当前唯一执行线已切换到 **Production Provider Region / Data Residency Gate**。这一阶段不新增业务功能，也不把开发阶段 Supabase 直接宣称为生产方案；先逐项冻结和验证 PostgreSQL、Auth、private Storage、Edge/邮件投递、日志/诊断与备份的实际驻留区域、跨区域数据流、生产凭据边界和可恢复性前置条件。只有证据可追溯的生产拓扑才能进入后续 Backup/Restore 与 Signing/Recovery Gate。
 
 动态工程状态以 `docs/project/PROJECT_STATE.yaml` 为准。
 
