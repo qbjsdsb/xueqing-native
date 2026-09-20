@@ -1,7 +1,7 @@
 begin;
 set local search_path = public, extensions;
 
-select plan(28);
+select plan(25);
 
 select ok(
     (
@@ -149,6 +149,8 @@ select throws_ok(
     'different operation cannot duplicate an in-flight delivery'
 );
 
+reset role;
+
 select is(
     (
         select pg_catalog.count(*)
@@ -182,7 +184,6 @@ select is(
     'delivery claim never creates StudentTeacherAssignment'
 );
 
-reset role;
 set local role service_role;
 
 select is(
