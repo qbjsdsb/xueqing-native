@@ -50,7 +50,6 @@ completed_gates:
   - evidence-attachment-staging
   - organization-management-vertical-slice
   - organization-invitation-acceptance
-  - organization-invitation-acceptance
 
 open_gates:
   - provider-adapter-conformance-spike
