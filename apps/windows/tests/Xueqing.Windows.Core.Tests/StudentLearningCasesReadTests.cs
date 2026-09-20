@@ -55,7 +55,7 @@ public sealed class StudentLearningCasesReadTests
             "\"is_current_actor_responsibility\":false",
             StringComparison.Ordinal);
 
-        Assert.ThrowsException<InvalidDataException>(
+        ExpectThrows<InvalidDataException>(
             () => StudentLearningCasesJsonParser.Parse(json, Scope, ActorId));
     }
 
@@ -75,7 +75,7 @@ public sealed class StudentLearningCasesReadTests
             """,
             StringComparison.Ordinal);
 
-        Assert.ThrowsException<InvalidDataException>(
+        ExpectThrows<InvalidDataException>(
             () => StudentLearningCasesJsonParser.Parse(json, Scope, ActorId));
     }
 
@@ -95,7 +95,7 @@ public sealed class StudentLearningCasesReadTests
             "\"primary_action\":null",
             StringComparison.Ordinal);
 
-        Assert.ThrowsException<InvalidDataException>(
+        ExpectThrows<InvalidDataException>(
             () => StudentLearningCasesJsonParser.Parse(json, Scope, ActorId));
     }
 
@@ -139,6 +139,22 @@ public sealed class StudentLearningCasesReadTests
         Assert.AreEqual(StudentLearningCasesViewStatus.AccessDenied, denied.Status);
         Assert.IsNull(denied.Snapshot);
         Assert.AreEqual("XQ_TEACHING_CONTEXT_UNAVAILABLE", denied.FailureCode);
+    }
+
+    private static TException ExpectThrows<TException>(Action action)
+        where TException : Exception
+    {
+        try
+        {
+            action();
+        }
+        catch (TException exception)
+        {
+            return exception;
+        }
+
+        Assert.Fail($"Expected exception of type {typeof(TException).Name}.");
+        throw new InvalidOperationException("Unreachable.");
     }
 
     private static string ValidJson() =>
