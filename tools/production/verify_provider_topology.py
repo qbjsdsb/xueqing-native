@@ -137,6 +137,24 @@ def validate(value: dict, require_accepted: bool, repo_root: Path) -> None:
         "independent Storage object backup requirement must remain explicit",
     )
 
+    hosted = value.get("hosted_environment_observation")
+    require(isinstance(hosted, dict), "hosted_environment_observation must be an object")
+    require(
+        isinstance(hosted.get("native_production_project_provisioned"), bool),
+        "native production project provisioning state must be explicit",
+    )
+
+    constraints = value.get("deployment_constraints")
+    require(isinstance(constraints, dict), "deployment_constraints must be an object")
+    require(
+        constraints.get("zero_paid_dependency_target") is True,
+        "zero-paid dependency target must remain explicit",
+    )
+    require(
+        constraints.get("hosted_free_can_be_sole_production_durability_layer") is False,
+        "hosted Free must not be treated as Xueqing's sole durability layer",
+    )
+
     blockers = value.get("blockers")
     require(isinstance(blockers, list), "blockers must be an array")
     require(all(isinstance(item, str) and item for item in blockers), "blockers must be strings")
@@ -165,6 +183,15 @@ def validate(value: dict, require_accepted: bool, repo_root: Path) -> None:
         isinstance(region, str) and REGION_RE.match(region) is not None,
         "accepted topology requires an exact provider region identifier",
     )
+    supported_primary = primary.get("supported_regions_snapshot")
+    require(
+        isinstance(supported_primary, list) and region in supported_primary,
+        "accepted topology region is not in the checked provider region snapshot",
+    )
+    require(
+        hosted.get("native_production_project_provisioned") is True,
+        "accepted topology requires a provisioned native production project",
+    )
 
     for key in (
         "postgres",
@@ -179,10 +206,25 @@ def validate(value: dict, require_accepted: bool, repo_root: Path) -> None:
             f"accepted topology requires data surface acceptance: {key}",
         )
 
-    edge_region = surfaces["edge_invitation_delivery"].get("production_execution_region")
+    edge = surfaces["edge_invitation_delivery"]
+    edge_region = edge.get("production_execution_region")
     require(
         isinstance(edge_region, str) and edge_region,
         "accepted topology requires explicit Edge execution-region policy",
+    )
+    supported_edge = edge.get("supported_regions_snapshot")
+    require(
+        isinstance(supported_edge, list) and edge_region in supported_edge,
+        "accepted Edge execution region is not in the checked regional-invocation snapshot",
+    )
+    if edge.get("same_region_with_primary_required") is True:
+        require(
+            edge_region == region,
+            "Invitation Delivery execution region must match primary project region",
+        )
+    require(
+        edge.get("global_gateway_transit") not in {None, "unresolved"},
+        "accepted topology requires an explicit global gateway transit decision",
     )
     require(
         surfaces["logs_diagnostics"].get("provider_log_residency"),
