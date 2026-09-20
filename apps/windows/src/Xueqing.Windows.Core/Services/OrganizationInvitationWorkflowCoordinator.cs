@@ -100,10 +100,18 @@ public sealed class OrganizationInvitationWorkflowCoordinator
                         null);
                 }
 
-                await TryRemoveKnownRejectedAsync(
-                    expectedActorAppUserId,
-                    intent,
-                    cancellationToken);
+                if (!await TryRemoveKnownRejectedAsync(
+                        expectedActorAppUserId,
+                        intent,
+                        cancellationToken))
+                {
+                    return new OrganizationInvitationWorkflowResult(
+                        OrganizationInvitationWorkflowOutcome.LocalDurabilityFailure,
+                        intent,
+                        createResult.Failure,
+                        null);
+                }
+
                 return new OrganizationInvitationWorkflowResult(
                     OrganizationInvitationWorkflowOutcome.Rejected,
                     null,
@@ -235,7 +243,7 @@ public sealed class OrganizationInvitationWorkflowCoordinator
             deliveryResult.Failure);
     }
 
-    private async Task TryRemoveKnownRejectedAsync(
+    private async Task<bool> TryRemoveKnownRejectedAsync(
         Guid actorAppUserId,
         OrganizationInvitationRecoveryIntent intent,
         CancellationToken cancellationToken)
@@ -247,6 +255,7 @@ public sealed class OrganizationInvitationWorkflowCoordinator
                 intent.OrganizationId,
                 intent.CreateOperationId,
                 cancellationToken);
+            return true;
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -255,7 +264,9 @@ public sealed class OrganizationInvitationWorkflowCoordinator
         catch
         {
             // The deterministic server rejection can be rediscovered locally;
-            // keeping the same operation is safer than fabricating a new intent.
+            // keep the same operation and surface local durability failure
+            // instead of encouraging a second formal intent.
+            return false;
         }
     }
 }
