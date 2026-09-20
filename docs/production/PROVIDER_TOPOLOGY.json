@@ -73,5 +73,13 @@
     "https://supabase.com/docs/guides/functions/regional-invocation",
     "https://supabase.com/docs/guides/platform/backups",
     "https://supabase.com/docs/guides/observability/log-drains"
-  ]
+  ],
+  "repository_evidence": {
+    "private_attachment_bucket_migration": "backend/supabase/migrations/20260920055000_observation_attachment_v1.sql",
+    "invitation_delivery_server_adapter": "backend/supabase/functions/organization-invitation-delivery/index.ts",
+    "production_client_source_roots": [
+      "apps/windows/src",
+      "apps/android/app/src/main"
+    ]
+  }
 }
