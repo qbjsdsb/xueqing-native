@@ -39,12 +39,19 @@ public sealed class OrganizationManagementReferenceProviderE2ETest
         Assert.IsTrue(management.IsSuccess, management.Failure?.Code);
         Assert.IsNotNull(management.Snapshot);
         Assert.AreEqual(OrganizationMembershipRole.Owner, management.Snapshot.ActorMembershipRole);
-        Assert.AreEqual(3, management.Snapshot.Members.Count);
+        Assert.IsTrue(
+            BaselineMemberIds.All(expected =>
+                management.Snapshot.Members.Any(member => member.AppUserId == expected)),
+            "Organization Management must include every deterministic baseline member even when another E2E has legitimately added members.");
+        Assert.AreEqual(
+            management.Snapshot.Members.Count,
+            management.Snapshot.Members.Select(member => member.AppUserId).Distinct().Count(),
+            "Organization Management must not duplicate members.");
         Assert.IsTrue(management.Snapshot.Capabilities.CanInviteAdmin);
         Assert.IsTrue(management.Snapshot.Capabilities.CanInviteTeacher);
         Assert.IsFalse(management.Snapshot.Capabilities.CanInviteOwner);
         Assert.IsTrue(management.Snapshot.Members.Any(member =>
-            member.AppUserId == Guid.Parse("10000000-0000-0000-0000-000000000003") &&
+            member.AppUserId == DisabledMemberId &&
             member.MembershipStatus == OrganizationMembershipStatus.Disabled));
 
         var bootstrapAfter = await bootstrapReader.ReadAsync();
@@ -66,4 +73,14 @@ public sealed class OrganizationManagementReferenceProviderE2ETest
 
     private static readonly Guid OrganizationId =
         Guid.Parse("20000000-0000-0000-0000-000000000001");
+
+    private static readonly Guid DisabledMemberId =
+        Guid.Parse("10000000-0000-0000-0000-000000000003");
+
+    private static readonly Guid[] BaselineMemberIds =
+    [
+        Guid.Parse("10000000-0000-0000-0000-000000000001"),
+        Guid.Parse("10000000-0000-0000-0000-000000000002"),
+        DisabledMemberId,
+    ];
 }

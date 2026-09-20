@@ -112,7 +112,9 @@ Windows 的 authoritative Case workspace 已完成：Student Detail 按需完整
 
 Evidence / Attachment staging 已在 Android 端完成第一条端到端闭环，并通过 exact-head 的 Foundation、Android device/durability 与真实 Supabase reference-provider 门禁。
 
-当前唯一执行线已切换到 **Organization Management vertical slice**。这一阶段坚持 server-first：先冻结 owner / admin / teacher 的管理可见性、成员投影与高风险命令边界，再把 Windows 现有“机构工作区”原型接到权威数据。个人教学工作区与机构管理工作区继续严格分离；管理可见性绝不自动成为教学责任或 StudentTeacherAssignment。
+Organization Management vertical slice 已完成第一条真实闭环：Owner/Admin 的权威管理投影、Windows 机构工作区入口门控、成员列表，以及幂等 Organization Invitation intent 均已通过真实 reference-provider E2E；管理可见性与教学责任继续严格分离。
+
+当前唯一执行线已切换到 **Organization Invitation Acceptance**。这一阶段先证明已认证邀请人身份 → provider-neutral invite email → AppUser / IdentityLink onboarding → Membership 原子创建 → invitation acceptance + operation receipt 的幂等链。邮件投递作为独立 provider adapter 在 Acceptance 绿后接入，不让邮件副作用成为领域事实源。
 
 动态工程状态以 `docs/project/PROJECT_STATE.yaml` 为准。
 
