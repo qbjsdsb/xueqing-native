@@ -452,13 +452,13 @@ select set_config(
 );
 set local role authenticated;
 select throws_ok(
-    $
+    $$
     select public.accept_organization_invitation_v1(
         '94000000-0000-0000-0000-00000000a099'::uuid,
         pg_catalog.current_setting('xq.test.inactive_link_invitation_id')::uuid,
         '停用身份链接用户'
     )
-    $,
+    $$,
     'P0001',
     'XQ_IDENTITY_LINK_INACTIVE',
     'inactive external identity link fails closed without replacement onboarding'
