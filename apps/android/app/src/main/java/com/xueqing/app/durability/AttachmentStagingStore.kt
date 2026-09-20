@@ -87,16 +87,27 @@ class AttachmentStagingStore(
         }
     }
 
-    suspend fun reconcileOrphanedFiles() {
+    suspend fun reconcileOrphanedFiles(
+        gracePeriodMillis: Long = DEFAULT_RECONCILIATION_GRACE_MILLIS,
+    ) {
+        require(gracePeriodMillis >= 0)
+        // Read the authoritative local metadata first. If SQLCipher/Room cannot
+        // be opened, no file deletion occurs.
         val referenced = dao.readReferencedFileNames().toSet()
+        val cutoff = Math.subtractExact(clock(), gracePeriodMillis)
         withContext(Dispatchers.IO) {
-            protectedFiles.listEncryptedFileNames()
+            // A grace window prevents startup reconciliation racing a newly
+            // staging attachment between file publish and Room metadata insert.
+            protectedFiles.deleteTemporaryFilesOlderThan(cutoff)
+            protectedFiles.listEncryptedFileNamesOlderThan(cutoff)
                 .filterNot(referenced::contains)
                 .forEach(protectedFiles::delete)
         }
     }
 
     companion object {
+        const val DEFAULT_RECONCILIATION_GRACE_MILLIS = 15 * 60 * 1000L
+
         val ALLOWED_CONTENT_TYPES = setOf(
             "image/jpeg",
             "image/png",

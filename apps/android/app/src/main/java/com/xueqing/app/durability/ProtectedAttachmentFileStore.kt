@@ -124,13 +124,34 @@ class ProtectedAttachmentFileStore(
         return !file.exists() || file.delete()
     }
 
-    fun listEncryptedFileNames(): Set<String> =
+    fun listEncryptedFileNamesOlderThan(cutoffEpochMillis: Long): Set<String> =
         stagingDirectory.listFiles()
             ?.asSequence()
-            ?.filter { it.isFile && ATTACHMENT_FILE_PATTERN.matches(it.name) }
+            ?.filter {
+                it.isFile &&
+                    ATTACHMENT_FILE_PATTERN.matches(it.name) &&
+                    it.lastModified() <= cutoffEpochMillis
+            }
             ?.map { it.name }
             ?.toSet()
             .orEmpty()
+
+    fun deleteTemporaryFilesOlderThan(cutoffEpochMillis: Long): Int {
+        var deleted = 0
+        stagingDirectory.listFiles()
+            ?.asSequence()
+            ?.filter {
+                it.isFile &&
+                    TEMPORARY_FILE_PATTERN.matches(it.name) &&
+                    it.lastModified() <= cutoffEpochMillis
+            }
+            ?.forEach { file ->
+                if (file.delete()) {
+                    deleted += 1
+                }
+            }
+        return deleted
+    }
 
     internal fun encryptedFile(fileName: String): File = fileForName(fileName)
 
@@ -190,6 +211,8 @@ class ProtectedAttachmentFileStore(
         private val MAGIC = byteArrayOf(0x58, 0x51, 0x41, 0x53, 0x01)
         private val ATTACHMENT_FILE_PATTERN =
             Regex("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\\.xqas$")
+        private val TEMPORARY_FILE_PATTERN =
+            Regex("^\\.tmp-[0-9a-fA-F-]{36}$")
 
         fun purgeAll(context: Context) {
             File(context.applicationContext.noBackupFilesDir, DIRECTORY_NAME).deleteRecursively()

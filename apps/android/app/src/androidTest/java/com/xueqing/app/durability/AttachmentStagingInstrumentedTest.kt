@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import java.io.ByteArrayInputStream
+import java.io.File
 import java.nio.charset.StandardCharsets
 import java.util.UUID
 import kotlinx.coroutines.runBlocking
@@ -11,6 +12,7 @@ import org.junit.After
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Assert.assertNotNull
 import org.junit.Before
 import org.junit.Test
@@ -67,6 +69,53 @@ class AttachmentStagingInstrumentedTest {
             .use { it.readBytes() }
         assertArrayEquals(sentinel, decrypted)
         reopened.close()
+    }
+
+    @Test
+    fun reconciliationDeletesOnlyStaleUnreferencedFilesAndOldTemporaryFiles() = runBlocking {
+        val database = DraftDatabase.create(context)
+        val scope = scope()
+        val session = DraftStore(database.draftDao()) { NOW }.open(scope)
+        val protectedFiles = ProtectedAttachmentFileStore(context)
+        val staging = AttachmentStagingStore(
+            dao = database.attachmentStagingDao(),
+            protectedFiles = protectedFiles,
+            clock = { NOW },
+        )
+
+        val referenced = staging.stageDerivative(
+            scope = scope,
+            draftEpoch = session.epoch,
+            assignmentId = ASSIGNMENT_ID,
+            attachmentId = UUID.fromString("71000000-0000-0000-0000-000000000010"),
+            contentType = "image/jpeg",
+            source = ByteArrayInputStream("referenced".toByteArray()),
+        )
+        val orphan = protectedFiles.stage(
+            attachmentId = UUID.fromString("71000000-0000-0000-0000-000000000011"),
+            source = ByteArrayInputStream("orphan".toByteArray()),
+        )
+
+        val referencedFile = protectedFiles.encryptedFile(referenced.localEncryptedFileName)
+        val orphanFile = protectedFiles.encryptedFile(orphan.fileName)
+        val oldTimestamp = NOW - AttachmentStagingStore.DEFAULT_RECONCILIATION_GRACE_MILLIS - 1
+        assertTrue(referencedFile.setLastModified(oldTimestamp))
+        assertTrue(orphanFile.setLastModified(oldTimestamp))
+
+        val temporary = File(
+            requireNotNull(orphanFile.parentFile),
+            ".tmp-71000000-0000-0000-0000-000000000012",
+        ).apply {
+            writeBytes(byteArrayOf(1, 2, 3))
+            assertTrue(setLastModified(oldTimestamp))
+        }
+
+        staging.reconcileOrphanedFiles()
+
+        assertTrue(referencedFile.exists())
+        assertFalse(orphanFile.exists())
+        assertFalse(temporary.exists())
+        database.close()
     }
 
     private fun scope() = DraftScope(
