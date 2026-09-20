@@ -139,8 +139,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          schema='apps/android/app/schemas/com.xueqing.app.durability.DraftDatabase/1.json'
-          test -f "$schema"
+          schema_dir='apps/android/app/schemas/com.xueqing.app.durability.DraftDatabase'
+          test -f "$schema_dir/1.json"
+          test -f "$schema_dir/2.json"
+          test -f "$schema_dir/3.json"
           git diff --exit-code -- apps/android/app/schemas
 
       - name: Run Android lint
@@ -338,8 +340,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          schema='apps/android/app/schemas/com.xueqing.app.durability.DraftDatabase/1.json'
-          test -f "$schema"
+          schema_dir='apps/android/app/schemas/com.xueqing.app.durability.DraftDatabase'
+          test -f "$schema_dir/1.json"
+          test -f "$schema_dir/2.json"
+          test -f "$schema_dir/3.json"
           git diff --exit-code -- apps/android/app/schemas
 
       - name: Print emulator log on failure

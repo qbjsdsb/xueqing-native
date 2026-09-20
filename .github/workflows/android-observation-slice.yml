@@ -24,6 +24,8 @@ on:
       - 'apps/android/app/src/androidTest/java/com/xueqing/app/infrastructure/remote/LearningReadReferenceProviderE2ETest.kt'
       - 'backend/supabase/**'
       - 'contracts/commands/CREATE_OBSERVATION_V1.md'
+      - 'contracts/commands/COMMIT_OBSERVATION_ATTACHMENT_V1.md'
+      - 'contracts/attachments/**'
       - 'contracts/commands/CREATE_LEARNING_CASE_V1.md'
       - 'contracts/errors/CREATE_OBSERVATION_ERRORS.md'
       - 'contracts/projections/PERSONAL_BOOTSTRAP_V1.md'
@@ -40,8 +42,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  room-v2-contract:
-    name: room-v2-contract
+  room-v3-contract:
+    name: room-v3-contract
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -91,13 +93,14 @@ jobs:
           set -euo pipefail
           gradle -p apps/android :app:compileDebugKotlin :app:compileDebugAndroidTestKotlin --no-daemon --stacktrace
 
-      - name: Verify committed Room v1 and v2 schemas are exact
+      - name: Verify committed Room v1, v2 and v3 schemas are exact
         shell: bash
         run: |
           set -euo pipefail
           schema_dir='apps/android/app/schemas/com.xueqing.app.durability.DraftDatabase'
           test -f "$schema_dir/1.json"
           test -f "$schema_dir/2.json"
+          test -f "$schema_dir/3.json"
           status="$(git status --porcelain -- apps/android/app/schemas)"
           if [ -n "$status" ]; then
             echo 'Room schema drift detected:' >&2
@@ -117,7 +120,7 @@ jobs:
 
   reference-provider-e2e:
     name: reference-provider-e2e
-    needs: room-v2-contract
+    needs: room-v3-contract
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
