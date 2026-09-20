@@ -1,7 +1,7 @@
 schema_version: 1
 project: xueqing-native
 phase: phase-1
-milestone: case-lifecycle-and-verification
+milestone: windows-authoritative-case-workspace
 status: active
 architecture_baseline: v1-accepted
 
@@ -43,6 +43,10 @@ completed_gates:
   - action-reschedule-and-verification-next-action
   - windows-action-progression-ux
   - android-current-focus-lightweight-read
+  - student-learning-case-history
+  - case-lifecycle-backend
+  - architecture-boundary-guard
+  - native-presentation-evolvability-foundation
 
 open_gates:
   - provider-adapter-conformance-spike
@@ -53,9 +57,9 @@ open_gates:
 next_execution:
   parallel_limit: 1
   lines:
-    - case-lifecycle-and-verification
+    - windows-authoritative-case-workspace
   after_current_green:
-    - evidence-attachment-staging
+    - windows-case-lifecycle-ux
 
 later:
   - evidence-attachment-staging

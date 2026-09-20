@@ -108,7 +108,7 @@ Android 已完成稳定 API 36 的 Kotlin + Compose 基线、PersonalBootstrap-b
 
 Provider Session/Auth 与 **IdentityLink 身份映射** conformance 已完成。应用业务身份由 application-owned `AppUser` 持有；provider-specific identity、SDK 与 transport 继续限制在 Infrastructure Adapter 边界。Projection / Storage 等更广的 provider conformance 仍按独立 Gate 推进，不提前宣称完成。
 
-当前唯一执行线是 **Android Current Focus + Today lightweight read**。目标是复用已经冻结的 Learning Case / Current Focus / Personal Today 服务端语义，在 Android 建立 provider-neutral read contract、严格 adapter/parser、application state 与原生 Compose 只读体验，让 Teaching Pocket 不只能够“记录”，还能够可靠回答“这个学生现在最需要解决什么、我今天下一步做什么”。这一切片首轮不引入 Android 正式 Action 写命令，不扩大成通用同步框架，也不重做已接受的 Quick Capture 架构。
+当前唯一执行线是 **Windows authoritative Case workspace**。服务端已完成 forward-only Learning Case lifecycle、显式 close/reopen、bounded Student Case history，以及 298 项数据库/并发/权限证据；下一步在 Windows 把 Student Detail 的按需完整 Case 列表与 authoritative Learning Case 工作面接起来，再接正式 lifecycle command/recovery。Android 继续保持 Capture-first，不为了桌面组织能力重复建设一整套正式 Case 写入 UI。
 
 动态工程状态以 `docs/project/PROJECT_STATE.yaml` 为准。
 
