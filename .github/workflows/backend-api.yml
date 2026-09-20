@@ -94,6 +94,18 @@ jobs:
           set -euo pipefail
           bash backend/supabase/tests/provider_adapter_conformance.sh
 
+      - name: Prove Observation Attachment Storage RLS and immutable commit boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash backend/supabase/tests/observation_attachment_storage_conformance.sh
+
+      - name: Prove Observation Attachment commit locks live teaching authority
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash backend/supabase/tests/observation_attachment_concurrency.sh
+
       - name: Print safe local-stack diagnostics on failure
         if: failure()
         shell: bash
