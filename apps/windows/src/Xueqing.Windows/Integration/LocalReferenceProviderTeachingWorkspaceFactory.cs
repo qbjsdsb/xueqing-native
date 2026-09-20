@@ -63,6 +63,11 @@ internal static class LocalReferenceProviderTeachingWorkspaceFactory
             projectUri,
             apiKey,
             AccessTokenProvider);
+        var caseHistoryReader = new PostgrestStudentLearningCasesReader(
+            httpClient,
+            projectUri,
+            apiKey,
+            AccessTokenProvider);
         var todayReader = new PostgrestPersonalTodayActionsReader(
             httpClient,
             projectUri,
@@ -98,6 +103,7 @@ internal static class LocalReferenceProviderTeachingWorkspaceFactory
                 bootstrapReader,
                 new StudentRecentObservationsCoordinator(recentReader)),
             new StudentLearningFocusCoordinator(focusReader),
+            new StudentLearningCasesCoordinator(caseHistoryReader),
             new PersonalTodayActionsCoordinator(todayReader),
             createLearningCase,
             createLearningCaseRecovery,
