@@ -76,6 +76,12 @@ Each projection still re-evaluates its own live authority:
 
 Provider Session/Auth and IdentityLink revoke semantics remain covered by their dedicated conformance gates.
 
+The executable provider conformance matrix also proves that real provider sessions remain fail-closed outside live business scope:
+
+- an actor who is an active teaching-capable member of another Organization but has no matching Student Teacher Assignment cannot read that Organization's teaching projections;
+- a teacher-only Membership cannot read Organization Management;
+- these denials use the same non-enumerating domain errors as the individual projection contracts.
+
 ## Provider replacement rule
 
 Supabase is the current development/reference provider, not the semantic owner of these contracts.
