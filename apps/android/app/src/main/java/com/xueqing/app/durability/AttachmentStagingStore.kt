@@ -75,16 +75,25 @@ class AttachmentStagingStore(
     suspend fun discardUnboundDraft(
         scope: DraftScope,
         draftEpoch: Long,
-    ) {
+    ): Boolean {
         val rows = dao.readForDraft(scope.storageKey, draftEpoch)
             .filter {
                 it.state == AttachmentStagingState.Staged &&
                     it.parentObservationOperationId == null
             }
         dao.deleteUnboundForDraft(scope.storageKey, draftEpoch)
-        withContext(Dispatchers.IO) {
-            rows.forEach { protectedFiles.delete(it.localEncryptedFileName) }
+        return deleteProtectedFilesBestEffort(rows.map { it.localEncryptedFileName })
+    }
+
+    suspend fun deleteProtectedFilesBestEffort(
+        fileNames: Collection<String>,
+    ): Boolean = withContext(Dispatchers.IO) {
+        var allDeleted = true
+        fileNames.forEach { fileName ->
+            val deleted = runCatching { protectedFiles.delete(fileName) }.getOrDefault(false)
+            allDeleted = allDeleted && deleted
         }
+        allDeleted
     }
 
     suspend fun reconcileOrphanedFiles(

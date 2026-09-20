@@ -120,6 +120,48 @@ class DurableIntentDaoInstrumentedTest {
     }
 
     @Test
+    fun discardAtomicallyRetiresDraftAndUnboundAttachmentMetadata() = runBlocking {
+        val session = draftStore.open(scope)
+        assertTrue(draftStore.save(session, "准备连同照片一起丢弃的草稿"))
+        val attachment = AttachmentStagingEntity(
+            attachmentId = "71000000-0000-0000-0000-000000000030",
+            scopeKey = scope.storageKey,
+            draftEpoch = session.epoch,
+            environmentId = scope.environmentId,
+            appUserId = scope.appUserId,
+            organizationId = scope.organizationId,
+            studentId = scope.studentId,
+            subjectProfileId = scope.subjectId,
+            assignmentId = "66666666-6666-6666-6666-666666666666",
+            localEncryptedFileName = "71000000-0000-0000-0000-000000000030.xqas",
+            contentType = "image/jpeg",
+            byteSize = 256,
+            state = AttachmentStagingState.Staged,
+            parentObservationOperationId = null,
+            authoritativeObservationId = null,
+            remoteObjectName = null,
+            attachmentCommitOperationId = null,
+            lastErrorClass = null,
+            createdAtEpochMillis = NOW,
+            updatedAtEpochMillis = NOW,
+        )
+        database.attachmentStagingDao().insert(attachment)
+
+        val result = requireNotNull(
+            dao.discardDraft(
+                scopeKey = scope.storageKey,
+                expectedEpoch = session.epoch,
+            ),
+        )
+
+        assertEquals(session.epoch + 1, result.nextEpoch)
+        assertEquals(listOf(attachment.localEncryptedFileName), result.attachmentFileNames)
+        assertNull(draftStore.load(scope))
+        assertNull(database.attachmentStagingDao().read(attachment.attachmentId))
+        assertFalse(draftStore.save(session, "旧 epoch 不能复活"))
+    }
+
+    @Test
     fun failedOutboxInsertRollsBackDraftRetirementAndEpochAdvance() = runBlocking {
         val existingSession = draftStore.open(scope)
         val duplicateOperationId = UUID.randomUUID()

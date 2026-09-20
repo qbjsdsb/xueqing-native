@@ -8,6 +8,11 @@ import androidx.room.Transaction
 import java.util.UUID
 import kotlinx.coroutines.flow.Flow
 
+data class DraftDiscardResult(
+    val nextEpoch: Long,
+    val attachmentFileNames: List<String>,
+)
+
 @Dao
 interface DurableIntentDao {
     @Insert(onConflict = OnConflictStrategy.IGNORE)
@@ -47,6 +52,37 @@ interface DurableIntentDao {
         stagedState: String = AttachmentStagingState.Staged,
         waitingState: String = AttachmentStagingState.WaitingForObservation,
         updatedAtEpochMillis: Long,
+    ): Int
+
+    @Query(
+        """
+        SELECT local_encrypted_file_name FROM attachment_staging
+        WHERE scope_key = :scopeKey
+          AND draft_epoch = :draftEpoch
+          AND state = :stagedState
+          AND parent_observation_operation_id IS NULL
+        ORDER BY attachment_id ASC
+        """,
+    )
+    suspend fun readUnboundAttachmentFileNamesForDraft(
+        scopeKey: String,
+        draftEpoch: Long,
+        stagedState: String = AttachmentStagingState.Staged,
+    ): List<String>
+
+    @Query(
+        """
+        DELETE FROM attachment_staging
+        WHERE scope_key = :scopeKey
+          AND draft_epoch = :draftEpoch
+          AND state = :stagedState
+          AND parent_observation_operation_id IS NULL
+        """,
+    )
+    suspend fun deleteUnboundAttachmentsForDraft(
+        scopeKey: String,
+        draftEpoch: Long,
+        stagedState: String = AttachmentStagingState.Staged,
     ): Int
 
     @Query("SELECT * FROM observation_outbox WHERE operation_id = :operationId LIMIT 1")
@@ -198,6 +234,37 @@ interface DurableIntentDao {
         leaseId: String,
         errorClass: String,
     ): Int
+
+    @Transaction
+    suspend fun discardDraft(
+        scopeKey: String,
+        expectedEpoch: Long,
+    ): DraftDiscardResult? {
+        ensureScopeState(DraftScopeStateEntity(scopeKey = scopeKey, epoch = 0))
+        if (readEpoch(scopeKey) != expectedEpoch) {
+            return null
+        }
+
+        val attachmentFileNames = readUnboundAttachmentFileNamesForDraft(
+            scopeKey = scopeKey,
+            draftEpoch = expectedEpoch,
+        )
+        deleteUnboundAttachmentsForDraft(
+            scopeKey = scopeKey,
+            draftEpoch = expectedEpoch,
+        )
+        deleteDraft(scopeKey)
+
+        val nextEpoch = Math.addExact(expectedEpoch, 1)
+        if (advanceEpoch(scopeKey, expectedEpoch, nextEpoch) != 1) {
+            error("Draft epoch changed during discard transaction")
+        }
+
+        return DraftDiscardResult(
+            nextEpoch = nextEpoch,
+            attachmentFileNames = attachmentFileNames,
+        )
+    }
 
     @Transaction
     suspend fun submitObservation(

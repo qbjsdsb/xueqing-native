@@ -6,6 +6,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import java.io.ByteArrayInputStream
 import java.io.File
 import java.nio.charset.StandardCharsets
+import java.security.KeyStore
 import java.util.UUID
 import kotlinx.coroutines.runBlocking
 import org.junit.After
@@ -14,6 +15,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.fail
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -69,6 +71,62 @@ class AttachmentStagingInstrumentedTest {
             .use { it.readBytes() }
         assertArrayEquals(sentinel, decrypted)
         reopened.close()
+    }
+
+    @Test
+    fun missingKeystoreKeyFailsClosedWhenProtectedBytesAlreadyExist() = runBlocking {
+        val protectedFiles = ProtectedAttachmentFileStore(context)
+        val first = protectedFiles.stage(
+            attachmentId = UUID.fromString("71000000-0000-0000-0000-000000000020"),
+            source = ByteArrayInputStream("protected-before-key-loss".toByteArray()),
+        )
+
+        KeyStore.getInstance("AndroidKeyStore").apply {
+            load(null)
+            deleteEntry(ProtectedAttachmentFileStore.KEY_ALIAS)
+        }
+
+        try {
+            ProtectedAttachmentFileStore(context).stage(
+                attachmentId = UUID.fromString("71000000-0000-0000-0000-000000000021"),
+                source = ByteArrayInputStream("must-not-get-a-new-key".toByteArray()),
+            )
+            fail("Expected staging to fail closed when encrypted bytes outlive their Keystore key")
+        } catch (_: LocalAttachmentKeyUnavailableException) {
+            // Expected: never silently generate replacement key material.
+        }
+
+        assertTrue(protectedFiles.encryptedFile(first.fileName).exists())
+    }
+
+    @Test
+    fun stagedAttachmentNeverLeaksAcrossStudentScope() = runBlocking {
+        val database = DraftDatabase.create(context)
+        val protectedFiles = ProtectedAttachmentFileStore(context)
+        val staging = AttachmentStagingStore(
+            dao = database.attachmentStagingDao(),
+            protectedFiles = protectedFiles,
+            clock = { NOW },
+        )
+        val originalScope = scope()
+        val originalSession = DraftStore(database.draftDao()) { NOW }.open(originalScope)
+        staging.stageDerivative(
+            scope = originalScope,
+            draftEpoch = originalSession.epoch,
+            assignmentId = ASSIGNMENT_ID,
+            attachmentId = UUID.fromString("71000000-0000-0000-0000-000000000022"),
+            contentType = "image/jpeg",
+            source = ByteArrayInputStream("student-a-only".toByteArray()),
+        )
+
+        val otherScope = originalScope.copy(
+            studentId = "30000000-0000-0000-0000-000000000099",
+        )
+        val otherSession = DraftStore(database.draftDao()) { NOW }.open(otherScope)
+
+        assertTrue(staging.readForDraft(otherScope, otherSession.epoch).isEmpty())
+        assertEquals(1, staging.readForDraft(originalScope, originalSession.epoch).size)
+        database.close()
     }
 
     @Test

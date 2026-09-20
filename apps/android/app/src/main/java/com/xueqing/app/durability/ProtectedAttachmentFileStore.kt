@@ -164,6 +164,12 @@ class ProtectedAttachmentFileStore(
         val keyStore = loadKeyStore()
         (keyStore.getKey(KEY_ALIAS, null) as? SecretKey)?.let { return it }
 
+        if (hasPublishedEncryptedFiles()) {
+            throw LocalAttachmentKeyUnavailableException(
+                "Protected attachment bytes exist but their Android Keystore key is unavailable",
+            )
+        }
+
         val generator = KeyGenerator.getInstance(
             KeyProperties.KEY_ALGORITHM_AES,
             "AndroidKeyStore",
@@ -181,6 +187,11 @@ class ProtectedAttachmentFileStore(
         )
         return generator.generateKey()
     }
+
+    private fun hasPublishedEncryptedFiles(): Boolean =
+        stagingDirectory.listFiles()
+            ?.any { it.isFile && ATTACHMENT_FILE_PATTERN.matches(it.name) }
+            ?: false
 
     private fun requireExistingKey(): SecretKey =
         loadKeyStore().getKey(KEY_ALIAS, null) as? SecretKey
