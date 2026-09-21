@@ -86,9 +86,25 @@ function secretKey(): string {
   return value;
 }
 
+function isLocalProviderUrl(raw: string | null): boolean {
+  if (!raw) return false;
+  try {
+    const provider = new URL(raw);
+    return provider.hostname === "127.0.0.1" || provider.hostname === "localhost";
+  } catch {
+    return false;
+  }
+}
+
 function enforceRequiredExecutionRegion(): void {
   const required = optionalEnvironment("XUEQING_REQUIRED_EDGE_REGION");
-  if (!required) return;
+  if (!required) {
+    // Local development intentionally has no hosted-region identity. Hosted
+    // deployments must opt in explicitly instead of silently losing the
+    // production region guard when configuration is missing.
+    if (isLocalProviderUrl(optionalEnvironment("SUPABASE_URL"))) return;
+    throw new DeliveryError("XQ_INVITATION_DELIVERY_REGION_UNAVAILABLE", 503);
+  }
 
   const actual = optionalEnvironment("SB_REGION");
   if (!actual || actual !== required) {
