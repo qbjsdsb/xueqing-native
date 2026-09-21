@@ -1,0 +1,328 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+backup_dir="${1:?usage: restore_fictional_backup_rehearsal.sh BACKUP_DIR}"
+archive="$backup_dir/archive.tar.gpg"
+key_file="$backup_dir/rehearsal.key"
+
+[[ -s "$archive" && -s "$key_file" ]] || {
+  echo 'Encrypted rehearsal archive/key are missing.' >&2
+  exit 1
+}
+
+restore_root="$(mktemp -d)"
+extract_dir="$restore_root/extracted"
+target_root="$restore_root/target"
+target_backend="$target_root/backend"
+mkdir -p "$extract_dir" "$target_root"
+
+cleanup() {
+  set +e
+  if [[ -d "$target_backend" ]]; then
+    supabase stop --workdir "$target_backend" >/dev/null 2>&1 || true
+  fi
+  rm -rf "$restore_root"
+}
+trap cleanup EXIT
+
+gpg --batch --yes --pinentry-mode loopback \
+  --passphrase-file "$key_file" \
+  --decrypt --output "$restore_root/archive.tar" "$archive"
+tar -C "$extract_dir" -xf "$restore_root/archive.tar"
+rm -f "$restore_root/archive.tar"
+
+manifest="$extract_dir/manifest.json"
+python3 tools/backup/verify_backup_manifest.py "$manifest"
+
+python3 - "$manifest" "$extract_dir" <<'PY'
+import hashlib
+import json
+import pathlib
+import sys
+
+manifest_path = pathlib.Path(sys.argv[1])
+root = pathlib.Path(sys.argv[2])
+value = json.loads(manifest_path.read_text(encoding="utf-8"))
+
+def verify(entry: dict) -> None:
+    path = root / entry["archive_relative_path"]
+    if not path.is_file():
+        raise SystemExit(f"missing backup payload: {entry['archive_relative_path']}")
+    content = path.read_bytes()
+    if len(content) != entry["byte_length"]:
+        raise SystemExit(f"byte-length mismatch: {entry['archive_relative_path']}")
+    digest = hashlib.sha256(content).hexdigest()
+    if digest != entry["sha256"]:
+        raise SystemExit(f"digest mismatch: {entry['archive_relative_path']}")
+
+verify(value["database"])
+for item in value["storage"]["objects"]:
+    verify(item)
+PY
+
+cp -a backend "$target_backend"
+python3 - "$target_backend/supabase/config.toml" <<'PY'
+import pathlib
+import re
+import sys
+
+path = pathlib.Path(sys.argv[1])
+text = path.read_text(encoding="utf-8")
+text, count = re.subn(
+    r'^project_id\s*=\s*"[^"]+"',
+    'project_id = "xueqing-native-restore-rehearsal"',
+    text,
+    count=1,
+    flags=re.MULTILINE,
+)
+if count != 1:
+    raise SystemExit("target config project_id was not rewritten")
+text, count = re.subn(
+    r'(\[db\.seed\]\s*\nenabled\s*=\s*)true',
+    r'\1false',
+    text,
+    count=1,
+)
+if count != 1:
+    raise SystemExit("target config seed flag was not disabled")
+path.write_text(text, encoding="utf-8")
+PY
+
+supabase start --workdir "$target_backend"
+supabase db reset --workdir "$target_backend"
+
+target_env="$(mktemp)"
+supabase status --workdir "$target_backend" -o env > "$target_env"
+set -a
+# shellcheck disable=SC1090
+source "$target_env"
+set +a
+rm -f "$target_env"
+
+: "${API_URL:?target API_URL missing}"
+: "${ANON_KEY:?target ANON_KEY missing}"
+: "${SERVICE_ROLE_KEY:?target SERVICE_ROLE_KEY missing}"
+: "${JWT_SECRET:?target JWT_SECRET missing}"
+
+api_url="${API_URL%/}"
+echo "::add-mask::$ANON_KEY"
+echo "::add-mask::$SERVICE_ROLE_KEY"
+
+db_container="$(
+  docker ps --filter 'name=supabase_db_xueqing-native-restore-rehearsal' \
+    --format '{{.Names}}' | head -n 1
+)"
+if [[ -z "$db_container" ]]; then
+  echo 'Fresh restore database container was not found.' >&2
+  docker ps -a >&2 || true
+  exit 1
+fi
+
+docker cp "$extract_dir/database/xueqing.dump" "$db_container:/tmp/xueqing.dump"
+docker exec "$db_container" pg_restore \
+  -U postgres -d postgres \
+  --data-only \
+  --no-owner \
+  --no-acl \
+  --disable-triggers \
+  --single-transaction \
+  --exit-on-error \
+  /tmp/xueqing.dump
+
+python3 - "$manifest" > "$restore_root/row-counts.tsv" <<'PY'
+import json
+import pathlib
+import re
+import sys
+
+value = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
+for table, count in sorted(value["database"]["row_counts"].items()):
+    if not re.fullmatch(r"[a-z][a-z0-9_]*", table):
+        raise SystemExit(f"unsafe table name in manifest: {table}")
+    print(f"{table}\t{count}")
+PY
+
+while IFS=$'\t' read -r table expected; do
+  actual="$(
+    docker exec "$db_container" psql -U postgres -d postgres -Atc \
+      "select count(*) from public.$table"
+  )"
+  if [[ "$actual" != "$expected" ]]; then
+    echo "Restored row count mismatch for $table: expected=$expected actual=$actual" >&2
+    exit 1
+  fi
+done < "$restore_root/row-counts.tsv"
+
+python3 - "$manifest" "$extract_dir" > "$restore_root/objects.tsv" <<'PY'
+import json
+import pathlib
+import sys
+
+value = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
+root = pathlib.Path(sys.argv[2])
+for item in value["storage"]["objects"]:
+    path = root / item["archive_relative_path"]
+    print("\t".join([
+        item["logical_object_locator"],
+        str(path),
+        item["mime_type"],
+        str(item["byte_length"]),
+        item["sha256"],
+    ]))
+PY
+
+bucket='teaching-attachments-v1'
+while IFS=$'\t' read -r locator object_file mime expected_size expected_sha; do
+  curl --fail-with-body --silent --show-error \
+    -X POST "$api_url/storage/v1/object/$bucket/$locator" \
+    -H "apikey: $SERVICE_ROLE_KEY" \
+    -H "Authorization: Bearer $SERVICE_ROLE_KEY" \
+    -H "Content-Type: $mime" \
+    --data-binary "@$object_file" >/dev/null
+
+  downloaded="$(mktemp)"
+  curl --fail-with-body --silent --show-error \
+    -X GET "$api_url/storage/v1/object/authenticated/$bucket/$locator" \
+    -H "apikey: $SERVICE_ROLE_KEY" \
+    -H "Authorization: Bearer $SERVICE_ROLE_KEY" \
+    --output "$downloaded"
+
+  actual_size="$(wc -c < "$downloaded" | tr -d ' ')"
+  actual_sha="$(sha256sum "$downloaded" | awk '{print $1}')"
+  rm -f "$downloaded"
+
+  [[ "$actual_size" == "$expected_size" ]] || {
+    echo "Restored object size mismatch for $locator" >&2
+    exit 1
+  }
+  [[ "$actual_sha" == "$expected_sha" ]] || {
+    echo "Restored object digest mismatch for $locator" >&2
+    exit 1
+  }
+
+  anon_status="$(
+    curl --silent --output /dev/null --write-out '%{http_code}' \
+      -X GET "$api_url/storage/v1/object/authenticated/$bucket/$locator" \
+      -H "apikey: $ANON_KEY" || true
+  )"
+  if [[ "$anon_status" =~ ^2 ]]; then
+    echo "Anonymous private Attachment read unexpectedly succeeded for $locator" >&2
+    exit 1
+  fi
+done < "$restore_root/objects.tsv"
+
+make_jwt() {
+  JWT_SUBJECT="$1" python3 - <<'PY'
+import base64
+import hashlib
+import hmac
+import json
+import os
+import time
+
+def b64url(value: bytes) -> str:
+    return base64.urlsafe_b64encode(value).rstrip(b'=').decode('ascii')
+
+now = int(time.time())
+header = {"alg": "HS256", "typ": "JWT"}
+payload = {
+    "iss": "supabase-demo",
+    "sub": os.environ["JWT_SUBJECT"],
+    "aud": "authenticated",
+    "role": "authenticated",
+    "iat": now,
+    "exp": now + 3600,
+}
+encoded_header = b64url(json.dumps(header, separators=(',', ':')).encode())
+encoded_payload = b64url(json.dumps(payload, separators=(',', ':')).encode())
+signing_input = f"{encoded_header}.{encoded_payload}".encode()
+signature = hmac.new(
+    os.environ["JWT_SECRET"].encode(),
+    signing_input,
+    hashlib.sha256,
+).digest()
+print(f"{encoded_header}.{encoded_payload}.{b64url(signature)}")
+PY
+}
+
+actor_token="$(make_jwt 'a0000000-0000-0000-0000-000000000001')"
+unlinked_token="$(make_jwt 'f0000000-0000-0000-0000-000000000001')"
+echo "::add-mask::$actor_token"
+echo "::add-mask::$unlinked_token"
+
+observation_operation="$(cat "$backup_dir/observation_operation_id")"
+attachment_operation="$(cat "$backup_dir/attachment_operation_id")"
+observation_id="$(cat "$backup_dir/observation_id")"
+attachment_id="$(cat "$backup_dir/attachment_id")"
+raw_text="$(cat "$backup_dir/raw_text")"
+
+organization_id='20000000-0000-0000-0000-000000000001'
+student_id='30000000-0000-0000-0000-000000000001'
+profile_id='40000000-0000-0000-0000-000000000001'
+assignment_id='50000000-0000-0000-0000-000000000001'
+
+rpc_call() {
+  local token="$1" function_name="$2" payload="$3" out
+  out="$(mktemp)"
+  RPC_STATUS="$(
+    curl --silent --show-error --output "$out" --write-out '%{http_code}' \
+      -X POST "$api_url/rest/v1/rpc/$function_name" \
+      -H "apikey: $ANON_KEY" \
+      -H "Authorization: Bearer $token" \
+      -H 'Content-Type: application/json' \
+      --data "$payload" || true
+  )"
+  RPC_BODY="$(cat "$out")"
+  rm -f "$out"
+}
+
+observation_payload="{\"p_operation_id\":\"$observation_operation\",\"p_organization_id\":\"$organization_id\",\"p_student_id\":\"$student_id\",\"p_subject_profile_id\":\"$profile_id\",\"p_assignment_id\":\"$assignment_id\",\"p_raw_text\":\"$raw_text\",\"p_client_capture_metadata\":{\"fixture\":true,\"source\":\"backup-restore-rehearsal\"}}"
+rpc_call "$actor_token" create_observation "$observation_payload"
+[[ "$RPC_STATUS" =~ ^2 ]] || {
+  echo "Restored CreateObservation same-operation replay failed: $RPC_STATUS $RPC_BODY" >&2
+  exit 1
+}
+restored_observation_id="$(
+  printf '%s' "$RPC_BODY" | python3 -c 'import json,sys; print(json.load(sys.stdin)["observation_id"])'
+)"
+[[ "$restored_observation_id" == "$observation_id" ]] || {
+  echo 'CreateObservation replay returned a different observation id.' >&2
+  exit 1
+}
+
+different_payload="{\"p_operation_id\":\"$observation_operation\",\"p_organization_id\":\"$organization_id\",\"p_student_id\":\"$student_id\",\"p_subject_profile_id\":\"$profile_id\",\"p_assignment_id\":\"$assignment_id\",\"p_raw_text\":\"Different payload must fail.\",\"p_client_capture_metadata\":{\"fixture\":true,\"source\":\"backup-restore-rehearsal\"}}"
+rpc_call "$actor_token" create_observation "$different_payload"
+if [[ "$RPC_STATUS" =~ ^2 ]] || [[ "$RPC_BODY" != *"XQ_OPERATION_REUSED_WITH_DIFFERENT_PAYLOAD"* ]]; then
+  echo "Different-payload replay did not fail closed: $RPC_STATUS $RPC_BODY" >&2
+  exit 1
+fi
+
+attachment_payload="{\"p_operation_id\":\"$attachment_operation\",\"p_organization_id\":\"$organization_id\",\"p_student_id\":\"$student_id\",\"p_subject_profile_id\":\"$profile_id\",\"p_assignment_id\":\"$assignment_id\",\"p_observation_id\":\"$observation_id\",\"p_attachment_id\":\"$attachment_id\"}"
+rpc_call "$actor_token" commit_observation_attachment "$attachment_payload"
+[[ "$RPC_STATUS" =~ ^2 ]] || {
+  echo "Restored Attachment same-operation replay failed: $RPC_STATUS $RPC_BODY" >&2
+  exit 1
+}
+
+unlinked_operation='76000000-0000-4000-8000-000000000201'
+unlinked_payload="{\"p_operation_id\":\"$unlinked_operation\",\"p_organization_id\":\"$organization_id\",\"p_student_id\":\"$student_id\",\"p_subject_profile_id\":\"$profile_id\",\"p_assignment_id\":\"$assignment_id\",\"p_raw_text\":\"Unlinked actor must fail.\",\"p_client_capture_metadata\":{\"fixture\":true}}"
+rpc_call "$unlinked_token" create_observation "$unlinked_payload"
+if [[ "$RPC_STATUS" =~ ^2 ]]; then
+  echo 'Unlinked provider identity unexpectedly created a Teaching Fact after restore.' >&2
+  exit 1
+fi
+
+observation_count="$(
+  docker exec "$db_container" psql -U postgres -d postgres -Atc \
+    "select count(*) from public.observations where operation_id = '$observation_operation'::uuid"
+)"
+attachment_count="$(
+  docker exec "$db_container" psql -U postgres -d postgres -Atc \
+    "select count(*) from public.observation_attachments where operation_id = '$attachment_operation'::uuid"
+)"
+if [[ "$observation_count" != '1' || "$attachment_count" != '1' ]]; then
+  echo "Idempotency continuity failed after restore: observations=$observation_count attachments=$attachment_count" >&2
+  exit 1
+fi
+
+echo 'Fresh isolated restore rehearsal passed: database rows, private object bytes, digests, authorization and operation replay remained coherent.'
