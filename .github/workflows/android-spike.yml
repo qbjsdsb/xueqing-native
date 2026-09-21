@@ -278,19 +278,64 @@ jobs:
           PY
           find apps/android/app/build/outputs/androidTest-results/connected/debug -name 'TEST-*.xml' -type f -exec cp {} "$diagnostic_dir" \; 2>/dev/null || true
 
-      - name: Verify encrypted durability instrumentation tests executed
+      - name: Collect Android UX screenshot and semantics evidence
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          adb="$ANDROID_HOME/platform-tools/adb"
+          evidence_dir='artifacts/android-final-ux/evidence'
+          mkdir -p "$evidence_dir"
+          names=(
+            compact-light-normal
+            short-dark-200
+            landscape-light-200
+            tablet-dark-200
+          )
+          for name in "${names[@]}"; do
+            for suffix in '.png' '-semantics.txt'; do
+              source="files/android-ux-evidence/${name}${suffix}"
+              target="$evidence_dir/${name}${suffix}"
+              if "$adb" shell run-as com.xueqing.app test -f "$source"; then
+                "$adb" exec-out run-as com.xueqing.app cat "$source" > "$target"
+              fi
+            done
+          done
+          find "$evidence_dir" -maxdepth 1 -type f -print -exec wc -c {} \;
+
+      - name: Verify Android final UX instrumentation evidence executed
         shell: bash
         run: |
           set -euo pipefail
           python3 - <<'PY'
+          import collections
           import glob
           import xml.etree.ElementTree as ET
 
           files = glob.glob('apps/android/app/build/outputs/androidTest-results/connected/debug/**/TEST-*.xml', recursive=True)
           test_count = sum(int(ET.parse(path).getroot().attrib.get('tests', '0')) for path in files)
+          counts = collections.Counter(
+              case.attrib.get('classname', '')
+              for path in files
+              for case in ET.parse(path).getroot().iter('testcase')
+          )
+          expected = {
+              'com.xueqing.app.presentation.QuickCaptureAccessibilityInstrumentedTest': 1,
+              'com.xueqing.app.presentation.QuickCaptureAdaptiveUiInstrumentedTest': 6,
+              'com.xueqing.app.presentation.QuickCaptureLifecycleInstrumentedTest': 4,
+              'com.xueqing.app.presentation.QuickCaptureMediaReturnInstrumentedTest': 2,
+              'com.xueqing.app.presentation.QuickCaptureVisualEvidenceInstrumentedTest': 4,
+          }
           print(f'Android instrumentation tests executed: {test_count}')
-          if test_count < 14:
-              raise SystemExit('Expected at least fourteen Android encrypted-draft and Quick Capture instrumentation tests.')
+          for classname, minimum in expected.items():
+              actual = counts[classname]
+              print(f'{classname}: {actual}')
+              if actual < minimum:
+                  raise SystemExit(
+                      f'Expected at least {minimum} executed tests for {classname}, got {actual}.'
+                  )
+          if test_count < 60:
+              raise SystemExit('Expected at least sixty Android instrumentation tests at the Final UX gate.')
           PY
 
       - name: Install APKs and seed known draft without uninstalling target app
@@ -376,6 +421,15 @@ jobs:
         if: failure()
         shell: bash
         run: cat "$RUNNER_TEMP/xueqing-emulator.log" || true
+
+      - name: Upload Android final UX visual evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: android-final-ux-visual-evidence
+          path: artifacts/android-final-ux/evidence
+          if-no-files-found: warn
+          retention-days: 7
 
       - name: Upload Android encrypted-durability diagnostics
         if: always()
