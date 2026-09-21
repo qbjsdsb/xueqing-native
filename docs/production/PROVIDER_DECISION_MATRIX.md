@@ -1,6 +1,6 @@
 # Production Provider Decision Matrix
 
-Status: **operator topology selected — production evidence pending**
+Status: **first production topology accepted — restore rehearsal remains a following Gate**
 
 Checked: 2026-09-21.
 
@@ -8,24 +8,19 @@ This document turns current provider facts into Xueqing-specific production cons
 
 ## Current hosted environment observation
 
-A read-only inspection of the connected Supabase account found:
+The first production topology has now been provisioned and proved:
 
-- an existing `xueqing-dev` project in `ap-southeast-1` (Singapore);
-- its migration history belongs to the legacy Flutter-era Xueqing backend;
-- its deployed Edge Function set does not contain the current native Invitation Delivery function;
-- therefore it is **development/legacy evidence only** and MUST NOT be treated as the Xueqing Native production project or as production-region acceptance.
+- `xueqing-native-prod` is **ACTIVE_HEALTHY** in `ap-southeast-1` (Singapore);
+- all 14 repository Supabase migrations were applied from a clean migration history;
+- the observed public business tables have RLS enabled and contain no imported legacy business data;
+- `teaching-attachments-v1` is private and retains the accepted size/MIME constraints;
+- Organization Invitation Delivery is deployed as an active hosted Edge Function;
+- a GitHub-hosted no-business-data probe requested `x-region: ap-southeast-1` and proved `x-sb-edge-region: ap-southeast-1`, with the function reaching its 405 method gate only after the server-side region guard;
+- `xueqing-dev` is now inactive legacy evidence and was not promoted to production.
 
-No current Xueqing Native production Supabase project is provisioned.
+The organization remains on the Free plan. Free hosting is accepted only as runtime infrastructure; it is explicitly **not** accepted as Xueqing's sole durability/recovery layer. The following Backup/Restore Gate must prove independent encrypted database/object recovery before real-data readiness.
 
-The connected Supabase organization is currently on the Free plan and read-only account inspection found **two active Free projects**. Current Supabase billing documentation grants two active Free projects and states that paused projects do not count toward that quota. Therefore a distinct zero-paid Xueqing Native production project currently has no free project slot.
-
-This is an operations blocker, not permission to reuse the legacy project or pause another project automatically. Before production provisioning, one of the following must be explicitly completed:
-
-- pause an existing project only after it is confirmed safe to pause; or
-- use another Free organization with available capacity; or
-- explicitly revisit the zero-paid constraint / paid plan.
-
-Project refs, credentials and account secrets are intentionally not recorded here.
+No provider admin secret, database password or real student/teacher data is recorded in this document or public CI.
 
 ## Selected V1 topology
 
@@ -42,9 +37,9 @@ The selected first authoritative topology is:
 - strict single-region provider-log residency: **not required**, but intentional production PII/secret logging remains forbidden;
 - backup: independent encrypted database + private object backup outside the live project remains mandatory.
 
-The existing `xueqing-dev` project is not promoted to production. A distinct Xueqing Native production project must be provisioned and verified before this Gate can be accepted.
+The existing `xueqing-dev` project was not promoted to production; the accepted topology uses the distinct `xueqing-native-prod` project.
 
-After this Gate, execution order is **Backup/Restore → CloudBase second-provider conformance → Signing/Recovery → V1 RC**. A second provider is portability/recovery evidence, never active-active authority.
+After this Gate, execution order is **Backup/Restore → Production Client Deployment + Session/Auth (#75) → CloudBase second-provider conformance → Signing/Recovery → V1 RC**. A second provider is portability/recovery evidence, never active-active authority.
 
 ## Exact hosted project regions
 
