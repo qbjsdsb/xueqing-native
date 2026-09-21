@@ -128,7 +128,9 @@ Windows 原生产品化已完成当前 Phase 1 收口。PR #68 已接受 Mica + 
 
 Android Final Native UX PR #66 已同步到最新 main，自动化 exact-head 再次通过 Foundation、API 36 device/durability、reference-provider、adaptive/large-text、accessibility 与视觉证据 Gate；剩余的是明确的真机人工验收：中文拼音 IME、TalkBack 播报质量，以及 predictive/system Back + Photo Picker 返回上下文。
 
-生产 Provider Region / Data Residency 已完成运营决策：V1 不要求学生/教师数据位于中国大陆，第一权威生产拓扑选择 **Supabase Hosted / Singapore `ap-southeast-1`**。Private Attachment 继续使用 private bucket 与 Xueqing 授权，接受 Supabase global CDN/edge transit；Invitation Delivery 必须显式请求并由服务端 fail-closed 校验 `ap-southeast-1` 执行区域。PR #63 现为当前唯一自动代码/证据执行线，仍须证明真实 Xueqing Native 生产项目区域、运行时拓扑、日志/诊断策略和独立数据库 + private Storage 备份路径后才能关闭。其后顺序收敛为 **Backup/Restore → CloudBase second-provider conformance → Signing/Recovery → V1 RC**，不做 active-active 或 live dual-write。
+Production Provider Region / Data Residency Gate 已获得真实生产证据并接受：第一权威生产拓扑为 **Supabase Hosted / Singapore `ap-southeast-1`**，独立的 `xueqing-native-prod` Free 项目已创建并应用 14/14 Git migrations；private Attachment bucket 保持私有，接受 global CDN/edge transit；Invitation Delivery 使用 checked-in Singapore deployment policy、显式 local-reference opt-in，并由服务端 `SB_REGION` fail-closed 校验。GitHub hosted probe 已证明 production Function 实际返回 `x-sb-edge-region: ap-southeast-1`，同时 Backend、Windows reference-provider、Windows MSIX/Native UX 与 Android reference-provider exact-head 回归全部保持通过。
+
+当前唯一自动执行线转为 **Backup + private Storage Restore**：先证明数据库逻辑备份、private object bytes + SHA-256 manifest、独立加密归档以及 fresh-environment restore。调查同时确认正式客户端尚缺 production deployment/session composition，因此 #75 已冻结为 Backup/Restore 后的下一条产品化 Gate；随后再做 CloudBase second-provider conformance、Signing/Recovery 和 V1 RC。任何环境始终只有一个 authoritative provider，不做 active-active 或 live dual-write。
 
 动态工程状态以 `docs/project/PROJECT_STATE.yaml` 为准。
 
