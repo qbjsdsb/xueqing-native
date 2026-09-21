@@ -152,28 +152,84 @@ case_b_reopened_action_id="$(
 # Handoff occurs after Teacher A has created the historical Observation/Case
 # receipts above. The original assignment remains as immutable responsibility
 # history but becomes inactive; Teacher B owns the new live assignment.
-docker exec "$DB_CONTAINER" psql -U postgres -d postgres -v ON_ERROR_STOP=1 >/dev/null <<SQL
-begin;
+#
+# This fixture is fail-closed: UPDATE 0 is not a handoff. The source snapshot is
+# allowed to proceed only after the database proves exactly the intended
+# A-inactive/B-active authority state for this teaching scope.
+docker exec "$DB_CONTAINER" psql -U postgres -d postgres -v ON_ERROR_STOP=1 \
+  -v assignment_old="$assignment_a_old" \
+  -v assignment_new="$assignment_a_new" \
+  -v org_id="$org_a" \
+  -v student_id="$handoff_student" \
+  -v profile_id="$handoff_profile" \
+  -v actor_a="$actor_a" \
+  -v actor_b="$actor_b" >/dev/null <<'SQL'
+do $xq$
+declare
+    v_updated integer;
+begin
+    update public.student_teacher_assignments
+       set active = false
+     where id = :'assignment_old'::uuid
+       and organization_id = :'org_id'::uuid
+       and student_id = :'student_id'::uuid
+       and subject_profile_id = :'profile_id'::uuid
+       and teacher_app_user_id = :'actor_a'::uuid
+       and active;
 
-update public.student_teacher_assignments
-   set active = false
- where id = '$assignment_a_old'::uuid
-   and organization_id = '$org_a'::uuid
-   and student_id = '$handoff_student'::uuid
-   and subject_profile_id = '$handoff_profile'::uuid
-   and teacher_app_user_id = '$actor_a'::uuid;
+    get diagnostics v_updated = row_count;
+    if v_updated <> 1 then
+        raise exception 'XQ_BACKUP_FIXTURE_HANDOFF_SOURCE_ASSIGNMENT_NOT_EXACTLY_ONE';
+    end if;
 
-insert into public.student_teacher_assignments (
-    id, organization_id, student_id, subject_profile_id, teacher_app_user_id, active
-) values (
-    '$assignment_a_new'::uuid,
-    '$org_a'::uuid,
-    '$handoff_student'::uuid,
-    '$handoff_profile'::uuid,
-    '$actor_b'::uuid,
-    true
-);
-commit;
+    insert into public.student_teacher_assignments (
+        id,
+        organization_id,
+        student_id,
+        subject_profile_id,
+        teacher_app_user_id,
+        active
+    ) values (
+        :'assignment_new'::uuid,
+        :'org_id'::uuid,
+        :'student_id'::uuid,
+        :'profile_id'::uuid,
+        :'actor_b'::uuid,
+        true
+    );
+
+    if not exists (
+        select 1
+          from public.student_teacher_assignments
+         where id = :'assignment_old'::uuid
+           and teacher_app_user_id = :'actor_a'::uuid
+           and not active
+    ) then
+        raise exception 'XQ_BACKUP_FIXTURE_FORMER_ASSIGNMENT_NOT_INACTIVE';
+    end if;
+
+    if not exists (
+        select 1
+          from public.student_teacher_assignments
+         where id = :'assignment_new'::uuid
+           and teacher_app_user_id = :'actor_b'::uuid
+           and active
+    ) then
+        raise exception 'XQ_BACKUP_FIXTURE_CURRENT_ASSIGNMENT_NOT_ACTIVE';
+    end if;
+
+    if (
+        select count(*)
+          from public.student_teacher_assignments
+         where organization_id = :'org_id'::uuid
+           and student_id = :'student_id'::uuid
+           and subject_profile_id = :'profile_id'::uuid
+           and active
+    ) <> 1 then
+        raise exception 'XQ_BACKUP_FIXTURE_HANDOFF_ACTIVE_ASSIGNMENT_COUNT_INVALID';
+    end if;
+end;
+$xq$;
 SQL
 
 # Preserve one explicitly revoked provider link independently of the recovered
