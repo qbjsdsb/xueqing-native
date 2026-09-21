@@ -12,12 +12,64 @@ api_url="${API_URL%/}"
 
 rpc() {
   local token="$1" fn="$2" payload="$3"
-  curl --fail-with-body --silent --show-error     -X POST "$api_url/rest/v1/rpc/$fn"     -H "apikey: $ANON_KEY"     -H "Authorization: Bearer $token"     -H 'Content-Type: application/json'     --data "$payload"
+  local body status operation_id
+  body="$(mktemp)"
+  status="$(
+    curl --silent --show-error --output "$body" --write-out '%{http_code}' \
+      -X POST "$api_url/rest/v1/rpc/$fn" \
+      -H "apikey: $ANON_KEY" \
+      -H "Authorization: Bearer $token" \
+      -H 'Content-Type: application/json' \
+      --data "$payload" || true
+  )"
+  if [[ ! "$status" =~ ^2 ]]; then
+    operation_id="$(
+      printf '%s' "$payload" | python3 -c '
+import json,sys
+try:
+    print(json.load(sys.stdin).get("p_operation_id", ""))
+except Exception:
+    print("")
+'
+    )"
+    echo "Recovery-history RPC failed: fn=$fn status=$status operation_id=$operation_id" >&2
+    cat "$body" >&2 || true
+    rm -f "$body"
+    return 1
+  fi
+  cat "$body"
+  rm -f "$body"
 }
 
 service_rpc() {
   local fn="$1" payload="$2"
-  curl --fail-with-body --silent --show-error     -X POST "$api_url/rest/v1/rpc/$fn"     -H "apikey: $SERVICE_ROLE_KEY"     -H "Authorization: Bearer $SERVICE_ROLE_KEY"     -H 'Content-Type: application/json'     --data "$payload"
+  local body status operation_id
+  body="$(mktemp)"
+  status="$(
+    curl --silent --show-error --output "$body" --write-out '%{http_code}' \
+      -X POST "$api_url/rest/v1/rpc/$fn" \
+      -H "apikey: $SERVICE_ROLE_KEY" \
+      -H "Authorization: Bearer $SERVICE_ROLE_KEY" \
+      -H 'Content-Type: application/json' \
+      --data "$payload" || true
+  )"
+  if [[ ! "$status" =~ ^2 ]]; then
+    operation_id="$(
+      printf '%s' "$payload" | python3 -c '
+import json,sys
+try:
+    print(json.load(sys.stdin).get("p_operation_id", ""))
+except Exception:
+    print("")
+'
+    )"
+    echo "Recovery-history service RPC failed: fn=$fn status=$status operation_id=$operation_id" >&2
+    cat "$body" >&2 || true
+    rm -f "$body"
+    return 1
+  fi
+  cat "$body"
+  rm -f "$body"
 }
 
 json_get() {
