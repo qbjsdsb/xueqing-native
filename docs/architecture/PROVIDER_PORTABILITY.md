@@ -159,15 +159,30 @@ The same fictional business scenarios must be executed against each provider ada
 
 Provider-specific tests may supplement this matrix but may not weaken it.
 
-## Supabase reference status
+## Supabase reference and first-production status
 
-Supabase remains the development/reference provider until superseded by an accepted decision.
+Supabase remains the development/reference provider and is now the operator-selected **first production provider candidate** for Singapore `ap-southeast-1`.
 
-Existing Supabase conformance evidence is reusable as a semantic baseline. It is not evidence that another provider passes the same contract.
+The production selection is still gated by PR #63: an actual Xueqing Native production project, runtime topology evidence, independent backup/recovery evidence and the accepted topology validator remain required before real-data readiness.
+
+Existing Supabase conformance evidence is reusable as the semantic baseline. It is not evidence that another provider passes the same contract.
 
 ## CloudBase second-provider rule
 
 CloudBase may become a supported provider through a dedicated conformance spike.
+
+Under the selected non-mainland V1 policy, CloudBase is a **portability and migration target**, not a prerequisite to choosing the first production provider. The preferred later spike target is CloudBase Singapore where current provider capability permits PostgreSQL-backed environments, so a migration rehearsal can isolate provider differences from region changes.
+
+The execution order is intentionally:
+
+```text
+Supabase Singapore topology acceptance
+→ provider-portable Backup/Restore proof
+→ CloudBase Singapore conformance
+→ optional controlled cross-provider restore/cutover rehearsal
+```
+
+Backup/Restore comes first so #65 can consume a proved archive/object-manifest contract rather than invent a second migration format.
 
 The spike must use fictional data and must not begin a production cutover. It must first prove the smallest high-risk surfaces:
 
