@@ -18,11 +18,11 @@ spec.loader.exec_module(verifier)
 class ProviderTopologyVerifierTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
-        cls.blocked = json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
+        cls.checked_in = json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
 
     def test_checked_in_manifest_records_selected_supabase_singapore_policy(self) -> None:
-        value = self.blocked
-        self.assertEqual("blocked", value["status"])
+        value = self.checked_in
+        self.assertEqual("accepted", value["status"])
         self.assertEqual("supabase-hosted", value["provider_candidate"])
         self.assertEqual(
             "non-mainland-acceptable-singapore-selected",
@@ -48,28 +48,33 @@ class ProviderTopologyVerifierTests(unittest.TestCase):
             value["deployment_constraints"]["production_local_reference_mode_allowed"]
         )
 
-    def test_checked_in_manifest_remains_blocked_only_until_runtime_region_probe(self) -> None:
-        value = self.blocked
+    def test_checked_in_manifest_is_fully_accepted(self) -> None:
+        value = self.checked_in
         self.assertTrue(
             value["hosted_environment_observation"]["native_production_project_provisioned"]
         )
         self.assertTrue(
             value["hosted_environment_observation"]["production_project_capacity_resolved"]
         )
-        self.assertTrue(value["data_surfaces"]["postgres"]["accepted"])
-        self.assertTrue(value["data_surfaces"]["auth"]["accepted"])
-        self.assertTrue(value["data_surfaces"]["storage"]["accepted"])
-        self.assertTrue(value["data_surfaces"]["logs_diagnostics"]["accepted"])
-        self.assertTrue(value["data_surfaces"]["backups"]["accepted"])
-        self.assertEqual(
-            ["hosted_edge_runtime_region_not_independently_probed"],
-            value["blockers"],
+        for surface in value["data_surfaces"].values():
+            self.assertTrue(surface["accepted"])
+        self.assertEqual([], value["blockers"])
+        self.assertIn(
+            "x-sb-edge-region-ap-southeast-1",
+            value["data_surfaces"]["edge_invitation_delivery"]["runtime_region_evidence"],
         )
+        verifier.validate(value, True, REPO_ROOT)
+
+    def test_synthetic_blocked_manifest_cannot_pass_acceptance(self) -> None:
+        value = copy.deepcopy(self.checked_in)
+        value["status"] = "blocked"
+        value["blockers"] = ["fictional-runtime-evidence-not-yet-accepted"]
+        value["data_surfaces"]["edge_invitation_delivery"]["accepted"] = False
         with self.assertRaisesRegex(ValueError, "production topology is still blocked"):
             verifier.validate(value, True, REPO_ROOT)
 
     def accepted_manifest(self) -> dict:
-        value = copy.deepcopy(self.blocked)
+        value = copy.deepcopy(self.checked_in)
         value["status"] = "accepted"
         value["blockers"] = []
         value["target_jurisdiction"] = "fictional-test-jurisdiction"
