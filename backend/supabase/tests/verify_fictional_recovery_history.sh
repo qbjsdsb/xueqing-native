@@ -114,8 +114,63 @@ require_success "Restored Case reopen receipt replay"
   exit 1
 }
 
-# Handoff continuity: former Teacher A is no longer authoritative on Student C.
-former_operation='76000000-0000-4000-8000-000000000601'
+# Handoff continuity: former Teacher A is no longer authoritative on the
+# handed-off teaching scope. Runtime-random operation ids prevent a restored
+# operation receipt from short-circuiting the authorization gate and producing
+# a false-positive "success".
+new_operation_id() {
+  python3 -c 'import uuid; print(uuid.uuid4())'
+}
+
+former_operation="$(new_operation_id)"
+current_operation="$(new_operation_id)"
+revoked_operation="$(new_operation_id)"
+
+docker exec "$DB_CONTAINER" psql -U postgres -d postgres -v ON_ERROR_STOP=1 \
+  -v assignment_old="$assignment_a_old" \
+  -v assignment_new="$assignment_a_new" \
+  -v actor_a="$actor_a" \
+  -v actor_b="$actor_b" \
+  -v former_operation="$former_operation" \
+  -v current_operation="$current_operation" \
+  -v revoked_operation="$revoked_operation" >/dev/null <<'SQL'
+do $xq$
+begin
+    if not exists (
+        select 1
+          from public.student_teacher_assignments
+         where id = :'assignment_old'::uuid
+           and teacher_app_user_id = :'actor_a'::uuid
+           and not active
+    ) then
+        raise exception 'XQ_RESTORE_FORMER_ASSIGNMENT_NOT_INACTIVE_BEFORE_AUTH_TEST';
+    end if;
+
+    if not exists (
+        select 1
+          from public.student_teacher_assignments
+         where id = :'assignment_new'::uuid
+           and teacher_app_user_id = :'actor_b'::uuid
+           and active
+    ) then
+        raise exception 'XQ_RESTORE_CURRENT_ASSIGNMENT_NOT_ACTIVE_BEFORE_AUTH_TEST';
+    end if;
+
+    if exists (
+        select 1
+          from public.operation_receipts
+         where operation_id in (
+             :'former_operation'::uuid,
+             :'current_operation'::uuid,
+             :'revoked_operation'::uuid
+         )
+    ) then
+        raise exception 'XQ_RESTORE_AUTH_TEST_OPERATION_ID_COLLISION';
+    end if;
+end;
+$xq$;
+SQL
+
 former_payload="{\"p_operation_id\":\"$former_operation\",\"p_organization_id\":\"$org_a\",\"p_student_id\":\"$handoff_student\",\"p_subject_profile_id\":\"$handoff_profile\",\"p_assignment_id\":\"$assignment_a_old\",\"p_raw_text\":\"Former teacher must not append after restored handoff.\",\"p_client_capture_metadata\":{\"fixture\":true,\"source\":\"restore-handoff-negative\"}}"
 rpc_call "$ACTOR_TOKEN_A" create_observation "$former_payload"
 if [[ "$RPC_STATUS" =~ ^2 ]] || [[ "$RPC_BODY" != *"XQ_TEACHER_ASSIGNMENT_REQUIRED"* ]]; then
@@ -124,7 +179,6 @@ if [[ "$RPC_STATUS" =~ ^2 ]] || [[ "$RPC_BODY" != *"XQ_TEACHER_ASSIGNMENT_REQUIR
 fi
 
 # Current Teacher B can continue after explicit fresh-provider relink.
-current_operation='76000000-0000-4000-8000-000000000602'
 current_payload="{\"p_operation_id\":\"$current_operation\",\"p_organization_id\":\"$org_a\",\"p_student_id\":\"$handoff_student\",\"p_subject_profile_id\":\"$handoff_profile\",\"p_assignment_id\":\"$assignment_a_new\",\"p_raw_text\":\"Current teacher continues after restored handoff.\",\"p_client_capture_metadata\":{\"fixture\":true,\"source\":\"restore-handoff-positive\"}}"
 rpc_call "$ACTOR_TOKEN_B" create_observation "$current_payload"
 require_success "Current teacher Teaching Fact after restored handoff"
@@ -137,7 +191,6 @@ handoff_observation_id="$(json_value observation_id)"
 
 # Explicitly revoked legacy link must not become authoritative simply because a
 # cryptographically valid token presents the old tuple.
-revoked_operation='76000000-0000-4000-8000-000000000603'
 revoked_payload="{\"p_operation_id\":\"$revoked_operation\",\"p_organization_id\":\"$org_a\",\"p_student_id\":\"$student_a\",\"p_subject_profile_id\":\"$profile_a\",\"p_assignment_id\":\"$case_assignment\",\"p_raw_text\":\"Revoked identity must remain denied.\",\"p_client_capture_metadata\":{\"fixture\":true,\"source\":\"restore-revoked-negative\"}}"
 rpc_call "$REVOKED_TOKEN" create_observation "$revoked_payload"
 if [[ "$RPC_STATUS" =~ ^2 ]] || [[ "$RPC_BODY" != *"XQ_ACTOR_NOT_FOUND"* ]]; then
