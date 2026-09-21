@@ -78,11 +78,12 @@
       ],
       "function_deployed": true,
       "function_status": "ACTIVE",
-      "function_version": 1,
+      "function_version": 3,
       "deployment_verify_jwt": false,
-      "required_region_configuration": "XUEQING_REQUIRED_EDGE_REGION=ap-southeast-1",
+      "required_region_configuration": "DEFAULT_HOSTED_REQUIRED_EDGE_REGION=ap-southeast-1",
       "required_region_secret_configured": false,
-      "runtime_region_evidence": "pending-required-region-secret"
+      "runtime_region_evidence": "checked-in-policy-plus-active-v3-deployment-runtime-http-probe-unavailable-in-current-tooling",
+      "required_region_policy_source": "checked-in-deployment-default-with-environment-override"
     },
     "logs_diagnostics": {
       "application_pii_logging": "forbidden",
@@ -109,8 +110,8 @@
     "accepted": true
   },
   "blockers": [
-    "edge_required_region_secret_not_configured_and_runtime_region_not_proven",
-    "independent_database_and_private_storage_backup_not_proven"
+    "hosted_edge_runtime_region_not_independently_probed",
+    "backup_mechanism_and_destination_policy_not_frozen"
   ],
   "references": [
     "https://supabase.com/docs/guides/platform/regions",
@@ -130,7 +131,8 @@
     "production_client_source_roots": [
       "apps/windows/src",
       "apps/android/app/src/main"
-    ]
+    ],
+    "invitation_delivery_region_policy": "backend/supabase/functions/organization-invitation-delivery/deployment.ts"
   },
   "hosted_environment_observation": {
     "native_production_project_provisioned": true,
