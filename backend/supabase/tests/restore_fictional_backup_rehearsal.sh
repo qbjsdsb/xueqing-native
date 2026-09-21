@@ -179,7 +179,9 @@ while IFS= read -r table; do
     --no-owner \
     --no-acl \
     --exit-on-error \
-    --table="public.$table" \
+    --strict-names \
+    --schema=public \
+    --table="$table" \
     /tmp/xueqing.dump
 done < "$restore_root/restore-order.txt"
 
