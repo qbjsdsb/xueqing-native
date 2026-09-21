@@ -53,20 +53,21 @@ Rules:
 - Durable Intent remains excluded from Android backup/device-transfer until the separate backup/restore gate;
 - explicit purge closes Room and removes DB/WAL/SHM/journal, wrapped envelope and Keystore alias.
 
-## Current gate: Offline Access Lease
+## Current gate: Final native UX acceptance
 
-Encryption does not prove that cached student data is still authorized while a device is offline.
+The Offline Access Lease and the core Android teaching slices are already accepted prerequisites. The active Android line is Issue #12 / PR #66: **final native UX evidence**, not an architecture restart.
 
-The active Phase 1 gate is the bounded Offline Access Lease contract:
+Current acceptance work is deliberately limited to:
 
-- candidate maximum duration: 72 hours;
-- exact environment / AppUser / organization / installation scope binding;
-- monotonic-time expiry during one validated boot session;
-- wall-clock rollback detection;
-- boot-session change fails closed and requires online revalidation;
-- loss of cached projection authority must not silently destroy encrypted drafts or queued teacher work.
+- Chinese IME / inset behavior and real-device composition evidence;
+- source-context / Back behavior with protected drafts;
+- adaptive short / landscape / foldable / tablet pressure cases;
+- accessibility semantics and TalkBack evidence;
+- system Photo Picker return and media-failure UX;
+- reproducible visual / semantic evidence;
+- performance evidence only where the measurement path is reliable.
 
-The executable reference lives behind `contracts/security/OFFLINE_ACCESS_LEASE_V1.md` and the Android application-security tests. This gate protects **cached projection reads**; it is not a replacement credential for server writes.
+The accepted Offline Access Lease still bounds cached projection authority and remains enforced by `contracts/security/OFFLINE_ACCESS_LEASE_V1.md`. It is not a replacement credential for server writes, and final UX work must not weaken it.
 
 ## Frozen dependency matrix
 
@@ -115,14 +116,14 @@ Rules:
 
 ## What remains outside the accepted slices
 
-The broader Android Issue #12 still needs evidence, where relevant, for:
+Issue #12 still needs final evidence, where automation cannot faithfully substitute for a real device, for:
 
-- Chinese IME composition and predictive Back;
-- TalkBack, one-handed use and large text;
-- account / organization switch and scoped purge policy;
-- photo/attachment staging and retention;
-- phone / foldable / tablet / desktop-windowing adaptation;
-- backup/restore behavior rather than the current safe exclusion;
-- cold start and performance evidence.
+- real Chinese Pinyin composition and IME focus behavior;
+- real TalkBack traversal / announcement quality;
+- predictive Back behavior to the extent supported by the tested Android stack;
+- representative screenshot / semantics artifacts;
+- reliable cold-start and core-journey performance measurements, or an explicit accepted deferral when measurement is not yet trustworthy.
 
-The next product line after the Offline Access Lease gate is the Learning Case + Primary Action vertical slice. UX semantics remain governed by `docs/ux/*`, especially `INTERACTION_STATE_CONTRACT.md`.
+System Photo Picker, protected attachment staging, derivative cleanup, private Attachment Storage commit, Learning Case + Primary Action, Today and Current Focus are already accepted product prerequisites and must not be reopened merely to satisfy final UX evidence.
+
+Backup / restore, production provider residency, signing / distribution and final V1 RC acceptance are separate project gates. UX semantics remain governed by `docs/ux/*`, especially `INTERACTION_STATE_CONTRACT.md`.

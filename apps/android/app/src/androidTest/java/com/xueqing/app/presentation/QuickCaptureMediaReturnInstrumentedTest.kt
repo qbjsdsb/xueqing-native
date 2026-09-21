@@ -124,7 +124,7 @@ class QuickCaptureMediaReturnInstrumentedTest {
                     bootstrapRemote = PersonalBootstrapRemote {
                         PersonalBootstrapResult.Loaded(
                             PersonalBootstrap(
-                                fetchedAt = Instant.EPOCH,
+                                generatedAtServer = Instant.EPOCH,
                                 actor = PersonalBootstrapActor(actorId, "虚构教师"),
                                 organizations = emptyList(),
                                 teachingContexts = listOf(teachingContext),
