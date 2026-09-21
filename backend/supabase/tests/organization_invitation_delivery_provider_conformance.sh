@@ -94,6 +94,7 @@ invitation_id="$(
 )"
 
 cat > "$function_env" <<EOF
+XUEQING_LOCAL_REFERENCE_MODE=1
 XUEQING_INVITATION_REDIRECT_URL=http://127.0.0.1:3000/invitation
 EOF
 

@@ -126,7 +126,11 @@ Windows Organization Invitation Product Closure 已完成并合入主线：WinUI
 
 Windows 原生产品化已完成当前 Phase 1 收口。PR #68 已接受 Mica + WinUI TitleBar + NavigationView 原生 Shell 和可下载测试 MSIX；PR #69 已将 Today、Learning 与 Organization Management 从工程/原型表达收敛为真实工作面，并把视觉证据门禁加固到可检测 stale screenshot；Issue #70 通过 PR #72 / #73 完成 Students list/detail 的原生键盘效率、焦点恢复、可见文案、列表密度和无障碍语义，且保持既有 320-DIP 列宽与窗口断点不变。当前没有新的 Windows UI 代码执行线，不应为了“继续优化”而重开已经通过的产品化 Gate。
 
-Android Final Native UX PR #66 的自动化 exact-head 已通过 Foundation、Android device/durability、reference-provider、adaptive/large-text、accessibility 与视觉证据 Gate；剩余的是明确的真机人工验收：中文拼音 IME、TalkBack 播报质量，以及 predictive/system Back + Photo Picker 返回上下文。生产 Provider Region / Data Residency PR #63 / Issue #64 则被真实运营方驻留决策阻塞；在该决策解决前，仓库没有可自动继续的生产基础设施代码线，也不得把开发/reference provider 自动当成生产拓扑或提前启动 CloudBase #65。
+Android Final Native UX PR #66 已同步到最新 main，自动化 exact-head 再次通过 Foundation、API 36 device/durability、reference-provider、adaptive/large-text、accessibility 与视觉证据 Gate；剩余的是明确的真机人工验收：中文拼音 IME、TalkBack 播报质量，以及 predictive/system Back + Photo Picker 返回上下文。
+
+Production Provider Region / Data Residency Gate 已获得真实生产证据并接受：第一权威生产拓扑为 **Supabase Hosted / Singapore `ap-southeast-1`**，独立的 `xueqing-native-prod` Free 项目已创建并应用 14/14 Git migrations；private Attachment bucket 保持私有，接受 global CDN/edge transit；Invitation Delivery 使用 checked-in Singapore deployment policy、显式 local-reference opt-in，并由服务端 `SB_REGION` fail-closed 校验。GitHub hosted probe 已证明 production Function 实际返回 `x-sb-edge-region: ap-southeast-1`，同时 Backend、Windows reference-provider、Windows MSIX/Native UX 与 Android reference-provider exact-head 回归全部保持通过。
+
+当前唯一自动执行线转为 **Backup + private Storage Restore**：先证明数据库逻辑备份、private object bytes + SHA-256 manifest、独立加密归档以及 fresh-environment restore。调查同时确认正式客户端尚缺 production deployment/session composition，因此 #75 已冻结为 Backup/Restore 后的下一条产品化 Gate；随后再做 CloudBase second-provider conformance、Signing/Recovery 和 V1 RC。任何环境始终只有一个 authoritative provider，不做 active-active 或 live dual-write。
 
 动态工程状态以 `docs/project/PROJECT_STATE.yaml` 为准。
 

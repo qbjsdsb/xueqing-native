@@ -1,0 +1,165 @@
+{
+  "schema_version": 1,
+  "gate": "production-provider-region-data-residency",
+  "status": "accepted",
+  "evaluated_at": "2026-09-21",
+  "provider_candidate": "supabase-hosted",
+  "target_jurisdiction": "non-mainland-acceptable-singapore-selected",
+  "primary_project_region": {
+    "selection_policy": "specific-region-required-when-jurisdiction-matters",
+    "region": "ap-southeast-1",
+    "evidence": "supabase-management-api-readback-xueqing-native-prod-active-healthy-ap-southeast-1-2026-09-21",
+    "supported_regions_snapshot": [
+      "us-west-1",
+      "us-west-2",
+      "us-east-1",
+      "us-east-2",
+      "ca-central-1",
+      "eu-west-1",
+      "eu-west-2",
+      "eu-west-3",
+      "eu-central-1",
+      "eu-central-2",
+      "eu-north-1",
+      "ap-south-1",
+      "ap-southeast-1",
+      "ap-northeast-1",
+      "ap-northeast-2",
+      "ap-southeast-2",
+      "sa-east-1"
+    ]
+  },
+  "data_surfaces": {
+    "postgres": {
+      "authority": "server-authoritative-business-state",
+      "at_rest_region": "ap-southeast-1",
+      "accepted": true,
+      "evidence": "production-project-active-healthy-in-ap-southeast-1-and-14-repository-migrations-applied"
+    },
+    "auth": {
+      "authority": "provider-identity-only-application-identity-via-identitylink",
+      "at_rest_region": "ap-southeast-1",
+      "accepted": true,
+      "evidence": "supabase-auth-bound-to-production-project-postgres-region"
+    },
+    "storage": {
+      "bucket_model": "private",
+      "metadata_region": "ap-southeast-1",
+      "object_origin_region": "ap-southeast-1",
+      "edge_cache_scope": "global-cdn-accepted-for-v1-private-per-user-authorization-retained",
+      "signed_urls_used_by_xueqing_v1": false,
+      "accepted": true,
+      "evidence": "teaching-attachments-v1-private-bucket-readback-public-false-6MiB-jpeg-png-webp"
+    },
+    "edge_invitation_delivery": {
+      "default_execution": "globally-distributed-nearest-request-region",
+      "production_execution_region": "ap-southeast-1",
+      "region_control": "client-x-region-plus-server-SB_REGION-guard-with-checked-in-singapore-default-and-explicit-local-reference-opt-in",
+      "personal_data": "invitee-email-server-derived-from-authoritative-invitation",
+      "accepted": true,
+      "same_region_with_primary_required": true,
+      "global_gateway_transit": "accepted-for-v1",
+      "supported_regions_snapshot": [
+        "ap-northeast-1",
+        "ap-northeast-2",
+        "ap-south-1",
+        "ap-southeast-1",
+        "ap-southeast-2",
+        "ca-central-1",
+        "eu-central-1",
+        "eu-central-2",
+        "eu-west-1",
+        "eu-west-2",
+        "eu-west-3",
+        "sa-east-1",
+        "us-east-1",
+        "us-west-1",
+        "us-west-2"
+      ],
+      "function_deployed": true,
+      "function_status": "ACTIVE",
+      "function_version": 4,
+      "deployment_verify_jwt": false,
+      "required_region_configuration": "DEFAULT_HOSTED_REQUIRED_EDGE_REGION=ap-southeast-1",
+      "runtime_region_evidence": "github-actions-production-topology-probe-run-35596578923-http-405-x-sb-edge-region-ap-southeast-1-body-XQ_METHOD_NOT_ALLOWED",
+      "required_region_policy_source": "checked-in-deployment-default-with-environment-override"
+    },
+    "logs_diagnostics": {
+      "application_pii_logging": "forbidden",
+      "provider_log_residency": "provider-managed-free-plan-logs-accepted-1-day-retention-no-intentional-application-pii",
+      "log_drains": [],
+      "public_ci_production_data": "forbidden",
+      "accepted": true,
+      "provider_log_retention_days": 1,
+      "log_drains_available_on_selected_plan": false,
+      "evidence": "free-plan-provider-managed-logs-accepted-no-log-drain-no-intentional-application-pii"
+    },
+    "backups": {
+      "database_backup": "pg_dump-custom-format-no-owner-no-acl-logical-export",
+      "storage_objects_in_database_backup": false,
+      "backup_residency": "operator-controlled-private-encrypted-off-project-destination-non-mainland-allowed-public-github-ci-forbidden",
+      "independent_storage_object_backup_required": true,
+      "accepted": true,
+      "storage_object_backup": "supabase-storage-s3-compatible-private-object-export-with-xueqing-locator-byte-length-mime-sha256-manifest",
+      "archive_encryption": "recipient-key-encrypted-archive-with-decryption-key-stored-separately",
+      "restore_rehearsal": "required-by-following-backup-storage-restore-gate"
+    }
+  },
+  "production_credentials": {
+    "client_secret_keys_allowed": false,
+    "public_repository_secret_keys_allowed": false,
+    "public_ci_production_secrets_allowed": false,
+    "accepted": true
+  },
+  "blockers": [],
+  "references": [
+    "https://supabase.com/docs/guides/platform/regions",
+    "https://supabase.com/docs/guides/auth/architecture",
+    "https://supabase.com/docs/guides/storage/cdn/fundamentals",
+    "https://supabase.com/docs/guides/storage/cdn/smart-cdn",
+    "https://supabase.com/docs/guides/functions/regional-invocation",
+    "https://supabase.com/docs/guides/platform/backups",
+    "https://supabase.com/docs/guides/observability/log-drains",
+    "https://supabase.com/docs/guides/platform/free-project-pausing",
+    "https://supabase.com/docs/guides/deployment/going-into-prod",
+    "https://supabase.com/docs/guides/storage/s3/authentication"
+  ],
+  "repository_evidence": {
+    "private_attachment_bucket_migration": "backend/supabase/migrations/20260920055000_observation_attachment_v1.sql",
+    "invitation_delivery_server_adapter": "backend/supabase/functions/organization-invitation-delivery/index.ts",
+    "production_client_source_roots": [
+      "apps/windows/src",
+      "apps/android/app/src/main"
+    ],
+    "invitation_delivery_region_policy": "backend/supabase/functions/organization-invitation-delivery/deployment.ts"
+  },
+  "hosted_environment_observation": {
+    "native_production_project_provisioned": true,
+    "existing_development_reference_region": "ap-southeast-1",
+    "existing_development_reference_matches_native_backend": false,
+    "evidence_checked_at": "2026-09-21",
+    "connected_organization_plan": "free",
+    "active_free_projects_observed": 2,
+    "free_project_limit_observed": 2,
+    "production_project_capacity_resolved": true,
+    "production_project_name": "xueqing-native-prod",
+    "production_project_status": "ACTIVE_HEALTHY",
+    "production_project_region": "ap-southeast-1",
+    "repository_migrations_applied": 14,
+    "public_rls_tables_observed": 17,
+    "legacy_xueqing_dev_status": "INACTIVE",
+    "other_legacy_project_pause_api_status": "provider-reported-hibernating-while-list-projects-reported-active-healthy-manual-dashboard-cleanup-required"
+  },
+  "deployment_constraints": {
+    "zero_paid_dependency_target": true,
+    "hosted_free_automatic_backups": false,
+    "hosted_free_pitr": false,
+    "hosted_free_log_drains": false,
+    "hosted_free_log_retention_days": 1,
+    "hosted_free_inactivity_pause_possible": true,
+    "hosted_free_can_be_sole_production_durability_layer": false,
+    "free_active_project_limit": 2,
+    "free_active_projects_observed": 2,
+    "production_local_reference_mode_allowed": false
+  }
+}

@@ -32,6 +32,24 @@ public sealed class OrganizationInvitationDeliveryCommandTests
     }
 
     [TestMethod]
+    public async Task Adapter_requests_configured_edge_execution_region()
+    {
+        var request = Request();
+        var handler = new StubHandler(HttpStatusCode.OK, ValidReceipt(request));
+        var command = new SupabaseOrganizationInvitationDeliveryCommand(
+            new HttpClient(handler),
+            new Uri("https://example.supabase.co/"),
+            "publishable-key",
+            _ => ValueTask.FromResult<string?>("access-token"),
+            "ap-southeast-1");
+
+        var result = await command.ExecuteAsync(request);
+
+        Assert.IsTrue(result.IsSuccess, result.Failure?.Code);
+        Assert.AreEqual("ap-southeast-1", handler.LastFunctionRegion);
+    }
+
+    [TestMethod]
     public async Task Adapter_treats_malformed_success_as_result_unknown()
     {
         var request = Request();
@@ -161,6 +179,7 @@ public sealed class OrganizationInvitationDeliveryCommandTests
     {
         public int RequestCount { get; private set; }
         public string? LastAuthorization { get; private set; }
+        public string? LastFunctionRegion { get; private set; }
         public string? LastBody { get; private set; }
         public Uri? LastRequestUri { get; private set; }
 
@@ -170,6 +189,9 @@ public sealed class OrganizationInvitationDeliveryCommandTests
         {
             RequestCount++;
             LastAuthorization = request.Headers.Authorization?.ToString();
+            LastFunctionRegion = request.Headers.TryGetValues("x-region", out var regions)
+                ? regions.SingleOrDefault()
+                : null;
             LastRequestUri = request.RequestUri;
             LastBody = request.Content is null
                 ? null
