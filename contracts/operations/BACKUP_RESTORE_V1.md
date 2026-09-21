@@ -93,6 +93,30 @@ The manifest must not contain provider admin secrets, database passwords, access
 
 The validator rejects secret-like fields and values.
 
+## Provider identity recovery
+
+Provider-owned Auth users, provider sessions and access/refresh tokens are **not** canonical Xueqing business identity and are not restored as authoritative application state.
+
+The backup preserves application-owned:
+
+- `AppUser`;
+- `IdentityLink` history and active/revoked state;
+- Membership / teaching authority;
+- historical actor ids and operation receipts.
+
+A fresh provider environment may issue a different `(provider, issuer, external_subject)` tuple for the same human. That new provider identity MUST NOT silently inherit an existing AppUser.
+
+Fresh-target recovery must prove this sequence:
+
+1. a newly created provider identity is denied before an authorized relink;
+2. the recovery operation explicitly deactivates/supersedes the old active provider link as required by the migration policy;
+3. the new provider tuple is linked to the same canonical AppUser through an auditable recovery/onboarding operation;
+4. exactly one intended active provider link remains for that recovered identity scope;
+5. only after relink may the fresh provider session exercise the restored AppUser authority;
+6. previously revoked/disabled links remain revoked/disabled and are never reactivated merely because a backup was restored.
+
+A provider subject is therefore recoverable **identity evidence**, not the business primary key. A changed provider subject after disaster recovery does not rewrite historical `actor_app_user_id`, Membership, Assignment, Case, Action, Observation or operation receipt identity.
+
 ## Restore acceptance
 
 A manifest-valid archive is only **backup-valid**. It is not yet **restore-accepted**.
