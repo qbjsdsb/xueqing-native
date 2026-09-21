@@ -4,11 +4,11 @@
   "status": "blocked",
   "evaluated_at": "2026-09-21",
   "provider_candidate": "supabase-hosted",
-  "target_jurisdiction": null,
+  "target_jurisdiction": "non-mainland-acceptable-singapore-selected",
   "primary_project_region": {
     "selection_policy": "specific-region-required-when-jurisdiction-matters",
-    "region": null,
-    "evidence": "provisioned-project-evidence-required",
+    "region": "ap-southeast-1",
+    "evidence": "operator-selected-supabase-singapore-production-project-provisioning-evidence-required",
     "supported_regions_snapshot": [
       "us-west-1",
       "us-west-2",
@@ -32,30 +32,30 @@
   "data_surfaces": {
     "postgres": {
       "authority": "server-authoritative-business-state",
-      "at_rest_region": "inherits-primary-project-region",
+      "at_rest_region": "ap-southeast-1",
       "accepted": false
     },
     "auth": {
       "authority": "provider-identity-only-application-identity-via-identitylink",
-      "at_rest_region": "project-postgres-auth-schema",
+      "at_rest_region": "ap-southeast-1",
       "accepted": false
     },
     "storage": {
       "bucket_model": "private",
-      "metadata_region": "project-postgres-storage-schema",
-      "object_origin_region": "inherits-primary-project-region",
-      "edge_cache_scope": "global-cdn-possible",
+      "metadata_region": "ap-southeast-1",
+      "object_origin_region": "ap-southeast-1",
+      "edge_cache_scope": "global-cdn-accepted-for-v1-private-per-user-authorization-retained",
       "signed_urls_used_by_xueqing_v1": false,
       "accepted": false
     },
     "edge_invitation_delivery": {
       "default_execution": "globally-distributed-nearest-request-region",
-      "production_execution_region": null,
+      "production_execution_region": "ap-southeast-1",
       "region_control": "client-x-region-plus-server-SB_REGION-guard-implemented-production-config-required",
       "personal_data": "invitee-email-server-derived-from-authoritative-invitation",
       "accepted": false,
       "same_region_with_primary_required": true,
-      "global_gateway_transit": "unresolved",
+      "global_gateway_transit": "accepted-for-v1",
       "supported_regions_snapshot": [
         "ap-northeast-1",
         "ap-northeast-2",
@@ -76,15 +76,15 @@
     },
     "logs_diagnostics": {
       "application_pii_logging": "forbidden",
-      "provider_log_residency": null,
+      "provider_log_residency": "strict-single-region-not-required-provider-managed-logging-accepted-no-intentional-application-pii",
       "log_drains": [],
       "public_ci_production_data": "forbidden",
       "accepted": false
     },
     "backups": {
-      "database_backup": "provider-plan-dependent",
+      "database_backup": "independent-encrypted-logical-backup-required-outside-live-project",
       "storage_objects_in_database_backup": false,
-      "backup_residency": null,
+      "backup_residency": "non-mainland-private-encrypted-destination-class-accepted-exact-target-pending-backup-restore-gate",
       "independent_storage_object_backup_required": true,
       "accepted": false
     }
@@ -96,12 +96,10 @@
     "accepted": true
   },
   "blockers": [
-    "target_jurisdiction_not_selected",
-    "exact_production_project_region_not_provisioned_and_verified",
-    "private_storage_global_cdn_residency_not_accepted_or_eliminated",
-    "edge_function_transient_processing_region_not_frozen",
-    "provider_log_residency_not_evidenced",
-    "database_backup_residency_not_evidenced"
+    "native_production_project_not_provisioned_and_region_not_verified",
+    "production_runtime_topology_evidence_not_recorded",
+    "independent_database_and_private_storage_backup_not_proven",
+    "production_log_retention_and_diagnostics_evidence_not_recorded"
   ],
   "references": [
     "https://supabase.com/docs/guides/platform/regions",
