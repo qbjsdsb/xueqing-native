@@ -280,6 +280,18 @@ def validate(value: dict, require_accepted: bool, repo_root: Path) -> None:
             "Invitation Delivery execution region must match primary project region",
         )
     require(
+        edge.get("function_deployed") is True,
+        "accepted topology requires deployed Invitation Delivery function evidence",
+    )
+    require(
+        edge.get("required_region_secret_configured") is True,
+        "accepted topology requires server-side required-region configuration",
+    )
+    require(
+        is_concrete_evidence(edge.get("runtime_region_evidence")),
+        "accepted topology requires concrete Edge runtime-region evidence",
+    )
+    require(
         edge.get("global_gateway_transit") not in {None, "unresolved"},
         "accepted topology requires an explicit global gateway transit decision",
     )
