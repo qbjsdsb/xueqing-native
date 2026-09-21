@@ -573,10 +573,31 @@ function Assert-CompactStudentKeyboardJourney {
     Switch-ToWorkspace -Workspace personal
     Navigate-ToSurface -NavigationId 'StudentsNavigation' -SurfaceId 'StudentsSurface' | Out-Null
 
-    $studentListForShortcut = Wait-Until -FailureMessage 'Student list is unavailable before Ctrl+F accelerator check.' -Condition {
-        Find-VisibleByAutomationId -Root $script:root -AutomationId 'StudentList'
+    $focusableStudentItem = Wait-Until -FailureMessage 'Student list did not expose a focusable row before Ctrl+F accelerator check.' -Condition {
+        $liveList = Find-VisibleByAutomationId -Root $script:root -AutomationId 'StudentList'
+        if ($null -eq $liveList) {
+            return $null
+        }
+
+        $items = @(Find-ListItems -List $liveList)
+        if ($items.Count -eq 0) {
+            return $null
+        }
+
+        try {
+            $items[0].SetFocus()
+            return $items[0]
+        }
+        catch [System.Management.Automation.MethodInvocationException] {
+            return $null
+        }
+        catch [System.InvalidOperationException] {
+            return $null
+        }
+        catch [System.Windows.Automation.ElementNotAvailableException] {
+            return $null
+        }
     }
-    $studentListForShortcut.SetFocus()
     [System.Windows.Forms.SendKeys]::SendWait('^f')
     Wait-Until -FailureMessage 'Ctrl+F did not focus the Student search box.' -Condition {
         $focused = [System.Windows.Automation.AutomationElement]::FocusedElement
