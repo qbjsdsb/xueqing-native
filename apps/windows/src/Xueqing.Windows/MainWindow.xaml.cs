@@ -124,7 +124,7 @@ public sealed partial class MainWindow : Window
         Shell.IsPaneOpen = false;
     }
 
-    private void Shell_SelectionChanged(NavigationView sender, NavigationViewSelectionChangedEventArgs args)
+    private async void Shell_SelectionChanged(NavigationView sender, NavigationViewSelectionChangedEventArgs args)
     {
         var tag = args.SelectedItemContainer?.Tag?.ToString();
         if (string.IsNullOrWhiteSpace(tag))
@@ -144,6 +144,11 @@ public sealed partial class MainWindow : Window
         }
 
         ShowSurface(tag);
+
+        if (tag == "learning" && ViewModel.IsAuthoritativeStudentWorkspace)
+        {
+            await ViewModel.LoadSelectedTeachingContextAsync();
+        }
     }
 
     private void ShowSurface(string tag)
