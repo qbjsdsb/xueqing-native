@@ -34,9 +34,11 @@ raw_text='Backup restore fictional observation.'
 echo "::add-mask::$ANON_KEY"
 echo "::add-mask::$SERVICE_ROLE_KEY"
 
-db_container="$(docker ps --filter 'name=supabase_db_' --format '{{.Names}}' | head -n 1)"
-if [[ -z "$db_container" ]]; then
-  echo 'Source local Supabase database container was not found.' >&2
+db_container='supabase_db_xueqing-native-local'
+if ! docker ps --format '{{.Names}}' | grep -Fxq "$db_container"; then
+  echo "Expected source database container is not running: $db_container" >&2
+  echo 'Running local Supabase DB containers:' >&2
+  docker ps --filter 'name=supabase_db_' --format '  {{.Names}}' >&2 || true
   exit 1
 fi
 
@@ -122,6 +124,37 @@ ACTOR_TOKEN="$actor_token" \
 DB_CONTAINER="$db_container" \
 bash backend/supabase/tests/seed_fictional_recovery_history.sh \
   "$output_dir/history_fixture.json"
+
+source_assignment_state="$(
+  docker exec "$db_container" psql -U postgres -d postgres -Atc \
+    "select coalesce(json_agg(json_build_object('id', id, 'teacher_app_user_id', teacher_app_user_id, 'active', active) order by id)::text, '[]') from public.student_teacher_assignments"
+)"
+printf 'Source DB assignment state immediately before pg_dump: %s\n' "$source_assignment_state"
+
+docker exec "$db_container" psql -U postgres -d postgres -v ON_ERROR_STOP=1 >/dev/null <<'SQL'
+do $xq$
+begin
+    if not exists (
+        select 1
+          from public.student_teacher_assignments
+         where id = '50000000-0000-0000-0000-000000000001'::uuid
+           and teacher_app_user_id = '10000000-0000-0000-0000-000000000001'::uuid
+           and not active
+    ) then
+        raise exception 'XQ_BACKUP_SOURCE_FORMER_ASSIGNMENT_NOT_INACTIVE_AT_DUMP_BOUNDARY';
+    end if;
+    if not exists (
+        select 1
+          from public.student_teacher_assignments
+         where id = '50000000-0000-0000-0000-000000000104'::uuid
+           and teacher_app_user_id = '10000000-0000-0000-0000-000000000002'::uuid
+           and active
+    ) then
+        raise exception 'XQ_BACKUP_SOURCE_CURRENT_ASSIGNMENT_NOT_ACTIVE_AT_DUMP_BOUNDARY';
+    end if;
+end;
+$xq$;
+SQL
 
 db_started_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 docker exec "$db_container" pg_dump \
