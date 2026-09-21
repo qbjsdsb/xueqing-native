@@ -22,6 +22,7 @@ frozen:
   offline_access_lease_v1: 72h-max-same-boot-monotonic-with-rollback-detection
   organization_business_date: server-side-validated-timezone
   provider_portability_v1: selectable-single-authority-multi-adapter-no-dual-write
+  secondary_provider_target: cloudbase-conformance
 
 completed_gates:
   - windows-native-ux-prototype

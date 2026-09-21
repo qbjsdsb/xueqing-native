@@ -129,7 +129,14 @@ Implication for Xueqing:
 - existing Supabase conformance evidence remains useful as a semantic contract but cannot be copied as proof for CloudBase;
 - the zero-paid constraint still requires an independent backup/restore strategy because the current free experience does not include data rollback.
 
-A CloudBase provider spike is justified only after the target jurisdiction makes mainland-hosted infrastructure materially necessary. Do not maintain two production adapters speculatively.
+CloudBase conformance is now a planned second-provider portability milestone after this residency Gate, regardless of which provider is selected for the first production topology.
+
+That sequencing has two different meanings:
+
+- if the selected production policy requires mainland-China residency, CloudBase conformance becomes a prerequisite to accepting CloudBase as the production topology and therefore materially blocks that production path;
+- if Supabase satisfies the selected first production topology, PR #63 may close on Supabase evidence first, and the queued CloudBase conformance spike still runs next as a portability milestone before Backup/Restore.
+
+Do not start the implementation in parallel with this Gate, and do not maintain active-active production adapters or dual-write live traffic.
 
 References:
 
