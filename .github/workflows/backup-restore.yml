@@ -55,3 +55,61 @@ jobs:
             printf '%s\n' "$forbidden" >&2
             exit 1
           fi
+
+
+  fictional-local-restore:
+    name: fictional-local-restore
+    needs: manifest-contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+
+      - name: Setup stable Supabase CLI 2.117.0
+        uses: supabase/setup-cli@46f7f98c7f948ad727d22c1e67fab04c223a0520
+        with:
+          version: 2.117.0
+
+      - name: Start clean fictional source provider
+        shell: bash
+        run: |
+          set -euo pipefail
+          supabase start --workdir backend
+          supabase db reset --workdir backend
+
+      - name: Create encrypted fictional backup archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash backend/supabase/tests/create_fictional_backup_rehearsal.sh \
+            "$RUNNER_TEMP/xueqing-backup-rehearsal"
+
+      - name: Stop source provider before fresh restore
+        shell: bash
+        run: |
+          set -euo pipefail
+          supabase stop --workdir backend
+
+      - name: Restore into a fresh isolated provider and prove semantics
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash backend/supabase/tests/restore_fictional_backup_rehearsal.sh \
+            "$RUNNER_TEMP/xueqing-backup-rehearsal"
+
+      - name: Prove backup material was not published as a repository artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s "$RUNNER_TEMP/xueqing-backup-rehearsal/archive.tar.gpg"
+          test -s "$RUNNER_TEMP/xueqing-backup-rehearsal/rehearsal.key"
+          echo "Rehearsal material remained runner-local and was not uploaded."
+
+      - name: Remove rehearsal material
+        if: always()
+        shell: bash
+        run: |
+          rm -rf "$RUNNER_TEMP/xueqing-backup-rehearsal" || true
+          supabase stop --workdir backend || true
