@@ -265,44 +265,82 @@ while IFS=$'\t' read -r locator object_file mime expected_size expected_sha; do
   fi
 done < "$restore_root/objects.tsv"
 
-make_jwt() {
-  JWT_SUBJECT="$1" python3 - <<'PY'
-import base64
-import hashlib
-import hmac
-import json
-import os
-import time
-
-def b64url(value: bytes) -> str:
-    return base64.urlsafe_b64encode(value).rstrip(b'=').decode('ascii')
-
-now = int(time.time())
-header = {"alg": "HS256", "typ": "JWT"}
-payload = {
-    "iss": "supabase-demo",
-    "sub": os.environ["JWT_SUBJECT"],
-    "aud": "authenticated",
-    "role": "authenticated",
-    "iat": now,
-    "exp": now + 3600,
-}
-encoded_header = b64url(json.dumps(header, separators=(',', ':')).encode())
-encoded_payload = b64url(json.dumps(payload, separators=(',', ':')).encode())
-signing_input = f"{encoded_header}.{encoded_payload}".encode()
-signature = hmac.new(
-    os.environ["JWT_SECRET"].encode(),
-    signing_input,
-    hashlib.sha256,
-).digest()
-print(f"{encoded_header}.{encoded_payload}.{b64url(signature)}")
-PY
+json_get() {
+  local expression="$1"
+  python3 -c '
+import json,sys
+expression=sys.argv[1]
+current=json.load(sys.stdin)
+for part in expression.split("."):
+    current=current[int(part)] if isinstance(current,list) else current[part]
+if isinstance(current,(dict,list)):
+    print(json.dumps(current,ensure_ascii=False,separators=(",",":")))
+elif current is None:
+    print("")
+else:
+    print(current)
+' "$expression"
 }
 
-actor_token="$(make_jwt 'a0000000-0000-0000-0000-000000000001')"
-unlinked_token="$(make_jwt 'f0000000-0000-0000-0000-000000000001')"
-echo "::add-mask::$actor_token"
-echo "::add-mask::$unlinked_token"
+jwt_claim() {
+  local token="$1" claim="$2"
+  python3 -c '
+import base64,json,sys
+token,claim=sys.argv[1],sys.argv[2]
+payload=token.split(".")[1]
+payload += "=" * (-len(payload)%4)
+claims=json.loads(base64.urlsafe_b64decode(payload.encode()).decode())
+value=claims.get(claim)
+print("" if value is None else value)
+' "$token" "$claim"
+}
+
+create_auth_identity() {
+  local email="$1" password="$2"
+  local user_response user_id session token issuer subject
+
+  user_response="$(
+    curl --fail-with-body --silent --show-error \
+      -X POST "$api_url/auth/v1/admin/users" \
+      -H "apikey: $SERVICE_ROLE_KEY" \
+      -H "Authorization: Bearer $SERVICE_ROLE_KEY" \
+      -H 'Content-Type: application/json' \
+      --data "{\"email\":\"$email\",\"password\":\"$password\",\"email_confirm\":true}"
+  )"
+  user_id="$(printf '%s' "$user_response" | json_get id)"
+
+  session="$(
+    curl --fail-with-body --silent --show-error \
+      -X POST "$api_url/auth/v1/token?grant_type=password" \
+      -H "apikey: $ANON_KEY" \
+      -H 'Content-Type: application/json' \
+      --data "{\"email\":\"$email\",\"password\":\"$password\"}"
+  )"
+  token="$(printf '%s' "$session" | json_get access_token)"
+  issuer="$(jwt_claim "$token" iss)"
+  subject="$(jwt_claim "$token" sub)"
+
+  [[ -n "$user_id" && -n "$token" && -n "$issuer" && "$subject" == "$user_id" ]] || {
+    echo "Fresh provider identity creation failed for $email." >&2
+    exit 1
+  }
+
+  echo "::add-mask::$token" >&2
+  printf '%s|%s|%s|%s\n' "$user_id" "$token" "$issuer" "$subject"
+}
+
+suffix="${GITHUB_RUN_ID:-local}-${GITHUB_RUN_ATTEMPT:-0}"
+actor_email="restore-actor-$suffix@example.com"
+unlinked_email="restore-unlinked-$suffix@example.com"
+actor_password="$(python3 -c 'import secrets,string; a=string.ascii_letters+string.digits; print("Xq!"+ "".join(secrets.choice(a) for _ in range(24)))')"
+unlinked_password="$(python3 -c 'import secrets,string; a=string.ascii_letters+string.digits; print("Xq!"+ "".join(secrets.choice(a) for _ in range(24)))')"
+echo "::add-mask::$actor_password"
+echo "::add-mask::$unlinked_password"
+
+actor_identity="$(create_auth_identity "$actor_email" "$actor_password")"
+IFS='|' read -r actor_provider_user actor_token actor_issuer actor_subject <<<"$actor_identity"
+unlinked_identity="$(create_auth_identity "$unlinked_email" "$unlinked_password")"
+IFS='|' read -r unlinked_provider_user unlinked_token unlinked_issuer unlinked_subject <<<"$unlinked_identity"
 
 observation_operation="$(cat "$backup_dir/observation_operation_id")"
 attachment_operation="$(cat "$backup_dir/attachment_operation_id")"
@@ -310,6 +348,7 @@ observation_id="$(cat "$backup_dir/observation_id")"
 attachment_id="$(cat "$backup_dir/attachment_id")"
 raw_text="$(cat "$backup_dir/raw_text")"
 
+actor_id='10000000-0000-0000-0000-000000000001'
 organization_id='20000000-0000-0000-0000-000000000001'
 student_id='30000000-0000-0000-0000-000000000001'
 profile_id='40000000-0000-0000-0000-000000000001'
@@ -328,6 +367,50 @@ rpc_call() {
   )"
   RPC_BODY="$(cat "$out")"
   rm -f "$out"
+}
+
+prelink_operation='76000000-0000-4000-8000-000000000200'
+prelink_payload="{\"p_operation_id\":\"$prelink_operation\",\"p_organization_id\":\"$organization_id\",\"p_student_id\":\"$student_id\",\"p_subject_profile_id\":\"$profile_id\",\"p_assignment_id\":\"$assignment_id\",\"p_raw_text\":\"Fresh provider identity must not map implicitly.\",\"p_client_capture_metadata\":{\"fixture\":true}}"
+rpc_call "$actor_token" create_observation "$prelink_payload"
+if [[ "$RPC_STATUS" =~ ^2 ]] || [[ "$RPC_BODY" != *"XQ_ACTOR_NOT_FOUND"* ]]; then
+  echo "Fresh provider identity unexpectedly mapped before explicit recovery relink: $RPC_STATUS $RPC_BODY" >&2
+  exit 1
+fi
+
+docker exec -i "$db_container" psql -U postgres -d postgres -v ON_ERROR_STOP=1 \
+  -v actor_id="$actor_id" \
+  -v new_issuer="$actor_issuer" \
+  -v new_subject="$actor_subject" >/dev/null <<'SQL'
+begin;
+update public.identity_links
+   set active = false
+ where app_user_id = :'actor_id'::uuid
+   and provider_key = 'supabase'
+   and active;
+
+insert into public.identity_links (
+    app_user_id,
+    provider_key,
+    issuer,
+    external_subject,
+    active
+) values (
+    :'actor_id'::uuid,
+    'supabase',
+    :'new_issuer',
+    :'new_subject',
+    true
+);
+commit;
+SQL
+
+active_link_count="$(
+  docker exec "$db_container" psql -U postgres -d postgres -Atc \
+    "select count(*) from public.identity_links where app_user_id = '$actor_id'::uuid and provider_key = 'supabase' and active"
+)"
+[[ "$active_link_count" == '1' ]] || {
+  echo "Recovery relink expected exactly one active provider identity, got $active_link_count." >&2
+  exit 1
 }
 
 observation_payload="{\"p_operation_id\":\"$observation_operation\",\"p_organization_id\":\"$organization_id\",\"p_student_id\":\"$student_id\",\"p_subject_profile_id\":\"$profile_id\",\"p_assignment_id\":\"$assignment_id\",\"p_raw_text\":\"$raw_text\",\"p_client_capture_metadata\":{\"fixture\":true,\"source\":\"backup-restore-rehearsal\"}}"
