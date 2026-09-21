@@ -226,6 +226,7 @@ if target["table_fingerprints_sha256"] != expected["table_fingerprints_sha256"]:
 PY
 
 actor_id='10000000-0000-0000-0000-000000000001'
+actor_b_id='10000000-0000-0000-0000-000000000002'
 organization_id='20000000-0000-0000-0000-000000000001'
 student_id='30000000-0000-0000-0000-000000000001'
 profile_id='40000000-0000-0000-0000-000000000001'
@@ -419,15 +420,20 @@ create_auth_identity() {
 }
 
 suffix="${GITHUB_RUN_ID:-local}-${GITHUB_RUN_ATTEMPT:-0}"
-actor_email="restore-actor-$suffix@example.com"
+actor_email="restore-actor-a-$suffix@example.com"
+actor_b_email="restore-actor-b-$suffix@example.com"
 unlinked_email="restore-unlinked-$suffix@example.com"
 actor_password="$(python3 -c 'import secrets,string; a=string.ascii_letters+string.digits; print("Xq!"+ "".join(secrets.choice(a) for _ in range(24)))')"
+actor_b_password="$(python3 -c 'import secrets,string; a=string.ascii_letters+string.digits; print("Xq!"+ "".join(secrets.choice(a) for _ in range(24)))')"
 unlinked_password="$(python3 -c 'import secrets,string; a=string.ascii_letters+string.digits; print("Xq!"+ "".join(secrets.choice(a) for _ in range(24)))')"
 echo "::add-mask::$actor_password"
+echo "::add-mask::$actor_b_password"
 echo "::add-mask::$unlinked_password"
 
 actor_identity="$(create_auth_identity "$actor_email" "$actor_password")"
 IFS='|' read -r actor_provider_user actor_token actor_issuer actor_subject <<<"$actor_identity"
+actor_b_identity="$(create_auth_identity "$actor_b_email" "$actor_b_password")"
+IFS='|' read -r actor_b_provider_user actor_b_token actor_b_issuer actor_b_subject <<<"$actor_b_identity"
 unlinked_identity="$(create_auth_identity "$unlinked_email" "$unlinked_password")"
 IFS='|' read -r unlinked_provider_user unlinked_token unlinked_issuer unlinked_subject <<<"$unlinked_identity"
 
@@ -462,18 +468,29 @@ prelink_operation='76000000-0000-4000-8000-000000000200'
 prelink_payload="{\"p_operation_id\":\"$prelink_operation\",\"p_organization_id\":\"$organization_id\",\"p_student_id\":\"$student_id\",\"p_subject_profile_id\":\"$profile_id\",\"p_assignment_id\":\"$assignment_id\",\"p_raw_text\":\"Fresh provider identity must not map implicitly.\",\"p_client_capture_metadata\":{\"fixture\":true}}"
 rpc_call "$actor_token" create_observation "$prelink_payload"
 if [[ "$RPC_STATUS" =~ ^2 ]] || [[ "$RPC_BODY" != *"XQ_ACTOR_NOT_FOUND"* ]]; then
-  echo "Fresh provider identity unexpectedly mapped before explicit recovery relink: $RPC_STATUS $RPC_BODY" >&2
+  echo "Fresh provider identity A unexpectedly mapped before explicit recovery relink: $RPC_STATUS $RPC_BODY" >&2
+  exit 1
+fi
+
+actor_b_prelink_operation='76000000-0000-4000-8000-000000000202'
+actor_b_prelink_payload="{\"p_operation_id\":\"$actor_b_prelink_operation\",\"p_organization_id\":\"$organization_id\",\"p_student_id\":\"$student_id\",\"p_subject_profile_id\":\"$profile_id\",\"p_assignment_id\":\"$assignment_id\",\"p_raw_text\":\"Fresh provider identity B must not map implicitly.\",\"p_client_capture_metadata\":{\"fixture\":true}}"
+rpc_call "$actor_b_token" create_observation "$actor_b_prelink_payload"
+if [[ "$RPC_STATUS" =~ ^2 ]] || [[ "$RPC_BODY" != *"XQ_ACTOR_NOT_FOUND"* ]]; then
+  echo "Fresh provider identity B unexpectedly mapped before explicit recovery relink: $RPC_STATUS $RPC_BODY" >&2
   exit 1
 fi
 
 docker exec -i "$db_container" psql -U postgres -d postgres -v ON_ERROR_STOP=1 \
   -v actor_id="$actor_id" \
+  -v actor_b_id="$actor_b_id" \
   -v new_issuer="$actor_issuer" \
-  -v new_subject="$actor_subject" >/dev/null <<'SQL'
+  -v new_subject="$actor_subject" \
+  -v actor_b_issuer="$actor_b_issuer" \
+  -v actor_b_subject="$actor_b_subject" >/dev/null <<'SQL'
 begin;
 update public.identity_links
    set active = false
- where app_user_id = :'actor_id'::uuid
+ where app_user_id in (:'actor_id'::uuid, :'actor_b_id'::uuid)
    and provider_key = 'supabase'
    and active;
 
@@ -483,22 +500,30 @@ insert into public.identity_links (
     issuer,
     external_subject,
     active
-) values (
-    :'actor_id'::uuid,
-    'supabase',
-    :'new_issuer',
-    :'new_subject',
-    true
-);
+) values
+    (
+        :'actor_id'::uuid,
+        'supabase',
+        :'new_issuer',
+        :'new_subject',
+        true
+    ),
+    (
+        :'actor_b_id'::uuid,
+        'supabase',
+        :'actor_b_issuer',
+        :'actor_b_subject',
+        true
+    );
 commit;
 SQL
 
 active_link_count="$(
   docker exec "$db_container" psql -U postgres -d postgres -Atc \
-    "select count(*) from public.identity_links where app_user_id = '$actor_id'::uuid and provider_key = 'supabase' and active"
+    "select count(*) from public.identity_links where app_user_id in ('$actor_id'::uuid, '$actor_b_id'::uuid) and provider_key = 'supabase' and active"
 )"
-[[ "$active_link_count" == '1' ]] || {
-  echo "Recovery relink expected exactly one active provider identity, got $active_link_count." >&2
+[[ "$active_link_count" == '2' ]] || {
+  echo "Recovery relink expected exactly two active provider identities for A/B, got $active_link_count." >&2
   exit 1
 }
 
@@ -537,6 +562,57 @@ if [[ "$RPC_STATUS" =~ ^2 ]]; then
   echo 'Unlinked provider identity unexpectedly created a Teaching Fact after restore.' >&2
   exit 1
 fi
+
+make_legacy_tuple_jwt() {
+  JWT_SUBJECT="$1" JWT_ISSUER="$2" python3 - <<'PY'
+import base64
+import hashlib
+import hmac
+import json
+import os
+import time
+
+def b64url(value: bytes) -> str:
+    return base64.urlsafe_b64encode(value).rstrip(b"=").decode("ascii")
+
+now = int(time.time())
+header = {"alg": "HS256", "typ": "JWT"}
+payload = {
+    "iss": os.environ["JWT_ISSUER"],
+    "sub": os.environ["JWT_SUBJECT"],
+    "aud": "authenticated",
+    "role": "authenticated",
+    "iat": now,
+    "exp": now + 3600,
+}
+encoded_header = b64url(json.dumps(header, separators=(",", ":")).encode())
+encoded_payload = b64url(json.dumps(payload, separators=(",", ":")).encode())
+signing_input = f"{encoded_header}.{encoded_payload}".encode()
+signature = hmac.new(
+    os.environ["JWT_SECRET"].encode(),
+    signing_input,
+    hashlib.sha256,
+).digest()
+print(f"{encoded_header}.{encoded_payload}.{b64url(signature)}")
+PY
+}
+
+revoked_token="$(make_legacy_tuple_jwt 'a0000000-0000-0000-0000-000000000003' 'supabase-demo')"
+echo "::add-mask::$revoked_token"
+
+history_file="$backup_dir/history_fixture.json"
+[[ -s "$history_file" ]] || {
+  echo "Recovery history fixture metadata is missing." >&2
+  exit 1
+}
+
+API_URL="$api_url" \
+ANON_KEY="$ANON_KEY" \
+DB_CONTAINER="$db_container" \
+ACTOR_TOKEN_A="$actor_token" \
+ACTOR_TOKEN_B="$actor_b_token" \
+REVOKED_TOKEN="$revoked_token" \
+bash backend/supabase/tests/verify_fictional_recovery_history.sh "$history_file"
 
 observation_count="$(
   docker exec "$db_container" psql -U postgres -d postgres -Atc \
