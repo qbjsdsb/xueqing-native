@@ -573,6 +573,37 @@ function Assert-CompactStudentKeyboardJourney {
     Switch-ToWorkspace -Workspace personal
     Navigate-ToSurface -NavigationId 'StudentsNavigation' -SurfaceId 'StudentsSurface' | Out-Null
 
+    $focusableStudentItem = Wait-Until -FailureMessage 'Student list did not expose a focusable row before Ctrl+F accelerator check.' -Condition {
+        $liveList = Find-VisibleByAutomationId -Root $script:root -AutomationId 'StudentList'
+        if ($null -eq $liveList) {
+            return $null
+        }
+
+        $items = @(Find-ListItems -List $liveList)
+        if ($items.Count -eq 0) {
+            return $null
+        }
+
+        try {
+            $items[0].SetFocus()
+            return $items[0]
+        }
+        catch [System.Management.Automation.MethodInvocationException] {
+            return $null
+        }
+        catch [System.InvalidOperationException] {
+            return $null
+        }
+        catch [System.Windows.Automation.ElementNotAvailableException] {
+            return $null
+        }
+    }
+    [System.Windows.Forms.SendKeys]::SendWait('^f')
+    Wait-Until -FailureMessage 'Ctrl+F did not focus the Student search box.' -Condition {
+        $focused = [System.Windows.Automation.AutomationElement]::FocusedElement
+        return $null -ne $focused -and $focused.Current.AutomationId -eq 'StudentSearchBox'
+    } | Out-Null
+
     Set-SearchValue -Value 'S000777'
     $studentItem = Get-UniqueFilteredStudentItem
     Invoke-Element -Element $studentItem
@@ -587,12 +618,13 @@ function Assert-CompactStudentKeyboardJourney {
     }
 
     [System.Windows.Forms.SendKeys]::SendWait('{ENTER}')
-    $backButton = Wait-Until -FailureMessage 'Enter did not open compact Student Detail.' -Condition {
+    Wait-Until -FailureMessage 'Enter did not open compact Student Detail.' -Condition {
         Find-VisibleByAutomationId -Root $script:root -AutomationId 'BackToStudentList'
-    }
-    Invoke-Element -Element $backButton
+    } | Out-Null
 
-    $searchBoxAfterReturn = Wait-Until -FailureMessage 'Student list was not restored after returning from detail.' -Condition {
+    [System.Windows.Forms.SendKeys]::SendWait('%{LEFT}')
+
+    $searchBoxAfterReturn = Wait-Until -FailureMessage 'Alt+Left did not restore the Student list from compact detail.' -Condition {
         Find-VisibleByAutomationId -Root $script:root -AutomationId 'StudentSearchBox'
     }
     $valueAfterReturn = $null
@@ -656,7 +688,7 @@ function Assert-CompactStudentKeyboardJourney {
         throw 'Arrow-key Student browsing lost list focus.'
     }
 
-    Write-Host '[ux-matrix] Compact keyboard journey passed: select/arrow browse stays in list; Enter opens detail; return preserves search and focus.'
+    Write-Host '[ux-matrix] Compact keyboard journey passed: Ctrl+F focuses search; select/arrow browse stays in list; Enter opens detail; Alt+Left returns with search and focus preserved.'
 }
 
 function Assert-WidthMatrix {
