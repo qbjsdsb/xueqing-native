@@ -38,8 +38,10 @@ actor_b='10000000-0000-0000-0000-000000000002'
 org_a='20000000-0000-0000-0000-000000000001'
 student_a='30000000-0000-0000-0000-000000000001'
 profile_a='40000000-0000-0000-0000-000000000001'
-assignment_a_old='50000000-0000-0000-0000-000000000001'
-assignment_a_new='50000000-0000-0000-0000-000000000101'
+handoff_student='30000000-0000-0000-0000-000000000003'
+handoff_profile='40000000-0000-0000-0000-000000000003'
+assignment_a_old='50000000-0000-0000-0000-000000000103'
+assignment_a_new='50000000-0000-0000-0000-000000000104'
 
 org_b='20000000-0000-0000-0000-000000000002'
 student_b='30000000-0000-0000-0000-000000000002'
@@ -115,21 +117,39 @@ case_b_reopened_action_id="$(
   docker exec "$DB_CONTAINER" psql -U postgres -d postgres -Atc     "select id from public.learning_case_actions where case_id='$case_b_id'::uuid and status='pending' order by created_at_server desc limit 1"
 )"
 
-# Org A handoff: historical assignment remains but is inactive; Teacher B owns
-# the current live assignment after the source snapshot.
+# Org A handoff is isolated on Student C so the baseline Observation/Attachment
+# replay for Student A remains independently valid.
 docker exec "$DB_CONTAINER" psql -U postgres -d postgres -v ON_ERROR_STOP=1 >/dev/null <<SQL
 begin;
-update public.student_teacher_assignments
-   set active = false
- where id = '$assignment_a_old'::uuid;
+
+insert into public.student_subject_profiles (
+    id, organization_id, student_id, subject_key, active
+) values (
+    '$handoff_profile'::uuid,
+    '$org_a'::uuid,
+    '$handoff_student'::uuid,
+    'chinese',
+    true
+);
+
+insert into public.student_teacher_assignments (
+    id, organization_id, student_id, subject_profile_id, teacher_app_user_id, active
+) values (
+    '$assignment_a_old'::uuid,
+    '$org_a'::uuid,
+    '$handoff_student'::uuid,
+    '$handoff_profile'::uuid,
+    '$actor_a'::uuid,
+    false
+);
 
 insert into public.student_teacher_assignments (
     id, organization_id, student_id, subject_profile_id, teacher_app_user_id, active
 ) values (
     '$assignment_a_new'::uuid,
     '$org_a'::uuid,
-    '$student_a'::uuid,
-    '$profile_a'::uuid,
+    '$handoff_student'::uuid,
+    '$handoff_profile'::uuid,
     '$actor_b'::uuid,
     true
 );
@@ -172,6 +192,8 @@ value = {
   "org_a": "$org_a",
   "student_a": "$student_a",
   "profile_a": "$profile_a",
+  "handoff_student": "$handoff_student",
+  "handoff_profile": "$handoff_profile",
   "assignment_a_old": "$assignment_a_old",
   "assignment_a_new": "$assignment_a_new",
   "actor_a": "$actor_a",
