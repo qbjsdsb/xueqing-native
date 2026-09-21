@@ -20,6 +20,47 @@ class ProviderTopologyVerifierTests(unittest.TestCase):
     def setUpClass(cls) -> None:
         cls.blocked = json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
 
+    def test_checked_in_manifest_records_selected_supabase_singapore_policy(self) -> None:
+        value = self.blocked
+        self.assertEqual("blocked", value["status"])
+        self.assertEqual("supabase-hosted", value["provider_candidate"])
+        self.assertEqual(
+            "non-mainland-acceptable-singapore-selected",
+            value["target_jurisdiction"],
+        )
+        self.assertEqual(
+            "ap-southeast-1",
+            value["primary_project_region"]["region"],
+        )
+        self.assertEqual(
+            "ap-southeast-1",
+            value["data_surfaces"]["edge_invitation_delivery"]["production_execution_region"],
+        )
+        self.assertEqual(
+            "accepted-for-v1",
+            value["data_surfaces"]["edge_invitation_delivery"]["global_gateway_transit"],
+        )
+        self.assertIn(
+            "global-cdn-accepted-for-v1",
+            value["data_surfaces"]["storage"]["edge_cache_scope"],
+        )
+
+    def test_checked_in_manifest_remains_blocked_until_runtime_and_backup_evidence_exist(self) -> None:
+        value = self.blocked
+        self.assertFalse(
+            value["hosted_environment_observation"]["native_production_project_provisioned"]
+        )
+        self.assertIn(
+            "native_production_project_not_provisioned_and_region_not_verified",
+            value["blockers"],
+        )
+        self.assertIn(
+            "independent_database_and_private_storage_backup_not_proven",
+            value["blockers"],
+        )
+        with self.assertRaisesRegex(ValueError, "production topology is still blocked"):
+            verifier.validate(value, True, REPO_ROOT)
+
     def accepted_manifest(self) -> dict:
         value = copy.deepcopy(self.blocked)
         value["status"] = "accepted"
