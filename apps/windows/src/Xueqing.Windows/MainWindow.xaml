@@ -8,15 +8,33 @@
     xmlns:views="using:Xueqing.Windows.Views"
     mc:Ignorable="d">
 
+    <Window.SystemBackdrop>
+        <MicaBackdrop Kind="Base" />
+    </Window.SystemBackdrop>
+
     <Grid
         x:Name="RootGrid"
         Loaded="RootGrid_Loaded"
         SizeChanged="RootGrid_SizeChanged">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <TitleBar
+            x:Name="AppTitleBar"
+            AutomationProperties.AutomationId="AppTitleBar"
+            Title="学情"
+            IsBackButtonVisible="False"
+            IsPaneToggleButtonVisible="True"
+            PaneToggleRequested="AppTitleBar_PaneToggleRequested" />
+
         <NavigationView
             x:Name="Shell"
+            Grid.Row="1"
             AutomationProperties.AutomationId="ShellNavigation"
             IsBackButtonVisible="Collapsed"
-            IsPaneToggleButtonVisible="True"
+            IsPaneToggleButtonVisible="False"
             IsSettingsVisible="False"
             OpenPaneLength="196"
             PaneDisplayMode="LeftCompact"

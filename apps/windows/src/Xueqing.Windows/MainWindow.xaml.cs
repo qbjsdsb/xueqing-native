@@ -21,8 +21,15 @@ public sealed partial class MainWindow : Window
         ViewModel = viewModel ?? throw new ArgumentNullException(nameof(viewModel));
         InitializeComponent();
         Title = "学情";
+        ExtendsContentIntoTitleBar = true;
+        SetTitleBar(AppTitleBar);
         RootGrid.DataContext = ViewModel;
         ApplyOrganizationWorkspaceAccess();
+    }
+
+    private void AppTitleBar_PaneToggleRequested(TitleBar sender, object args)
+    {
+        Shell.IsPaneOpen = !Shell.IsPaneOpen;
     }
 
     private async void RootGrid_Loaded(object sender, RoutedEventArgs e)
@@ -117,7 +124,7 @@ public sealed partial class MainWindow : Window
         Shell.IsPaneOpen = false;
     }
 
-    private void Shell_SelectionChanged(NavigationView sender, NavigationViewSelectionChangedEventArgs args)
+    private async void Shell_SelectionChanged(NavigationView sender, NavigationViewSelectionChangedEventArgs args)
     {
         var tag = args.SelectedItemContainer?.Tag?.ToString();
         if (string.IsNullOrWhiteSpace(tag))
@@ -137,6 +144,11 @@ public sealed partial class MainWindow : Window
         }
 
         ShowSurface(tag);
+
+        if (tag == "learning" && ViewModel.IsAuthoritativeStudentWorkspace)
+        {
+            await ViewModel.LoadSelectedTeachingContextAsync();
+        }
     }
 
     private void ShowSurface(string tag)
