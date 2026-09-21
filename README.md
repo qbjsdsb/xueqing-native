@@ -126,7 +126,9 @@ Windows Organization Invitation Product Closure 已完成并合入主线：WinUI
 
 Windows 原生产品化已完成当前 Phase 1 收口。PR #68 已接受 Mica + WinUI TitleBar + NavigationView 原生 Shell 和可下载测试 MSIX；PR #69 已将 Today、Learning 与 Organization Management 从工程/原型表达收敛为真实工作面，并把视觉证据门禁加固到可检测 stale screenshot；Issue #70 通过 PR #72 / #73 完成 Students list/detail 的原生键盘效率、焦点恢复、可见文案、列表密度和无障碍语义，且保持既有 320-DIP 列宽与窗口断点不变。当前没有新的 Windows UI 代码执行线，不应为了“继续优化”而重开已经通过的产品化 Gate。
 
-Android Final Native UX PR #66 的自动化 exact-head 已通过 Foundation、Android device/durability、reference-provider、adaptive/large-text、accessibility 与视觉证据 Gate；剩余的是明确的真机人工验收：中文拼音 IME、TalkBack 播报质量，以及 predictive/system Back + Photo Picker 返回上下文。生产 Provider Region / Data Residency PR #63 / Issue #64 则被真实运营方驻留决策阻塞；在该决策解决前，仓库没有可自动继续的生产基础设施代码线，也不得把开发/reference provider 自动当成生产拓扑或提前启动 CloudBase #65。
+Android Final Native UX PR #66 已同步到最新 main，自动化 exact-head 再次通过 Foundation、API 36 device/durability、reference-provider、adaptive/large-text、accessibility 与视觉证据 Gate；剩余的是明确的真机人工验收：中文拼音 IME、TalkBack 播报质量，以及 predictive/system Back + Photo Picker 返回上下文。
+
+生产 Provider Region / Data Residency 已完成运营决策：V1 不要求学生/教师数据位于中国大陆，第一权威生产拓扑选择 **Supabase Hosted / Singapore `ap-southeast-1`**。Private Attachment 继续使用 private bucket 与 Xueqing 授权，接受 Supabase global CDN/edge transit；Invitation Delivery 必须显式请求并由服务端 fail-closed 校验 `ap-southeast-1` 执行区域。PR #63 现为当前唯一自动代码/证据执行线，仍须证明真实 Xueqing Native 生产项目区域、运行时拓扑、日志/诊断策略和独立数据库 + private Storage 备份路径后才能关闭。其后顺序收敛为 **Backup/Restore → CloudBase second-provider conformance → Signing/Recovery → V1 RC**，不做 active-active 或 live dual-write。
 
 动态工程状态以 `docs/project/PROJECT_STATE.yaml` 为准。
 
