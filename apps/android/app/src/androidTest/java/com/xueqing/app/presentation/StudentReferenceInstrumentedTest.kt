@@ -37,7 +37,7 @@ class StudentReferenceInstrumentedTest {
         ).performClick()
 
         composeRule.waitUntil(timeoutMillis = 5_000) {
-            composeRule.onAllNodesWithTag("quick-capture-teaching-context")
+            composeRule.onAllNodesWithText("虚构学生甲 · 语文")
                 .fetchSemanticsNodes(atLeastOneRootRequired = false)
                 .isNotEmpty()
         }
