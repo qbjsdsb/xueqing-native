@@ -1,0 +1,57 @@
+name: backup-restore
+
+on:
+  pull_request:
+    paths:
+      - 'contracts/operations/BACKUP_RESTORE_V1.md'
+      - 'contracts/schemas/BACKUP_ARCHIVE_MANIFEST_V1.schema.json'
+      - 'docs/production/BACKUP_RESTORE_PRECONDITIONS.md'
+      - 'tools/backup/**'
+      - '.github/workflows/backup-restore.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backup-restore-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  manifest-contract:
+    name: manifest-contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+
+      - name: Test backup manifest validator
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/backup/test_verify_backup_manifest.py
+
+      - name: Validate fictional manifest fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/backup/verify_backup_manifest.py \
+            tools/backup/fixtures/valid_backup_manifest.json
+
+      - name: Reject accidental backup archives in repository
+        shell: bash
+        run: |
+          set -euo pipefail
+          forbidden="$(
+            find . -type f \
+              \( -name '*.dump' -o -name '*.backup' -o -name '*.bak' -o -name '*.age' -o -name '*.gpg' \) \
+              -not -path './.git/*' \
+              -print
+          )"
+          if [[ -n "$forbidden" ]]; then
+            echo "Backup/archive material must not be committed:" >&2
+            printf '%s\n' "$forbidden" >&2
+            exit 1
+          fi
