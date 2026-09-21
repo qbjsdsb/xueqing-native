@@ -186,7 +186,7 @@ def validate(value: dict, require_accepted: bool, repo_root: Path) -> None:
     require(isinstance(primary, dict), "primary_project_region must be an object")
     region = primary.get("region")
     require(
-        isinstance(region, str) and REGION_RE.match(region) is not None,
+        isinstance(region, str) and REGION_ID_RE.fullmatch(region) is not None,
         "accepted topology requires an exact provider region identifier",
     )
     supported_primary = primary.get("supported_regions_snapshot")

@@ -58,6 +58,23 @@ class ProviderTopologyVerifierTests(unittest.TestCase):
     def test_fictional_complete_acceptance_fixture_passes(self) -> None:
         verifier.validate(self.accepted_manifest(), True, REPO_ROOT)
 
+    def test_provider_neutral_exact_region_id_accepts_cloudbase_style(self) -> None:
+        value = self.accepted_manifest()
+        value["provider_candidate"] = "tencent-cloudbase"
+        value["primary_project_region"]["region"] = "ap-shanghai"
+        value["primary_project_region"]["supported_regions_snapshot"].append("ap-shanghai")
+        value["data_surfaces"]["edge_invitation_delivery"]["production_execution_region"] = "ap-shanghai"
+        value["data_surfaces"]["edge_invitation_delivery"]["supported_regions_snapshot"].append(
+            "ap-shanghai"
+        )
+        verifier.validate(value, True, REPO_ROOT)
+
+    def test_broad_region_label_is_not_an_exact_region_id(self) -> None:
+        self.assert_rejected(
+            lambda value: value["primary_project_region"].__setitem__("region", "apac"),
+            "exact provider region identifier",
+        )
+
     def test_acceptance_requires_concrete_primary_region_evidence(self) -> None:
         self.assert_rejected(
             lambda value: value["primary_project_region"].__setitem__(
