@@ -142,10 +142,18 @@ jobs:
           $msixHash = (Get-FileHash $msixOut -Algorithm SHA256).Hash.ToLowerInvariant()
           $cerHash = (Get-FileHash $cerOut -Algorithm SHA256).Hash.ToLowerInvariant()
 
+          $event = Get-Content $env:GITHUB_EVENT_PATH -Raw | ConvertFrom-Json
+          $sourceHead = if ($null -ne $event.pull_request -and $event.pull_request.head.sha) {
+            $event.pull_request.head.sha
+          } else {
+            $env:GITHUB_SHA
+          }
+
           @"
           Xueqing Native Windows test package
 
-          Source commit: $env:GITHUB_SHA
+          Source PR/head commit: $sourceHead
+          Workflow commit: $env:GITHUB_SHA
           Package identity: Xueqing.Native.Development
           Architecture: x64
           Package version: 1.0.1.0
