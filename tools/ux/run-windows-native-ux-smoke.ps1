@@ -711,6 +711,12 @@ function Capture-BaseRepresentativeEvidence {
     Set-WindowDips -Width 1280 -Height 640
     Navigate-ToSurface -NavigationId 'StudentsNavigation' -SurfaceId 'StudentsSurface' | Out-Null
     Save-WindowScreenshot -Name '1280-expanded-students'
+
+    Navigate-ToSurface -NavigationId 'TodayNavigation' -SurfaceId 'TodaySurface' | Out-Null
+    Save-WindowScreenshot -Name '1280-today'
+
+    Navigate-ToSurface -NavigationId 'LearningNavigation' -SurfaceId 'LearningSurface' | Out-Null
+    Save-WindowScreenshot -Name '1280-learning'
 }
 
 function Assert-NoHardCodedPrototypeColors {
