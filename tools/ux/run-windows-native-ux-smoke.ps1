@@ -444,9 +444,32 @@ function Navigate-ToSurface {
         Find-VisibleByAutomationId -Root $script:root -AutomationId $NavigationId
     }
     Invoke-Element -Element $navigation
-    return Wait-Until -FailureMessage "Surface '$SurfaceId' did not become visible." -Condition {
+
+    Wait-Until -FailureMessage "Navigation '$NavigationId' was invoked but never became selected." -Condition {
+        $liveNavigation = Find-VisibleByAutomationId -Root $script:root -AutomationId $NavigationId
+        if ($null -eq $liveNavigation) {
+            return $false
+        }
+
+        $selectionPattern = $null
+        if (-not $liveNavigation.TryGetCurrentPattern(
+            [System.Windows.Automation.SelectionItemPattern]::Pattern,
+            [ref]$selectionPattern)) {
+            return $false
+        }
+
+        return ([System.Windows.Automation.SelectionItemPattern]$selectionPattern).Current.IsSelected
+    } | Out-Null
+
+    $surface = Wait-Until -FailureMessage "Surface '$SurfaceId' did not become visible." -Condition {
         Find-VisibleByAutomationId -Root $script:root -AutomationId $SurfaceId
     }
+
+    # UIA selection changes can become observable before WinUI has submitted the
+    # corresponding frame to the compositor. Give the actual native surface a
+    # bounded settle interval before screenshot evidence is captured.
+    Start-Sleep -Milliseconds 300
+    return $surface
 }
 
 function Switch-ToWorkspace {
@@ -702,6 +725,30 @@ function Assert-RepresentativeSurfaces {
     Navigate-ToSurface -NavigationId 'OrganizationManagementNavigation' -SurfaceId 'OrganizationManagementSurface' | Out-Null
 }
 
+function Assert-DistinctScreenshotEvidence {
+    param(
+        [Parameter(Mandatory = $true)][string]$LeftName,
+        [Parameter(Mandatory = $true)][string]$RightName,
+        [Parameter(Mandatory = $true)][string]$FailureMessage
+    )
+
+    if ([string]::IsNullOrWhiteSpace($EvidenceDirectory)) {
+        return
+    }
+
+    $leftPath = Join-Path $EvidenceDirectory "$LeftName.png"
+    $rightPath = Join-Path $EvidenceDirectory "$RightName.png"
+    if (-not (Test-Path $leftPath) -or -not (Test-Path $rightPath)) {
+        throw "Representative evidence comparison is missing '$LeftName' or '$RightName'."
+    }
+
+    $leftHash = (Get-FileHash -Path $leftPath -Algorithm SHA256).Hash
+    $rightHash = (Get-FileHash -Path $rightPath -Algorithm SHA256).Hash
+    if ($leftHash -eq $rightHash) {
+        throw "$FailureMessage Both screenshots have SHA-256 $leftHash."
+    }
+}
+
 function Capture-BaseRepresentativeEvidence {
     Set-WindowDips -Width 800 -Height 640
     Switch-ToWorkspace -Workspace personal
@@ -714,9 +761,17 @@ function Capture-BaseRepresentativeEvidence {
 
     Navigate-ToSurface -NavigationId 'TodayNavigation' -SurfaceId 'TodaySurface' | Out-Null
     Save-WindowScreenshot -Name '1280-today'
+    Assert-DistinctScreenshotEvidence \
+        -LeftName '1280-expanded-students' \
+        -RightName '1280-today' \
+        -FailureMessage 'Today evidence is identical to Students evidence; navigation/render evidence is stale.'
 
     Navigate-ToSurface -NavigationId 'LearningNavigation' -SurfaceId 'LearningSurface' | Out-Null
     Save-WindowScreenshot -Name '1280-learning'
+    Assert-DistinctScreenshotEvidence \
+        -LeftName '1280-today' \
+        -RightName '1280-learning' \
+        -FailureMessage 'Learning evidence is identical to Today evidence; navigation/render evidence is stale.'
 }
 
 function Assert-NoHardCodedPrototypeColors {
