@@ -62,6 +62,7 @@
                 x:Name="StudentList"
                 Grid.Row="2"
                 AutomationProperties.AutomationId="StudentList"
+                AutomationProperties.Name="学生列表"
                 IsItemClickEnabled="True"
                 ItemClick="StudentList_ItemClick"
                 ItemsSource="{Binding Students}"
