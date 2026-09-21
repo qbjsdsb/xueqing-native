@@ -114,6 +114,77 @@ jobs:
             Stop-Transcript -ErrorAction SilentlyContinue | Out-Null
           }
 
+      - name: Prepare downloadable Windows test package
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $root = Join-Path $env:GITHUB_WORKSPACE 'artifacts/windows-real-app-integration'
+          $download = Join-Path $root 'download'
+          New-Item -ItemType Directory -Force -Path $download | Out-Null
+
+          $msix = Get-ChildItem (Join-Path $root 'v2') -Recurse -File -Filter *.msix |
+            Where-Object { $_.FullName -notmatch '\\Dependencies\\' } |
+            Select-Object -First 1
+          $cer = Join-Path $root 'xueqing-native-real-app.cer'
+
+          if ($null -eq $msix) {
+            throw 'Validated v2 MSIX was not found for download packaging.'
+          }
+          if (-not (Test-Path $cer)) {
+            throw 'Development signing certificate was not found for download packaging.'
+          }
+
+          Copy-Item $msix.FullName (Join-Path $download 'Xueqing-Windows-Test-x64.msix') -Force
+          Copy-Item $cer (Join-Path $download 'Xueqing-Windows-Test.cer') -Force
+
+          $msixOut = Join-Path $download 'Xueqing-Windows-Test-x64.msix'
+          $cerOut = Join-Path $download 'Xueqing-Windows-Test.cer'
+          $msixHash = (Get-FileHash $msixOut -Algorithm SHA256).Hash.ToLowerInvariant()
+          $cerHash = (Get-FileHash $cerOut -Algorithm SHA256).Hash.ToLowerInvariant()
+
+          $event = Get-Content $env:GITHUB_EVENT_PATH -Raw | ConvertFrom-Json
+          $sourceHead = if ($null -ne $event.pull_request -and $event.pull_request.head.sha) {
+            $event.pull_request.head.sha
+          } else {
+            $env:GITHUB_SHA
+          }
+
+          @"
+          Xueqing Native Windows test package
+
+          Source PR/head commit: $sourceHead
+          Workflow commit: $env:GITHUB_SHA
+          Package identity: Xueqing.Native.Development
+          Architecture: x64
+          Package version: 1.0.1.0
+          Signing identity: CN=Xueqing Native Development
+
+          Install for testing:
+          1. Open PowerShell as your normal user.
+          2. Import the included development certificate:
+             Import-Certificate -FilePath .\Xueqing-Windows-Test.cer -CertStoreLocation Cert:\CurrentUser\TrustedPeople
+          3. Install the package:
+             Add-AppxPackage .\Xueqing-Windows-Test-x64.msix
+
+          This is a development-signed test package, not a production-signed release.
+          The certificate is public material; no private signing key is included.
+          "@ | Set-Content (Join-Path $download 'INSTALL.txt') -Encoding utf8
+
+          @"
+          $msixHash  Xueqing-Windows-Test-x64.msix
+          $cerHash  Xueqing-Windows-Test.cer
+          "@ | Set-Content (Join-Path $download 'SHA256SUMS.txt') -Encoding ascii
+
+          Get-ChildItem $download | Format-Table Name, Length
+
+      - name: Upload downloadable Windows test package
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: windows-test-msix
+          path: artifacts/windows-real-app-integration/download
+          if-no-files-found: error
+          retention-days: 3
+
       - name: Upload real-app integration diagnostics and UX evidence
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

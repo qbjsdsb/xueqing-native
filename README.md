@@ -106,7 +106,7 @@ Windows 已经从 Native UX Reference 进入真实业务闭环：Personal Studen
 
 Android 已完成稳定 API 36 的 Kotlin + Compose 基线、PersonalBootstrap-backed 学生目录、Student → Quick Capture、Room Draft Engine、process-death recovery、SQLCipher + Android Keystore Durable Intent、Observation Outbox + WorkManager，以及真实 **Quick Capture → reference provider → authoritative Observation** 写入链。Observation Attachment 也已完成系统 Photo Picker、受保护本地 staging、图片衍生与 EXIF/GPS 清理、process-death 恢复、private Storage 上传、稳定 attachment/commit identity、CommitObservationAttachment receipt 与真实 reference-provider E2E。Offline Access Lease 的 72 小时上限、同 boot monotonic expiry 与 wall-clock rollback 检测也已形成可执行安全基线。
 
-Provider Session/Auth 与 **IdentityLink 身份映射** conformance 已完成。应用业务身份由 application-owned `AppUser` 持有；provider-specific identity、SDK 与 transport 继续限制在 Infrastructure Adapter 边界。Projection / Storage 等更广的 provider conformance 仍按独立 Gate 推进，不提前宣称完成。
+Provider Session/Auth、**IdentityLink 身份映射**、Projection 与 private Storage conformance 均已完成。应用业务身份由 application-owned `AppUser` 持有；provider-specific identity、SDK 与 transport 继续限制在 Infrastructure Adapter 边界。四层 provider evidence 已共同关闭 Provider Adapter Conformance Spike；生产 provider/region 与数据驻留仍是单独的发布前 Gate。
 
 Windows 的 authoritative Case workspace 已完成：Student Detail 按需完整 Case history、Current Focus、Today、Action progression，以及正式 Learning Case lifecycle（confirm / intervene / pending verification / stable / close / reopen）均已接入真实 reference provider。Lifecycle 写入使用 exact Case/Action version、server-side authorization、operation receipt 与加密 Durable Intent；ResultUnknown 只允许复用原 operation_id 继续确认。该链已经通过 Windows Core、真实 Supabase E2E、WinUI cloud build、MSIX 原位升级、加密 LocalState 与 Native UX smoke 的 exact-head 证明。
 
@@ -122,9 +122,11 @@ Provider Projection Conformance 已完成并合入主线：两个独立真实外
 
 Provider Storage Conformance 也已完成并合入主线：两个独立真实外部 Auth 身份只通过 `IdentityLink` 解析到同一 application-owned AppUser 后，private Attachment upload/read/cross-commit 保持同一教学权限语义；单个 IdentityLink revoke 只撤销对应 provider identity；匿名读取继续拒绝；最终迁移后的 Storage authorization helper 不得直接依赖 `auth.jwt()` / `auth.uid()`。Session/Auth、IdentityLink、Projection 与 Storage 四层证据因此共同关闭原先更宽泛的 Provider Adapter Conformance Spike。
 
-Windows Organization Invitation Product Closure 已完成并合入主线：负责人/管理员现在可以从真实 Organization Management capability 打开原生 WinUI 邀请流程，输入邮箱、角色与任教能力；Create 与 Delivery 使用各自稳定 operation id，并先写入 SQLite3MC + DPAPI 加密 recovery，再执行任何结果可能不确定的网络操作。CreatePending / DeliveryPending 只允许 same-operation 确认，明确 provider 拒绝不会自动 resend，管理权限变化和本机持久化失败均 fail closed。Windows reference-provider E2E 已继续穿过真实 Delivery Edge adapter，并通过 MSIX 安装升级与 Native UX smoke 的 exact-head 证明。
+Windows Organization Invitation Product Closure 已完成并合入主线：WinUI 端已接入 capability-gated 邀请创建与可信 Delivery，ResultUnknown 保留同一 operation/intent，Create → Delivery → Authentication → Acceptance → Membership 的产品闭环已经有真实 provider 与 MSIX/Native UX 证据。
 
-当前唯一执行线已切换到 **Production Provider Region / Data Residency Gate**。这一阶段不新增业务功能，也不把开发阶段 Supabase 直接宣称为生产方案；先逐项冻结和验证 PostgreSQL、Auth、private Storage、Edge/邮件投递、日志/诊断与备份的实际驻留区域、跨区域数据流、生产凭据边界和可恢复性前置条件。只有证据可追溯的生产拓扑才能进入后续 Backup/Restore 与 Signing/Recovery Gate。
+Windows 原生产品化已完成当前 Phase 1 收口。PR #68 已接受 Mica + WinUI TitleBar + NavigationView 原生 Shell 和可下载测试 MSIX；PR #69 已将 Today、Learning 与 Organization Management 从工程/原型表达收敛为真实工作面，并把视觉证据门禁加固到可检测 stale screenshot；Issue #70 通过 PR #72 / #73 完成 Students list/detail 的原生键盘效率、焦点恢复、可见文案、列表密度和无障碍语义，且保持既有 320-DIP 列宽与窗口断点不变。当前没有新的 Windows UI 代码执行线，不应为了“继续优化”而重开已经通过的产品化 Gate。
+
+Android Final Native UX PR #66 的自动化 exact-head 已通过 Foundation、Android device/durability、reference-provider、adaptive/large-text、accessibility 与视觉证据 Gate；剩余的是明确的真机人工验收：中文拼音 IME、TalkBack 播报质量，以及 predictive/system Back + Photo Picker 返回上下文。生产 Provider Region / Data Residency PR #63 / Issue #64 则被真实运营方驻留决策阻塞；在该决策解决前，仓库没有可自动继续的生产基础设施代码线，也不得把开发/reference provider 自动当成生产拓扑或提前启动 CloudBase #65。
 
 动态工程状态以 `docs/project/PROJECT_STATE.yaml` 为准。
 

@@ -444,9 +444,32 @@ function Navigate-ToSurface {
         Find-VisibleByAutomationId -Root $script:root -AutomationId $NavigationId
     }
     Invoke-Element -Element $navigation
-    return Wait-Until -FailureMessage "Surface '$SurfaceId' did not become visible." -Condition {
+
+    Wait-Until -FailureMessage "Navigation '$NavigationId' was invoked but never became selected." -Condition {
+        $liveNavigation = Find-VisibleByAutomationId -Root $script:root -AutomationId $NavigationId
+        if ($null -eq $liveNavigation) {
+            return $false
+        }
+
+        $selectionPattern = $null
+        if (-not $liveNavigation.TryGetCurrentPattern(
+            [System.Windows.Automation.SelectionItemPattern]::Pattern,
+            [ref]$selectionPattern)) {
+            return $false
+        }
+
+        return ([System.Windows.Automation.SelectionItemPattern]$selectionPattern).Current.IsSelected
+    } | Out-Null
+
+    $surface = Wait-Until -FailureMessage "Surface '$SurfaceId' did not become visible." -Condition {
         Find-VisibleByAutomationId -Root $script:root -AutomationId $SurfaceId
     }
+
+    # UIA selection changes can become observable before WinUI has submitted the
+    # corresponding frame to the compositor. Give the actual native surface a
+    # bounded settle interval before screenshot evidence is captured.
+    Start-Sleep -Milliseconds 300
+    return $surface
 }
 
 function Switch-ToWorkspace {
@@ -550,6 +573,37 @@ function Assert-CompactStudentKeyboardJourney {
     Switch-ToWorkspace -Workspace personal
     Navigate-ToSurface -NavigationId 'StudentsNavigation' -SurfaceId 'StudentsSurface' | Out-Null
 
+    $focusableStudentItem = Wait-Until -FailureMessage 'Student list did not expose a focusable row before Ctrl+F accelerator check.' -Condition {
+        $liveList = Find-VisibleByAutomationId -Root $script:root -AutomationId 'StudentList'
+        if ($null -eq $liveList) {
+            return $null
+        }
+
+        $items = @(Find-ListItems -List $liveList)
+        if ($items.Count -eq 0) {
+            return $null
+        }
+
+        try {
+            $items[0].SetFocus()
+            return $items[0]
+        }
+        catch [System.Management.Automation.MethodInvocationException] {
+            return $null
+        }
+        catch [System.InvalidOperationException] {
+            return $null
+        }
+        catch [System.Windows.Automation.ElementNotAvailableException] {
+            return $null
+        }
+    }
+    [System.Windows.Forms.SendKeys]::SendWait('^f')
+    Wait-Until -FailureMessage 'Ctrl+F did not focus the Student search box.' -Condition {
+        $focused = [System.Windows.Automation.AutomationElement]::FocusedElement
+        return $null -ne $focused -and $focused.Current.AutomationId -eq 'StudentSearchBox'
+    } | Out-Null
+
     Set-SearchValue -Value 'S000777'
     $studentItem = Get-UniqueFilteredStudentItem
     Invoke-Element -Element $studentItem
@@ -564,12 +618,13 @@ function Assert-CompactStudentKeyboardJourney {
     }
 
     [System.Windows.Forms.SendKeys]::SendWait('{ENTER}')
-    $backButton = Wait-Until -FailureMessage 'Enter did not open compact Student Detail.' -Condition {
+    Wait-Until -FailureMessage 'Enter did not open compact Student Detail.' -Condition {
         Find-VisibleByAutomationId -Root $script:root -AutomationId 'BackToStudentList'
-    }
-    Invoke-Element -Element $backButton
+    } | Out-Null
 
-    $searchBoxAfterReturn = Wait-Until -FailureMessage 'Student list was not restored after returning from detail.' -Condition {
+    [System.Windows.Forms.SendKeys]::SendWait('%{LEFT}')
+
+    $searchBoxAfterReturn = Wait-Until -FailureMessage 'Alt+Left did not restore the Student list from compact detail.' -Condition {
         Find-VisibleByAutomationId -Root $script:root -AutomationId 'StudentSearchBox'
     }
     $valueAfterReturn = $null
@@ -633,7 +688,7 @@ function Assert-CompactStudentKeyboardJourney {
         throw 'Arrow-key Student browsing lost list focus.'
     }
 
-    Write-Host '[ux-matrix] Compact keyboard journey passed: select/arrow browse stays in list; Enter opens detail; return preserves search and focus.'
+    Write-Host '[ux-matrix] Compact keyboard journey passed: Ctrl+F focuses search; select/arrow browse stays in list; Enter opens detail; Alt+Left returns with search and focus preserved.'
 }
 
 function Assert-WidthMatrix {
@@ -702,6 +757,30 @@ function Assert-RepresentativeSurfaces {
     Navigate-ToSurface -NavigationId 'OrganizationManagementNavigation' -SurfaceId 'OrganizationManagementSurface' | Out-Null
 }
 
+function Assert-DistinctScreenshotEvidence {
+    param(
+        [Parameter(Mandatory = $true)][string]$LeftName,
+        [Parameter(Mandatory = $true)][string]$RightName,
+        [Parameter(Mandatory = $true)][string]$FailureMessage
+    )
+
+    if ([string]::IsNullOrWhiteSpace($EvidenceDirectory)) {
+        return
+    }
+
+    $leftPath = Join-Path $EvidenceDirectory "$LeftName.png"
+    $rightPath = Join-Path $EvidenceDirectory "$RightName.png"
+    if (-not (Test-Path $leftPath) -or -not (Test-Path $rightPath)) {
+        throw "Representative evidence comparison is missing '$LeftName' or '$RightName'."
+    }
+
+    $leftHash = (Get-FileHash -Path $leftPath -Algorithm SHA256).Hash
+    $rightHash = (Get-FileHash -Path $rightPath -Algorithm SHA256).Hash
+    if ($leftHash -eq $rightHash) {
+        throw "$FailureMessage Both screenshots have SHA-256 $leftHash."
+    }
+}
+
 function Capture-BaseRepresentativeEvidence {
     Set-WindowDips -Width 800 -Height 640
     Switch-ToWorkspace -Workspace personal
@@ -711,6 +790,14 @@ function Capture-BaseRepresentativeEvidence {
     Set-WindowDips -Width 1280 -Height 640
     Navigate-ToSurface -NavigationId 'StudentsNavigation' -SurfaceId 'StudentsSurface' | Out-Null
     Save-WindowScreenshot -Name '1280-expanded-students'
+
+    Navigate-ToSurface -NavigationId 'TodayNavigation' -SurfaceId 'TodaySurface' | Out-Null
+    Save-WindowScreenshot -Name '1280-today'
+    Assert-DistinctScreenshotEvidence -LeftName '1280-expanded-students' -RightName '1280-today' -FailureMessage 'Today evidence is identical to Students evidence; navigation/render evidence is stale.'
+
+    Navigate-ToSurface -NavigationId 'LearningNavigation' -SurfaceId 'LearningSurface' | Out-Null
+    Save-WindowScreenshot -Name '1280-learning'
+    Assert-DistinctScreenshotEvidence -LeftName '1280-today' -RightName '1280-learning' -FailureMessage 'Learning evidence is identical to Today evidence; navigation/render evidence is stale.'
 }
 
 function Assert-NoHardCodedPrototypeColors {

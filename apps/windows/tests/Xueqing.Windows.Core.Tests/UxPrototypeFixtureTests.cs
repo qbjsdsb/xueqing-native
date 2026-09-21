@@ -105,6 +105,14 @@ public sealed class UxPrototypeFixtureTests
         Assert.IsTrue(students.Any(student => student.ActiveCaseCount == 0));
         Assert.IsTrue(students.Any(student => student.ActiveCaseCount == 1));
         Assert.IsTrue(students.Any(student => student.ActiveCaseCount >= 20));
+
+        var zeroAttention = students.First(student => student.ActiveCaseCount == 0);
+        var oneAttention = students.First(student => student.ActiveCaseCount == 1);
+        var manyAttention = students.First(student => student.ActiveCaseCount >= 20);
+        Assert.AreEqual(string.Empty, zeroAttention.ActiveCaseCountLabel);
+        Assert.AreEqual("1 个关注", oneAttention.ActiveCaseCountLabel);
+        Assert.AreEqual($"{manyAttention.ActiveCaseCount} 个关注", manyAttention.ActiveCaseCountLabel);
+
         CollectionAssert.AreEquivalent(
             new[] { "语文", "数学", "英语", "物理" },
             students.Select(student => student.PrimarySubject).Distinct().ToArray());

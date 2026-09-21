@@ -174,12 +174,12 @@ public sealed class MainWindowViewModel : ObservableObject
 
         if (_personalWorkspace is null)
         {
-            _recentObservationsStatusText = "UX 原型记录，仅用于布局与交互验证。";
-            _currentFocusStatusText = "UX 原型关注项，仅用于布局与交互验证。";
+            _recentObservationsStatusText = "测试数据 · 最近记录";
+            _currentFocusStatusText = "测试数据 · 当前关注";
             _caseHistoryStatusText = string.Empty;
             _todayStatusText = string.Empty;
-            _organizationManagementStatusText = "UX 原型成员，仅用于布局与交互验证。";
-            _organizationName = "虚构机构";
+            _organizationManagementStatusText = "测试数据 · 机构成员";
+            _organizationName = "测试机构";
         }
         else
         {
@@ -362,22 +362,48 @@ public sealed class MainWindowViewModel : ObservableObject
         private set => SetProperty(ref _todayStatusText, value);
     }
 
+    public bool HasPendingRecoveryNotice =>
+        PendingLearningCaseRecoveries.Count > 0 ||
+        PendingActionProgressionRecoveries.Count > 0 ||
+        PendingCaseLifecycleRecoveries.Count > 0 ||
+        !string.IsNullOrWhiteSpace(PendingLearningCaseRecoveryStatusText) ||
+        !string.IsNullOrWhiteSpace(PendingActionProgressionRecoveryStatusText) ||
+        !string.IsNullOrWhiteSpace(PendingCaseLifecycleRecoveryStatusText);
+
     public string PendingLearningCaseRecoveryStatusText
     {
         get => _pendingLearningCaseRecoveryStatusText;
-        private set => SetProperty(ref _pendingLearningCaseRecoveryStatusText, value);
+        private set
+        {
+            if (SetProperty(ref _pendingLearningCaseRecoveryStatusText, value))
+            {
+                OnPropertyChanged(nameof(HasPendingRecoveryNotice));
+            }
+        }
     }
 
     public string PendingActionProgressionRecoveryStatusText
     {
         get => _pendingActionProgressionRecoveryStatusText;
-        private set => SetProperty(ref _pendingActionProgressionRecoveryStatusText, value);
+        private set
+        {
+            if (SetProperty(ref _pendingActionProgressionRecoveryStatusText, value))
+            {
+                OnPropertyChanged(nameof(HasPendingRecoveryNotice));
+            }
+        }
     }
 
     public string PendingCaseLifecycleRecoveryStatusText
     {
         get => _pendingCaseLifecycleRecoveryStatusText;
-        private set => SetProperty(ref _pendingCaseLifecycleRecoveryStatusText, value);
+        private set
+        {
+            if (SetProperty(ref _pendingCaseLifecycleRecoveryStatusText, value))
+            {
+                OnPropertyChanged(nameof(HasPendingRecoveryNotice));
+            }
+        }
     }
 
     public async Task InitializeAsync(CancellationToken cancellationToken = default)

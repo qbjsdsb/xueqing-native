@@ -11,7 +11,7 @@ public sealed record StudentSummary(
         ? "当前任教学员"
         : StudentCode;
 
-    public string ActiveCaseCountLabel => ActiveCaseCount < 0
+    public string ActiveCaseCountLabel => ActiveCaseCount <= 0
         ? string.Empty
-        : ActiveCaseCount.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        : $"{ActiveCaseCount.ToString(System.Globalization.CultureInfo.InvariantCulture)} 个关注";
 }

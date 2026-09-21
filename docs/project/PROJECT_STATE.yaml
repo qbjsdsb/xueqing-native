@@ -2,7 +2,7 @@ schema_version: 1
 project: xueqing-native
 phase: phase-1
 milestone: production-provider-region-data-residency-gate
-status: active
+status: blocked-on-operator-decision
 architecture_baseline: v1-accepted
 
 frozen:
@@ -21,8 +21,6 @@ frozen:
   ai_continuity: github-is-engineering-source-of-truth
   offline_access_lease_v1: 72h-max-same-boot-monotonic-with-rollback-detection
   organization_business_date: server-side-validated-timezone
-  provider_portability_v1: selectable-single-authority-multi-adapter-no-dual-write
-  secondary_provider_target: cloudbase-conformance
 
 completed_gates:
   - windows-native-ux-prototype
@@ -57,20 +55,31 @@ completed_gates:
   - provider-storage-conformance
   - provider-adapter-conformance-spike
   - windows-organization-invitation-product-closure
+  - windows-native-ui-shell-polish
+  - windows-teaching-work-surfaces-polish
+  - windows-students-density-and-keyboard-productization
 
 open_gates:
+  - android-final-native-ux-acceptance
   - production-provider-region-data-residency-gate
+  - cloudbase-provider-conformance-spike
   - backup-storage-restore-gate
   - signing-and-recovery-gate
+  - v1-release-candidate-acceptance
 
 next_execution:
   parallel_limit: 1
-  lines:
+  lines: []
+  manual_acceptance:
+    - android-final-native-ux-acceptance
+  operator_blocked:
     - production-provider-region-data-residency-gate
-  after_current_green:
+  after_operator_decision:
+    - production-provider-region-data-residency-gate
     - cloudbase-provider-conformance-spike
     - backup-storage-restore-gate
     - signing-and-recovery-gate
+    - v1-release-candidate-acceptance
 
 later:
   - generic-change-list-or-cursor-sync

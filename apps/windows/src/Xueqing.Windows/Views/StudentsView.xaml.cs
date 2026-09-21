@@ -17,6 +17,30 @@ public sealed partial class StudentsView : UserControl
         InitializeComponent();
     }
 
+    private void FocusStudentSearch_Invoked(
+        KeyboardAccelerator sender,
+        KeyboardAcceleratorInvokedEventArgs args)
+    {
+        SearchBox.Focus(FocusState.Keyboard);
+        SearchBox.SelectAll();
+        args.Handled = true;
+    }
+
+    private void BackToStudentList_Invoked(
+        KeyboardAccelerator sender,
+        KeyboardAcceleratorInvokedEventArgs args)
+    {
+        if (_layoutMode == WindowLayoutMode.Expanded ||
+            DetailPane.Visibility != Visibility.Visible)
+        {
+            return;
+        }
+
+        ShowListOnly();
+        StudentList.Focus(FocusState.Keyboard);
+        args.Handled = true;
+    }
+
     public void ApplyLayout(WindowLayoutMode mode)
     {
         _layoutMode = mode;
