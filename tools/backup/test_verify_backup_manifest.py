@@ -66,6 +66,20 @@ class BackupManifestValidatorTests(unittest.TestCase):
             "must be lowercase SHA-256 hex",
         )
 
+    def test_table_fingerprint_keys_must_match_row_counts(self) -> None:
+        self.assert_rejected(
+            lambda value: value["database"]["table_fingerprints_sha256"].pop("app_users"),
+            "must cover exactly",
+        )
+
+    def test_table_fingerprint_must_be_sha256(self) -> None:
+        self.assert_rejected(
+            lambda value: value["database"]["table_fingerprints_sha256"].__setitem__(
+                "app_users", "bad"
+            ),
+            "must be lowercase SHA-256 hex",
+        )
+
     def test_migration_count_must_match(self) -> None:
         self.assert_rejected(
             lambda value: value["source"].__setitem__("migration_count", 13),
