@@ -1,7 +1,7 @@
 schema_version: 1
 project: xueqing-native
 phase: phase-1
-milestone: windows-organization-invitation-product-closure
+milestone: windows-students-density-and-keyboard-productization
 status: active
 architecture_baseline: v1-accepted
 
@@ -54,21 +54,33 @@ completed_gates:
   - provider-projection-conformance
   - provider-storage-conformance
   - provider-adapter-conformance-spike
+  - windows-organization-invitation-product-closure
+  - windows-native-ui-shell-polish
+  - windows-teaching-work-surfaces-polish
 
 open_gates:
-  - windows-organization-invitation-product-closure
+  - android-final-native-ux-acceptance
+  - windows-students-density-and-keyboard-productization
   - production-provider-region-data-residency-gate
+  - cloudbase-provider-conformance-spike
   - backup-storage-restore-gate
   - signing-and-recovery-gate
+  - v1-release-candidate-acceptance
 
 next_execution:
   parallel_limit: 1
   lines:
-    - windows-organization-invitation-product-closure
+    - windows-students-density-and-keyboard-productization
+  manual_acceptance:
+    - android-final-native-ux-acceptance
+  operator_blocked:
+    - production-provider-region-data-residency-gate
   after_current_green:
     - production-provider-region-data-residency-gate
+    - cloudbase-provider-conformance-spike
     - backup-storage-restore-gate
     - signing-and-recovery-gate
+    - v1-release-candidate-acceptance
 
 later:
   - generic-change-list-or-cursor-sync
