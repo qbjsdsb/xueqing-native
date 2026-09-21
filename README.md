@@ -124,9 +124,9 @@ Provider Storage Conformance 也已完成并合入主线：两个独立真实外
 
 Windows Organization Invitation Product Closure 已完成并合入主线：WinUI 端已接入 capability-gated 邀请创建与可信 Delivery，ResultUnknown 保留同一 operation/intent，Create → Delivery → Authentication → Acceptance → Membership 的产品闭环已经有真实 provider 与 MSIX/Native UX 证据。
 
-Windows 原生产品化也已进入第二阶段。PR #68 已接受 Mica + WinUI TitleBar + NavigationView 原生 Shell 和可下载测试 MSIX；PR #69 已将 Today、Learning 与 Organization Management 从工程/原型表达收敛为真实工作面，并把视觉证据门禁加固到可检测 stale screenshot。当前代码执行线是 Issue #70 **Windows Students density and keyboard productization**：只继续打磨高频 Students list/detail 的密度、键盘效率、状态恢复和可见文案，不重开 backend/domain/provider 架构。
+Windows 原生产品化已完成当前 Phase 1 收口。PR #68 已接受 Mica + WinUI TitleBar + NavigationView 原生 Shell 和可下载测试 MSIX；PR #69 已将 Today、Learning 与 Organization Management 从工程/原型表达收敛为真实工作面，并把视觉证据门禁加固到可检测 stale screenshot；Issue #70 通过 PR #72 / #73 完成 Students list/detail 的原生键盘效率、焦点恢复、可见文案、列表密度和无障碍语义，且保持既有 320-DIP 列宽与窗口断点不变。当前没有新的 Windows UI 代码执行线，不应为了“继续优化”而重开已经通过的产品化 Gate。
 
-Android Final Native UX PR #66 的自动化 exact-head 已通过 Foundation、Android device/durability、reference-provider、adaptive/large-text、accessibility 与视觉证据 Gate；剩余的是明确的真机人工验收：中文拼音 IME、TalkBack 播报质量，以及 predictive/system Back + Photo Picker 返回上下文。生产 Provider Region / Data Residency PR #63 / Issue #64 仍被真实运营方驻留决策阻塞；在该决策解决前不得把开发/reference provider 自动当成生产拓扑。
+Android Final Native UX PR #66 的自动化 exact-head 已通过 Foundation、Android device/durability、reference-provider、adaptive/large-text、accessibility 与视觉证据 Gate；剩余的是明确的真机人工验收：中文拼音 IME、TalkBack 播报质量，以及 predictive/system Back + Photo Picker 返回上下文。生产 Provider Region / Data Residency PR #63 / Issue #64 则被真实运营方驻留决策阻塞；在该决策解决前，仓库没有可自动继续的生产基础设施代码线，也不得把开发/reference provider 自动当成生产拓扑或提前启动 CloudBase #65。
 
 动态工程状态以 `docs/project/PROJECT_STATE.yaml` 为准。
 
