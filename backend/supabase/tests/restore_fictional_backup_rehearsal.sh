@@ -183,29 +183,116 @@ while IFS= read -r table; do
     /tmp/xueqing.dump
 done < "$restore_root/restore-order.txt"
 
-python3 - "$manifest" > "$restore_root/row-counts.tsv" <<'PY'
+target_table_state="$(bash tools/backup/snapshot_public_table_state.sh "$db_container")"
+TABLE_STATE_JSON="$target_table_state" python3 - "$manifest" <<'PY'
 import json
+import os
 import pathlib
-import re
 import sys
 
-value = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
-for table, count in sorted(value["database"]["row_counts"].items()):
-    if not re.fullmatch(r"[a-z][a-z0-9_]*", table):
-        raise SystemExit(f"unsafe table name in manifest: {table}")
-    print(f"{table}\t{count}")
+manifest = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
+target = json.loads(os.environ["TABLE_STATE_JSON"])
+expected = {
+    "row_counts": manifest["database"]["row_counts"],
+    "table_fingerprints_sha256": manifest["database"]["table_fingerprints_sha256"],
+}
+if target["row_counts"] != expected["row_counts"]:
+    all_tables = sorted(set(target["row_counts"]) | set(expected["row_counts"]))
+    differences = {
+        table: {
+            "expected": expected["row_counts"].get(table),
+            "actual": target["row_counts"].get(table),
+        }
+        for table in all_tables
+        if target["row_counts"].get(table) != expected["row_counts"].get(table)
+    }
+    raise SystemExit(f"restored row-count mismatch: {differences}")
+if target["table_fingerprints_sha256"] != expected["table_fingerprints_sha256"]:
+    all_tables = sorted(
+        set(target["table_fingerprints_sha256"])
+        | set(expected["table_fingerprints_sha256"])
+    )
+    differences = [
+        table
+        for table in all_tables
+        if target["table_fingerprints_sha256"].get(table)
+        != expected["table_fingerprints_sha256"].get(table)
+    ]
+    raise SystemExit(
+        "restored canonical table fingerprint mismatch: " + ", ".join(differences)
+    )
 PY
 
-while IFS=$'\t' read -r table expected; do
-  actual="$(
-    docker exec "$db_container" psql -U postgres -d postgres -Atc \
-      "select count(*) from public.$table"
-  )"
-  if [[ "$actual" != "$expected" ]]; then
-    echo "Restored row count mismatch for $table: expected=$expected actual=$actual" >&2
-    exit 1
-  fi
-done < "$restore_root/row-counts.tsv"
+actor_id='10000000-0000-0000-0000-000000000001'
+organization_id='20000000-0000-0000-0000-000000000001'
+student_id='30000000-0000-0000-0000-000000000001'
+profile_id='40000000-0000-0000-0000-000000000001'
+assignment_id='50000000-0000-0000-0000-000000000001'
+observation_operation="$(cat "$backup_dir/observation_operation_id")"
+attachment_operation="$(cat "$backup_dir/attachment_operation_id")"
+observation_id="$(cat "$backup_dir/observation_id")"
+attachment_id="$(cat "$backup_dir/attachment_id")"
+raw_text="$(cat "$backup_dir/raw_text")"
+
+docker exec "$db_container" psql -U postgres -d postgres -v ON_ERROR_STOP=1 \
+  -v actor_id="$actor_id" \
+  -v organization_id="$organization_id" \
+  -v student_id="$student_id" \
+  -v profile_id="$profile_id" \
+  -v assignment_id="$assignment_id" \
+  -v observation_id="$observation_id" \
+  -v observation_operation="$observation_operation" \
+  -v attachment_id="$attachment_id" \
+  -v attachment_operation="$attachment_operation" >/dev/null <<'SQL'
+do $xq$
+begin
+    if not exists (select 1 from public.app_users where id = :'actor_id'::uuid) then
+        raise exception 'XQ_RESTORE_APP_USER_ID_MISSING';
+    end if;
+    if not exists (select 1 from public.organizations where id = :'organization_id'::uuid) then
+        raise exception 'XQ_RESTORE_ORGANIZATION_ID_MISSING';
+    end if;
+    if not exists (select 1 from public.students where id = :'student_id'::uuid) then
+        raise exception 'XQ_RESTORE_STUDENT_ID_MISSING';
+    end if;
+    if not exists (
+        select 1 from public.student_subject_profiles where id = :'profile_id'::uuid
+    ) then
+        raise exception 'XQ_RESTORE_PROFILE_ID_MISSING';
+    end if;
+    if not exists (
+        select 1 from public.student_teacher_assignments where id = :'assignment_id'::uuid
+    ) then
+        raise exception 'XQ_RESTORE_ASSIGNMENT_ID_MISSING';
+    end if;
+    if not exists (
+        select 1 from public.observations
+         where id = :'observation_id'::uuid
+           and operation_id = :'observation_operation'::uuid
+    ) then
+        raise exception 'XQ_RESTORE_OBSERVATION_ID_MISSING';
+    end if;
+    if not exists (
+        select 1 from public.observation_attachments
+         where id = :'attachment_id'::uuid
+           and operation_id = :'attachment_operation'::uuid
+    ) then
+        raise exception 'XQ_RESTORE_ATTACHMENT_ID_MISSING';
+    end if;
+    if not exists (
+        select 1 from public.operation_receipts
+         where operation_id in (
+             :'observation_operation'::uuid,
+             :'attachment_operation'::uuid
+         )
+         group by true
+        having count(*) = 2
+    ) then
+        raise exception 'XQ_RESTORE_OPERATION_RECEIPTS_MISSING';
+    end if;
+end;
+$xq$;
+SQL
 
 python3 - "$manifest" "$extract_dir" > "$restore_root/objects.tsv" <<'PY'
 import json
