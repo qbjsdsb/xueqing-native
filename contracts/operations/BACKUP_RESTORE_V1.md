@@ -36,7 +36,7 @@ The manifest itself is production data when created from production. Production 
 V1 uses logical PostgreSQL custom-format export:
 
 ```text
-pg_dump --format=custom --no-owner --no-acl
+pg_dump --format=custom --data-only --schema=public --no-owner --no-acl
 ```
 
 The manifest records:
