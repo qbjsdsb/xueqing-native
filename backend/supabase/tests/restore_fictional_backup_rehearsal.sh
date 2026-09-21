@@ -235,6 +235,41 @@ if target["table_fingerprints_sha256"] != expected["table_fingerprints_sha256"]:
     )
 PY
 
+# The logical restore above writes directly to PostgreSQL while the local API
+# stack is already running. A disaster-recovery acceptance must not let
+# PostgREST/Auth/Storage reuse pre-restore connections or runtime state. Recycle
+# the isolated target stack after the database fingerprint has been proven, then
+# reacquire its runtime endpoints/keys before any API-level semantic checks.
+supabase stop --workdir "$target_backend"
+supabase start --workdir "$target_backend"
+
+target_env="$(mktemp)"
+supabase status --workdir "$target_backend" -o env > "$target_env"
+set -a
+# shellcheck disable=SC1090
+source "$target_env"
+set +a
+rm -f "$target_env"
+
+: "${API_URL:?target API_URL missing after restore recycle}"
+: "${ANON_KEY:?target ANON_KEY missing after restore recycle}"
+: "${SERVICE_ROLE_KEY:?target SERVICE_ROLE_KEY missing after restore recycle}"
+: "${JWT_SECRET:?target JWT_SECRET missing after restore recycle}"
+
+api_url="${API_URL%/}"
+echo "::add-mask::$ANON_KEY"
+echo "::add-mask::$SERVICE_ROLE_KEY"
+
+db_container="$(
+  docker ps --filter 'name=supabase_db_xueqing-native-restore-rehearsal' \
+    --format '{{.Names}}' | head -n 1
+)"
+if [[ -z "$db_container" ]]; then
+  echo 'Fresh restore database container was not found after API recycle.' >&2
+  docker ps -a >&2 || true
+  exit 1
+fi
+
 actor_id='10000000-0000-0000-0000-000000000001'
 actor_b_id='10000000-0000-0000-0000-000000000002'
 organization_id='20000000-0000-0000-0000-000000000001'
