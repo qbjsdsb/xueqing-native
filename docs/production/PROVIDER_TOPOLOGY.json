@@ -8,7 +8,7 @@
   "primary_project_region": {
     "selection_policy": "specific-region-required-when-jurisdiction-matters",
     "region": "ap-southeast-1",
-    "evidence": "operator-selected-supabase-singapore-production-project-provisioning-evidence-required",
+    "evidence": "supabase-management-api-readback-xueqing-native-prod-active-healthy-ap-southeast-1-2026-09-21",
     "supported_regions_snapshot": [
       "us-west-1",
       "us-west-2",
@@ -33,12 +33,14 @@
     "postgres": {
       "authority": "server-authoritative-business-state",
       "at_rest_region": "ap-southeast-1",
-      "accepted": false
+      "accepted": true,
+      "evidence": "production-project-active-healthy-in-ap-southeast-1-and-14-repository-migrations-applied"
     },
     "auth": {
       "authority": "provider-identity-only-application-identity-via-identitylink",
       "at_rest_region": "ap-southeast-1",
-      "accepted": false
+      "accepted": true,
+      "evidence": "supabase-auth-bound-to-production-project-postgres-region"
     },
     "storage": {
       "bucket_model": "private",
@@ -46,7 +48,8 @@
       "object_origin_region": "ap-southeast-1",
       "edge_cache_scope": "global-cdn-accepted-for-v1-private-per-user-authorization-retained",
       "signed_urls_used_by_xueqing_v1": false,
-      "accepted": false
+      "accepted": true,
+      "evidence": "teaching-attachments-v1-private-bucket-readback-public-false-6MiB-jpeg-png-webp"
     },
     "edge_invitation_delivery": {
       "default_execution": "globally-distributed-nearest-request-region",
@@ -72,14 +75,24 @@
         "us-east-1",
         "us-west-1",
         "us-west-2"
-      ]
+      ],
+      "function_deployed": true,
+      "function_status": "ACTIVE",
+      "function_version": 1,
+      "deployment_verify_jwt": false,
+      "required_region_configuration": "XUEQING_REQUIRED_EDGE_REGION=ap-southeast-1",
+      "required_region_secret_configured": false,
+      "runtime_region_evidence": "pending-required-region-secret"
     },
     "logs_diagnostics": {
       "application_pii_logging": "forbidden",
       "provider_log_residency": "strict-single-region-not-required-provider-managed-logging-accepted-no-intentional-application-pii",
       "log_drains": [],
       "public_ci_production_data": "forbidden",
-      "accepted": false
+      "accepted": true,
+      "provider_log_retention_days": 1,
+      "log_drains_available_on_selected_plan": false,
+      "evidence": "free-plan-provider-managed-logs-accepted-no-log-drain-no-intentional-application-pii"
     },
     "backups": {
       "database_backup": "independent-encrypted-logical-backup-required-outside-live-project",
@@ -96,11 +109,8 @@
     "accepted": true
   },
   "blockers": [
-    "free_project_capacity_exhausted_distinct_production_project_requires_operator_capacity_action",
-    "native_production_project_not_provisioned_and_region_not_verified",
-    "production_runtime_topology_evidence_not_recorded",
-    "independent_database_and_private_storage_backup_not_proven",
-    "production_log_retention_and_diagnostics_evidence_not_recorded"
+    "edge_required_region_secret_not_configured_and_runtime_region_not_proven",
+    "independent_database_and_private_storage_backup_not_proven"
   ],
   "references": [
     "https://supabase.com/docs/guides/platform/regions",
@@ -123,14 +133,21 @@
     ]
   },
   "hosted_environment_observation": {
-    "native_production_project_provisioned": false,
+    "native_production_project_provisioned": true,
     "existing_development_reference_region": "ap-southeast-1",
     "existing_development_reference_matches_native_backend": false,
     "evidence_checked_at": "2026-09-21",
     "connected_organization_plan": "free",
     "active_free_projects_observed": 2,
     "free_project_limit_observed": 2,
-    "production_project_capacity_resolved": false
+    "production_project_capacity_resolved": true,
+    "production_project_name": "xueqing-native-prod",
+    "production_project_status": "ACTIVE_HEALTHY",
+    "production_project_region": "ap-southeast-1",
+    "repository_migrations_applied": 14,
+    "public_rls_tables_observed": 17,
+    "legacy_xueqing_dev_status": "INACTIVE",
+    "other_legacy_project_pause_api_status": "provider-reported-hibernating-while-list-projects-reported-active-healthy-manual-dashboard-cleanup-required"
   },
   "deployment_constraints": {
     "zero_paid_dependency_target": true,
