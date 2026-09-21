@@ -4,6 +4,17 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
+    <UserControl.KeyboardAccelerators>
+        <KeyboardAccelerator
+            Key="F"
+            Modifiers="Control"
+            Invoked="FocusStudentSearch_Invoked" />
+        <KeyboardAccelerator
+            Key="Left"
+            Modifiers="Menu"
+            Invoked="BackToStudentList_Invoked" />
+    </UserControl.KeyboardAccelerators>
+
     <Grid
         x:Name="WorkspaceGrid"
         Padding="20,16,24,20"
@@ -259,7 +270,7 @@
                                 <TextBlock
                                     Grid.Column="1"
                                     Opacity="0.55"
-                                    Text="UX 原型数据" />
+                                    Text="测试数据" />
                             </Grid>
 
                             <Grid ColumnSpacing="12">
