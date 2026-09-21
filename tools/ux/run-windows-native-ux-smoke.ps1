@@ -761,17 +761,11 @@ function Capture-BaseRepresentativeEvidence {
 
     Navigate-ToSurface -NavigationId 'TodayNavigation' -SurfaceId 'TodaySurface' | Out-Null
     Save-WindowScreenshot -Name '1280-today'
-    Assert-DistinctScreenshotEvidence \
-        -LeftName '1280-expanded-students' \
-        -RightName '1280-today' \
-        -FailureMessage 'Today evidence is identical to Students evidence; navigation/render evidence is stale.'
+    Assert-DistinctScreenshotEvidence -LeftName '1280-expanded-students' -RightName '1280-today' -FailureMessage 'Today evidence is identical to Students evidence; navigation/render evidence is stale.'
 
     Navigate-ToSurface -NavigationId 'LearningNavigation' -SurfaceId 'LearningSurface' | Out-Null
     Save-WindowScreenshot -Name '1280-learning'
-    Assert-DistinctScreenshotEvidence \
-        -LeftName '1280-today' \
-        -RightName '1280-learning' \
-        -FailureMessage 'Learning evidence is identical to Today evidence; navigation/render evidence is stale.'
+    Assert-DistinctScreenshotEvidence -LeftName '1280-today' -RightName '1280-learning' -FailureMessage 'Learning evidence is identical to Today evidence; navigation/render evidence is stale.'
 }
 
 function Assert-NoHardCodedPrototypeColors {
