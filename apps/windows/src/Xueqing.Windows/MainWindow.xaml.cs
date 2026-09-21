@@ -21,8 +21,15 @@ public sealed partial class MainWindow : Window
         ViewModel = viewModel ?? throw new ArgumentNullException(nameof(viewModel));
         InitializeComponent();
         Title = "学情";
+        ExtendsContentIntoTitleBar = true;
+        SetTitleBar(AppTitleBar);
         RootGrid.DataContext = ViewModel;
         ApplyOrganizationWorkspaceAccess();
+    }
+
+    private void AppTitleBar_PaneToggleRequested(TitleBar sender, object args)
+    {
+        Shell.IsPaneOpen = !Shell.IsPaneOpen;
     }
 
     private async void RootGrid_Loaded(object sender, RoutedEventArgs e)
