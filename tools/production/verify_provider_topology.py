@@ -210,6 +210,10 @@ def validate(value: dict, require_accepted: bool, repo_root: Path) -> None:
         hosted.get("native_production_project_provisioned") is True,
         "accepted topology requires a provisioned native production project",
     )
+    require(
+        hosted.get("production_project_capacity_resolved") is True,
+        "accepted topology requires resolved production-project capacity",
+    )
     primary_evidence = primary.get("evidence")
     require(
         is_concrete_evidence(primary_evidence),
