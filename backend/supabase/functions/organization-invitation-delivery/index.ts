@@ -1,4 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2.116.0";
+import { DEFAULT_HOSTED_REQUIRED_EDGE_REGION } from "./deployment.ts";
 
 type JsonObject = Record<string, unknown>;
 
@@ -97,15 +98,15 @@ function isLocalProviderUrl(raw: string | null): boolean {
 }
 
 function enforceRequiredExecutionRegion(): void {
-  const required = optionalEnvironment("XUEQING_REQUIRED_EDGE_REGION");
-  if (!required) {
-    // Local development intentionally has no hosted-region identity. Hosted
-    // deployments must opt in explicitly instead of silently losing the
-    // production region guard when configuration is missing.
-    if (isLocalProviderUrl(optionalEnvironment("SUPABASE_URL"))) return;
-    throw new DeliveryError("XQ_INVITATION_DELIVERY_REGION_UNAVAILABLE", 503);
-  }
+  const configured = optionalEnvironment("XUEQING_REQUIRED_EDGE_REGION");
+  const providerUrl = optionalEnvironment("SUPABASE_URL");
 
+  // Local development intentionally has no hosted-region identity. Hosted
+  // deployments always enforce either the explicit environment override or
+  // the audited checked-in V1 deployment policy.
+  if (!configured && isLocalProviderUrl(providerUrl)) return;
+
+  const required = configured ?? DEFAULT_HOSTED_REQUIRED_EDGE_REGION;
   const actual = optionalEnvironment("SB_REGION");
   if (!actual || actual !== required) {
     throw new DeliveryError("XQ_INVITATION_DELIVERY_REGION_UNAVAILABLE", 503);
@@ -196,14 +197,16 @@ async function callServiceCompletion(
 
 async function handle(request: Request): Promise<Response> {
   if (request.method === "OPTIONS") return response({ ok: true });
+
+  // Every hosted non-preflight request proves its runtime region before method,
+  // bearer, body, database, invitation or provider processing. This also makes
+  // a no-data GET probe useful for release evidence: 405 means the region guard
+  // passed, while a drifted region fails closed with 503 first.
+  enforceRequiredExecutionRegion();
+
   if (request.method !== "POST") {
     return response({ ok: false, error: "XQ_METHOD_NOT_ALLOWED" }, 405);
   }
-
-  // This guard runs before bearer parsing, request-body parsing, database reads,
-  // invitation lookup or provider dispatch. Production can therefore require
-  // a specific Supabase execution region and fail closed if routing drifts.
-  enforceRequiredExecutionRegion();
 
   const accessToken = requiredBearer(request);
   const supabaseUrl = requiredEnvironment("SUPABASE_URL");
