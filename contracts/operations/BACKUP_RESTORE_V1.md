@@ -48,7 +48,8 @@ The manifest records:
 - exact repository source commit;
 - exact migration list/count;
 - schema fingerprint;
-- representative row counts used for restore reconciliation.
+- all public business-table row counts used for restore reconciliation;
+- all public business-table canonical content SHA-256 fingerprints.
 
 Git migrations remain schema truth. The dump is authoritative state, not schema-source history.
 
@@ -120,6 +121,8 @@ A provider subject is therefore recoverable **identity evidence**, not the busin
 ## Restore acceptance
 
 A manifest-valid archive is only **backup-valid**. It is not yet **restore-accepted**.
+
+Fresh restore MUST reproduce the exact public business-table set, row counts and canonical row-content fingerprints before provider identity relink or product replay is attempted. Equal row counts with different ids/content are a failed restore.
 
 Issue #76 closes only after a fresh isolated target proves:
 
