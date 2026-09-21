@@ -17,6 +17,14 @@ A read-only inspection of the connected Supabase account found:
 
 No current Xueqing Native production Supabase project is provisioned.
 
+The connected Supabase organization is currently on the Free plan and read-only account inspection found **two active Free projects**. Current Supabase billing documentation grants two active Free projects and states that paused projects do not count toward that quota. Therefore a distinct zero-paid Xueqing Native production project currently has no free project slot.
+
+This is an operations blocker, not permission to reuse the legacy project or pause another project automatically. Before production provisioning, one of the following must be explicitly completed:
+
+- pause an existing project only after it is confirmed safe to pause; or
+- use another Free organization with available capacity; or
+- explicitly revisit the zero-paid constraint / paid plan.
+
 Project refs, credentials and account secrets are intentionally not recorded here.
 
 ## Selected V1 topology
