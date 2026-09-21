@@ -162,6 +162,7 @@
     "hosted_free_inactivity_pause_possible": true,
     "hosted_free_can_be_sole_production_durability_layer": false,
     "free_active_project_limit": 2,
-    "free_active_projects_observed": 2
+    "free_active_projects_observed": 2,
+    "production_local_reference_mode_allowed": false
   }
 }
