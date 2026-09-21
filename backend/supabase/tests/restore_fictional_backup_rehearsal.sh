@@ -60,7 +60,17 @@ for item in value["storage"]["objects"]:
     verify(item)
 PY
 
-cp -a backend "$target_backend"
+# A restore target must be reconstructed from versioned source, never by
+# copying the already-running source provider directory. The source workdir
+# contains ignored Supabase runtime state (.temp/.branches) that can pin local
+# API services to the wrong project/container and invalidate the rehearsal.
+git archive --format=tar HEAD backend | tar -xf - -C "$target_root"
+
+if [[ -e "$target_backend/supabase/.temp" || -e "$target_backend/supabase/.branches" ]]; then
+  echo "Fresh restore target unexpectedly contains Supabase runtime state." >&2
+  exit 1
+fi
+
 python3 - "$target_backend/supabase/config.toml" <<'PY'
 import pathlib
 import re
