@@ -54,6 +54,7 @@ completed_gates:
   - provider-projection-conformance
   - provider-storage-conformance
   - provider-adapter-conformance-spike
+  - windows-organization-invitation-product-closure
 
 open_gates:
   - production-provider-region-data-residency-gate
