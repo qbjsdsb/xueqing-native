@@ -4,6 +4,7 @@ set -euo pipefail
 history_file="${1:?usage: verify_fictional_recovery_history.sh HISTORY_JSON}"
 : "${API_URL:?API_URL required}"
 : "${ANON_KEY:?ANON_KEY required}"
+: "${SERVICE_ROLE_KEY:?SERVICE_ROLE_KEY required}"
 : "${DB_CONTAINER:?DB_CONTAINER required}"
 : "${ACTOR_TOKEN_A:?ACTOR_TOKEN_A required}"
 : "${ACTOR_TOKEN_B:?ACTOR_TOKEN_B required}"
@@ -170,6 +171,58 @@ begin
 end;
 $xq$;
 SQL
+
+api_assignment_snapshot="$(
+  curl --fail-with-body --silent --show-error \
+    "$api_url/rest/v1/student_teacher_assignments?id=in.($assignment_a_old,$assignment_a_new)&select=id,teacher_app_user_id,active&order=id.asc" \
+    -H "apikey: $SERVICE_ROLE_KEY" \
+    -H "Authorization: Bearer $SERVICE_ROLE_KEY"
+)"
+
+API_ASSIGNMENT_SNAPSHOT="$api_assignment_snapshot" \
+ASSIGNMENT_OLD="$assignment_a_old" ASSIGNMENT_NEW="$assignment_a_new" \
+ACTOR_A="$actor_a" ACTOR_B="$actor_b" \
+python3 - <<'PY'
+import json
+import os
+
+rows = {
+    row["id"]: row
+    for row in json.loads(os.environ["API_ASSIGNMENT_SNAPSHOT"])
+}
+old = rows.get(os.environ["ASSIGNMENT_OLD"])
+new = rows.get(os.environ["ASSIGNMENT_NEW"])
+if old is None or new is None:
+    raise SystemExit(f"Data API assignment snapshot incomplete: {rows}")
+if old["teacher_app_user_id"] != os.environ["ACTOR_A"] or old["active"] is not False:
+    raise SystemExit(f"Data API former assignment state mismatch: {old}")
+if new["teacher_app_user_id"] != os.environ["ACTOR_B"] or new["active"] is not True:
+    raise SystemExit(f"Data API current assignment state mismatch: {new}")
+PY
+
+rpc_call "$ACTOR_TOKEN_A" get_personal_bootstrap_v1 '{}'
+require_success "Former teacher restored personal bootstrap"
+ACTOR_A_BOOTSTRAP="$RPC_BODY" ASSIGNMENT_OLD="$assignment_a_old" python3 - <<'PY'
+import json
+import os
+
+value = json.loads(os.environ["ACTOR_A_BOOTSTRAP"])
+contexts = value.get("teaching_contexts", [])
+if any(item.get("assignment_id") == os.environ["ASSIGNMENT_OLD"] for item in contexts):
+    raise SystemExit("Former teacher bootstrap still exposes inactive assignment")
+PY
+
+rpc_call "$ACTOR_TOKEN_B" get_personal_bootstrap_v1 '{}'
+require_success "Current teacher restored personal bootstrap"
+ACTOR_B_BOOTSTRAP="$RPC_BODY" ASSIGNMENT_NEW="$assignment_a_new" python3 - <<'PY'
+import json
+import os
+
+value = json.loads(os.environ["ACTOR_B_BOOTSTRAP"])
+contexts = value.get("teaching_contexts", [])
+if not any(item.get("assignment_id") == os.environ["ASSIGNMENT_NEW"] for item in contexts):
+    raise SystemExit("Current teacher bootstrap is missing active handoff assignment")
+PY
 
 former_payload="{\"p_operation_id\":\"$former_operation\",\"p_organization_id\":\"$org_a\",\"p_student_id\":\"$handoff_student\",\"p_subject_profile_id\":\"$handoff_profile\",\"p_assignment_id\":\"$assignment_a_old\",\"p_raw_text\":\"Former teacher must not append after restored handoff.\",\"p_client_capture_metadata\":{\"fixture\":true,\"source\":\"restore-handoff-negative\"}}"
 rpc_call "$ACTOR_TOKEN_A" create_observation "$former_payload"
