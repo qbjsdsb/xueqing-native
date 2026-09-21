@@ -97,8 +97,10 @@ def validate_repository_evidence(value: dict, repo_root: Path) -> None:
         require(
             'DEFAULT_HOSTED_REQUIRED_EDGE_REGION' in edge_text
             and 'configured ?? DEFAULT_HOSTED_REQUIRED_EDGE_REGION' in edge_text
-            and 'isLocalProviderUrl(providerUrl)' in edge_text,
-            "hosted Delivery adapter must enforce checked-in region policy with local-only exemption",
+            and 'XUEQING_LOCAL_REFERENCE_MODE' in edge_text
+            and 'optionalEnvironment("XUEQING_LOCAL_REFERENCE_MODE") === "1"' in edge_text
+            and 'if (localReferenceModeEnabled()) return;' in edge_text,
+            "hosted Delivery adapter must enforce checked-in region policy with explicit local-reference opt-in",
         )
 
     roots = evidence.get("production_client_source_roots")
@@ -198,6 +200,10 @@ def validate(value: dict, require_accepted: bool, repo_root: Path) -> None:
     require(
         constraints.get("hosted_free_can_be_sole_production_durability_layer") is False,
         "hosted Free must not be treated as Xueqing's sole durability layer",
+    )
+    require(
+        constraints.get("production_local_reference_mode_allowed") is False,
+        "production must forbid local-reference region bypass",
     )
 
     blockers = value.get("blockers")
