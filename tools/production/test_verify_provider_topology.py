@@ -44,6 +44,9 @@ class ProviderTopologyVerifierTests(unittest.TestCase):
             "global-cdn-accepted-for-v1",
             value["data_surfaces"]["storage"]["edge_cache_scope"],
         )
+        self.assertFalse(
+            value["deployment_constraints"]["production_local_reference_mode_allowed"]
+        )
 
     def test_checked_in_manifest_remains_blocked_only_until_runtime_region_probe(self) -> None:
         value = self.blocked
@@ -167,6 +170,15 @@ class ProviderTopologyVerifierTests(unittest.TestCase):
                 "pending-required-region-secret",
             ),
             "concrete Edge runtime-region evidence",
+        )
+
+    def test_acceptance_forbids_local_reference_mode_in_production(self) -> None:
+        self.assert_rejected(
+            lambda value: value["deployment_constraints"].__setitem__(
+                "production_local_reference_mode_allowed",
+                True,
+            ),
+            "production must forbid local-reference region bypass",
         )
 
     def test_acceptance_requires_resolved_production_project_capacity(self) -> None:
