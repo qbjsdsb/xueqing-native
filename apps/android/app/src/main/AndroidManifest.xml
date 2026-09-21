@@ -6,7 +6,7 @@
         android:name=".XueqingApplication"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
-        android:label="学情 Native · Android Spike"
+        android:label="学情"
         android:supportsRtl="true"
         android:theme="@android:style/Theme.DeviceDefault.NoActionBar">
         <activity
