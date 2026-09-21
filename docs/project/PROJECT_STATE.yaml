@@ -1,8 +1,8 @@
 schema_version: 1
 project: xueqing-native
 phase: phase-1
-milestone: windows-students-density-and-keyboard-productization
-status: active
+milestone: production-provider-region-data-residency-gate
+status: blocked-on-operator-decision
 architecture_baseline: v1-accepted
 
 frozen:
@@ -57,10 +57,10 @@ completed_gates:
   - windows-organization-invitation-product-closure
   - windows-native-ui-shell-polish
   - windows-teaching-work-surfaces-polish
+  - windows-students-density-and-keyboard-productization
 
 open_gates:
   - android-final-native-ux-acceptance
-  - windows-students-density-and-keyboard-productization
   - production-provider-region-data-residency-gate
   - cloudbase-provider-conformance-spike
   - backup-storage-restore-gate
@@ -69,13 +69,12 @@ open_gates:
 
 next_execution:
   parallel_limit: 1
-  lines:
-    - windows-students-density-and-keyboard-productization
+  lines: []
   manual_acceptance:
     - android-final-native-ux-acceptance
   operator_blocked:
     - production-provider-region-data-residency-gate
-  after_current_green:
+  after_operator_decision:
     - production-provider-region-data-residency-gate
     - cloudbase-provider-conformance-spike
     - backup-storage-restore-gate
