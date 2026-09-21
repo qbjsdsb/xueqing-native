@@ -1,6 +1,6 @@
 # Backup / Restore v1
 
-Status: **active Phase 1 contract**  
+Status: **active Phase 1 contract**
 Tracker: **#76**
 
 ## Purpose
