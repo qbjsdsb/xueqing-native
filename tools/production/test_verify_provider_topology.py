@@ -50,6 +50,9 @@ class ProviderTopologyVerifierTests(unittest.TestCase):
         self.assertFalse(
             value["hosted_environment_observation"]["native_production_project_provisioned"]
         )
+        self.assertFalse(
+            value["hosted_environment_observation"]["production_project_capacity_resolved"]
+        )
         self.assertIn(
             "native_production_project_not_provisioned_and_region_not_verified",
             value["blockers"],
@@ -73,6 +76,7 @@ class ProviderTopologyVerifierTests(unittest.TestCase):
         primary["evidence"] = "fictional-provisioned-project-region-evidence"
 
         value["hosted_environment_observation"]["native_production_project_provisioned"] = True
+        value["hosted_environment_observation"]["production_project_capacity_resolved"] = True
         value["production_credentials"]["accepted"] = True
 
         for surface in value["data_surfaces"].values():
@@ -122,6 +126,15 @@ class ProviderTopologyVerifierTests(unittest.TestCase):
             "exact provider region identifier",
         )
 
+    def test_acceptance_requires_resolved_production_project_capacity(self) -> None:
+        self.assert_rejected(
+            lambda value: value["hosted_environment_observation"].__setitem__(
+                "production_project_capacity_resolved",
+                False,
+            ),
+            "resolved production-project capacity",
+        )
+
     def test_acceptance_requires_concrete_primary_region_evidence(self) -> None:
         self.assert_rejected(
             lambda value: value["primary_project_region"].__setitem__(
@@ -135,6 +148,7 @@ class ProviderTopologyVerifierTests(unittest.TestCase):
         value["status"] = "accepted"
         value["blockers"] = []
         value["hosted_environment_observation"]["native_production_project_provisioned"] = True
+        value["hosted_environment_observation"]["production_project_capacity_resolved"] = True
         value["production_credentials"]["accepted"] = True
         for surface in value["data_surfaces"].values():
             surface["accepted"] = True
