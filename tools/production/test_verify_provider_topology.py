@@ -104,6 +104,12 @@ class ProviderTopologyVerifierTests(unittest.TestCase):
         value["provider_candidate"] = "tencent-cloudbase"
         value["primary_project_region"]["region"] = "ap-shanghai"
         value["primary_project_region"]["supported_regions_snapshot"].append("ap-shanghai")
+
+        value["data_surfaces"]["postgres"]["at_rest_region"] = "ap-shanghai"
+        value["data_surfaces"]["auth"]["at_rest_region"] = "ap-shanghai"
+        value["data_surfaces"]["storage"]["metadata_region"] = "ap-shanghai"
+        value["data_surfaces"]["storage"]["object_origin_region"] = "ap-shanghai"
+
         value["data_surfaces"]["edge_invitation_delivery"]["production_execution_region"] = "ap-shanghai"
         value["data_surfaces"]["edge_invitation_delivery"]["supported_regions_snapshot"].append(
             "ap-shanghai"
