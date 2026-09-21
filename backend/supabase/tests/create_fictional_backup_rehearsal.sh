@@ -115,6 +115,14 @@ attachment_response="$(
 printf '%s' "$attachment_response" | python3 -c \
   'import json,sys; value=json.load(sys.stdin); assert value["bucket_id"]=="teaching-attachments-v1"'
 
+API_URL="$api_url" \
+ANON_KEY="$ANON_KEY" \
+SERVICE_ROLE_KEY="$SERVICE_ROLE_KEY" \
+ACTOR_TOKEN="$actor_token" \
+DB_CONTAINER="$db_container" \
+bash backend/supabase/tests/seed_fictional_recovery_history.sh \
+  "$output_dir/history_fixture.json"
+
 db_started_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 docker exec "$db_container" pg_dump \
   -U postgres -d postgres \
