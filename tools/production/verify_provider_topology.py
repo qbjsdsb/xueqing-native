@@ -176,6 +176,12 @@ def validate(value: dict, require_accepted: bool, repo_root: Path) -> None:
     jurisdiction = value.get("target_jurisdiction")
     require(isinstance(jurisdiction, str) and jurisdiction.strip(), "target jurisdiction is required")
 
+    provider_candidate = value.get("provider_candidate")
+    require(
+        isinstance(provider_candidate, str) and provider_candidate.strip(),
+        "accepted topology requires an explicit provider candidate",
+    )
+
     primary = value.get("primary_project_region")
     require(isinstance(primary, dict), "primary_project_region must be an object")
     region = primary.get("region")
@@ -192,6 +198,18 @@ def validate(value: dict, require_accepted: bool, repo_root: Path) -> None:
         hosted.get("native_production_project_provisioned") is True,
         "accepted topology requires a provisioned native production project",
     )
+    primary_evidence = primary.get("evidence")
+    require(
+        isinstance(primary_evidence, str)
+        and primary_evidence.strip()
+        and primary_evidence
+        not in {"provisioned-project-evidence-required", "unknown", "unresolved"},
+        "accepted topology requires concrete production-project region evidence",
+    )
+    require(
+        creds.get("accepted") is True,
+        "accepted topology requires production credential boundary acceptance",
+    )
 
     for key in (
         "postgres",
@@ -205,6 +223,32 @@ def validate(value: dict, require_accepted: bool, repo_root: Path) -> None:
             surfaces[key].get("accepted") is True,
             f"accepted topology requires data surface acceptance: {key}",
         )
+
+    postgres_region = surfaces["postgres"].get("at_rest_region")
+    require(
+        postgres_region in {region, "inherits-primary-project-region"},
+        "accepted topology must bind PostgreSQL at-rest location to the primary region",
+    )
+
+    auth_region = surfaces["auth"].get("at_rest_region")
+    require(
+        auth_region in {region, "inherits-primary-project-region", "project-postgres-auth-schema"},
+        "accepted topology must bind Auth at-rest location to the accepted project region",
+    )
+
+    storage = surfaces["storage"]
+    storage_origin = storage.get("object_origin_region")
+    require(
+        storage_origin in {region, "inherits-primary-project-region"},
+        "accepted topology must bind private Attachment origin to the primary region",
+    )
+    storage_cache = storage.get("edge_cache_scope")
+    require(
+        isinstance(storage_cache, str)
+        and storage_cache.strip()
+        and storage_cache not in {"unknown", "unresolved"},
+        "accepted topology requires an explicit private Attachment CDN/cache policy",
+    )
 
     edge = surfaces["edge_invitation_delivery"]
     edge_region = edge.get("production_execution_region")
@@ -226,13 +270,28 @@ def validate(value: dict, require_accepted: bool, repo_root: Path) -> None:
         edge.get("global_gateway_transit") not in {None, "unresolved"},
         "accepted topology requires an explicit global gateway transit decision",
     )
+    log_residency = surfaces["logs_diagnostics"].get("provider_log_residency")
     require(
-        surfaces["logs_diagnostics"].get("provider_log_residency"),
-        "accepted topology requires provider log-residency evidence",
+        isinstance(log_residency, str)
+        and log_residency.strip()
+        and log_residency not in {"unknown", "unresolved"},
+        "accepted topology requires concrete provider log-residency evidence",
     )
+
+    backup = surfaces["backups"]
+    database_backup = backup.get("database_backup")
     require(
-        surfaces["backups"].get("backup_residency"),
-        "accepted topology requires backup-residency evidence",
+        isinstance(database_backup, str)
+        and database_backup.strip()
+        and database_backup not in {"provider-plan-dependent", "unknown", "unresolved"},
+        "accepted topology requires a concrete database backup mechanism",
+    )
+    backup_residency = backup.get("backup_residency")
+    require(
+        isinstance(backup_residency, str)
+        and backup_residency.strip()
+        and backup_residency not in {"unknown", "unresolved"},
+        "accepted topology requires concrete backup-residency evidence",
     )
 
 

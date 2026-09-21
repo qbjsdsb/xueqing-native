@@ -104,6 +104,12 @@ jobs:
             fi
           fi
 
+      - name: Test production provider topology verifier
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m unittest tools/production/test_verify_provider_topology.py
+
       - name: Reject obvious secret/private-data file types
         shell: bash
         run: |
