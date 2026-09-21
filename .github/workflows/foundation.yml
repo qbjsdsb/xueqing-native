@@ -74,6 +74,7 @@ jobs:
             contracts/operations/PRODUCTION_PROVIDER_REGION_DATA_RESIDENCY_V1.md
             docs/production/PROVIDER_TOPOLOGY.json
             docs/production/PROVIDER_DECISION_MATRIX.md
+            docs/production/BACKUP_RESTORE_PRECONDITIONS.md
             tools/production/verify_provider_topology.py
           )
           for file in "${required[@]}"; do
