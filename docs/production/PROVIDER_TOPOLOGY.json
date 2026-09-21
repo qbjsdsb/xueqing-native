@@ -96,6 +96,7 @@
     "accepted": true
   },
   "blockers": [
+    "free_project_capacity_exhausted_distinct_production_project_requires_operator_capacity_action",
     "native_production_project_not_provisioned_and_region_not_verified",
     "production_runtime_topology_evidence_not_recorded",
     "independent_database_and_private_storage_backup_not_proven",
@@ -125,7 +126,11 @@
     "native_production_project_provisioned": false,
     "existing_development_reference_region": "ap-southeast-1",
     "existing_development_reference_matches_native_backend": false,
-    "evidence_checked_at": "2026-09-21"
+    "evidence_checked_at": "2026-09-21",
+    "connected_organization_plan": "free",
+    "active_free_projects_observed": 2,
+    "free_project_limit_observed": 2,
+    "distinct_production_project_capacity_available": false
   },
   "deployment_constraints": {
     "zero_paid_dependency_target": true,
@@ -134,6 +139,8 @@
     "hosted_free_log_drains": false,
     "hosted_free_log_retention_days": 1,
     "hosted_free_inactivity_pause_possible": true,
-    "hosted_free_can_be_sole_production_durability_layer": false
+    "hosted_free_can_be_sole_production_durability_layer": false,
+    "free_active_project_limit": 2,
+    "free_active_projects_observed": 2
   }
 }
