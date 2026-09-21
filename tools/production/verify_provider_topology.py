@@ -6,6 +6,10 @@ import re
 import sys
 
 REGION_ID_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+){1,4}$")
+EVIDENCE_PLACEHOLDER_RE = re.compile(
+    r"(?:^|[-_\s])(unknown|unresolved|pending|required|placeholder|tbd)(?:$|[-_\s])",
+    re.IGNORECASE,
+)
 
 
 def fail(message: str) -> None:
@@ -15,6 +19,14 @@ def fail(message: str) -> None:
 def require(condition: bool, message: str) -> None:
     if not condition:
         fail(message)
+
+
+def is_concrete_evidence(value: object) -> bool:
+    return (
+        isinstance(value, str)
+        and bool(value.strip())
+        and EVIDENCE_PLACEHOLDER_RE.search(value.strip()) is None
+    )
 
 
 def load(path: Path) -> dict:
@@ -200,10 +212,7 @@ def validate(value: dict, require_accepted: bool, repo_root: Path) -> None:
     )
     primary_evidence = primary.get("evidence")
     require(
-        isinstance(primary_evidence, str)
-        and primary_evidence.strip()
-        and primary_evidence
-        not in {"provisioned-project-evidence-required", "unknown", "unresolved"},
+        is_concrete_evidence(primary_evidence),
         "accepted topology requires concrete production-project region evidence",
     )
     require(
@@ -272,25 +281,20 @@ def validate(value: dict, require_accepted: bool, repo_root: Path) -> None:
     )
     log_residency = surfaces["logs_diagnostics"].get("provider_log_residency")
     require(
-        isinstance(log_residency, str)
-        and log_residency.strip()
-        and log_residency not in {"unknown", "unresolved"},
+        is_concrete_evidence(log_residency),
         "accepted topology requires concrete provider log-residency evidence",
     )
 
     backup = surfaces["backups"]
     database_backup = backup.get("database_backup")
     require(
-        isinstance(database_backup, str)
-        and database_backup.strip()
-        and database_backup not in {"provider-plan-dependent", "unknown", "unresolved"},
+        database_backup != "provider-plan-dependent"
+        and is_concrete_evidence(database_backup),
         "accepted topology requires a concrete database backup mechanism",
     )
     backup_residency = backup.get("backup_residency")
     require(
-        isinstance(backup_residency, str)
-        and backup_residency.strip()
-        and backup_residency not in {"unknown", "unresolved"},
+        is_concrete_evidence(backup_residency),
         "accepted topology requires concrete backup-residency evidence",
     )
 
