@@ -7,7 +7,7 @@ import sys
 
 REGION_ID_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+){1,4}$")
 EVIDENCE_PLACEHOLDER_RE = re.compile(
-    r"(?:^|[-_\s])(unknown|unresolved|pending|required|placeholder|tbd)(?:$|[-_\s])",
+    r"(?:^|[-_\s])(unknown|unresolved|pending|required|placeholder|tbd|unavailable|unproven)(?:$|[-_\s])",
     re.IGNORECASE,
 )
 
@@ -67,6 +67,39 @@ def validate_repository_evidence(value: dict, repo_root: Path) -> None:
         < edge_text.index("const accessToken = requiredBearer(request);"),
         "execution-region guard must run before auth/body/business processing",
     )
+
+    if value.get("provider_candidate") == "supabase-hosted":
+        region_policy = repo_root / str(evidence.get("invitation_delivery_region_policy", ""))
+        require(
+            region_policy.is_file(),
+            "Supabase Invitation Delivery region policy evidence is missing",
+        )
+        region_policy_text = region_policy.read_text(encoding="utf-8")
+        match = re.search(
+            r'DEFAULT_HOSTED_REQUIRED_EDGE_REGION\s*=\s*"([^"]+)"',
+            region_policy_text,
+        )
+        require(
+            match is not None,
+            "Supabase hosted region policy must declare DEFAULT_HOSTED_REQUIRED_EDGE_REGION",
+        )
+        configured_region = match.group(1)
+        expected_region = (
+            value.get("data_surfaces", {})
+            .get("edge_invitation_delivery", {})
+            .get("production_execution_region")
+        )
+        primary_region = value.get("primary_project_region", {}).get("region")
+        require(
+            configured_region == expected_region == primary_region,
+            "checked-in Supabase hosted region policy must match accepted primary/Edge region",
+        )
+        require(
+            'DEFAULT_HOSTED_REQUIRED_EDGE_REGION' in edge_text
+            and 'configured ?? DEFAULT_HOSTED_REQUIRED_EDGE_REGION' in edge_text
+            and 'isLocalProviderUrl(providerUrl)' in edge_text,
+            "hosted Delivery adapter must enforce checked-in region policy with local-only exemption",
+        )
 
     roots = evidence.get("production_client_source_roots")
     require(isinstance(roots, list) and roots, "production client source roots are required")
@@ -284,8 +317,8 @@ def validate(value: dict, require_accepted: bool, repo_root: Path) -> None:
         "accepted topology requires deployed Invitation Delivery function evidence",
     )
     require(
-        edge.get("required_region_secret_configured") is True,
-        "accepted topology requires server-side required-region configuration",
+        is_concrete_evidence(edge.get("required_region_policy_source")),
+        "accepted topology requires concrete server-side required-region policy",
     )
     require(
         is_concrete_evidence(edge.get("runtime_region_evidence")),
