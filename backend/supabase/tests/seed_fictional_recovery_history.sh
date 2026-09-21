@@ -90,36 +90,16 @@ actor_b='10000000-0000-0000-0000-000000000002'
 org_a='20000000-0000-0000-0000-000000000001'
 student_a='30000000-0000-0000-0000-000000000001'
 profile_a='40000000-0000-0000-0000-000000000001'
+case_assignment='50000000-0000-0000-0000-000000000001'
 handoff_student='30000000-0000-0000-0000-000000000003'
 handoff_profile='40000000-0000-0000-0000-000000000003'
 assignment_a_old='50000000-0000-0000-0000-000000000103'
 assignment_a_new='50000000-0000-0000-0000-000000000104'
 
-org_b='20000000-0000-0000-0000-000000000002'
-student_b='30000000-0000-0000-0000-000000000002'
-profile_b='40000000-0000-0000-0000-000000000002'
-assignment_b='50000000-0000-0000-0000-000000000002'
-
-# Source-only fixture authority: Teacher A receives a legal Org B assignment so
-# Case/Action history can remain independent from the Org A handoff scenario.
-docker exec "$DB_CONTAINER" psql -U postgres -d postgres -v ON_ERROR_STOP=1 >/dev/null <<SQL
-insert into public.student_teacher_assignments (
-    id, organization_id, student_id, subject_profile_id, teacher_app_user_id, active
-) values (
-    '$assignment_b'::uuid,
-    '$org_b'::uuid,
-    '$student_b'::uuid,
-    '$profile_b'::uuid,
-    '$actor_a'::uuid,
-    true
-)
-on conflict (id) do nothing;
-SQL
-
 # Case A: Verification + Next Action.
 case_a_create='76000000-0000-4000-8000-000000000301'
 case_a_verify='76000000-0000-4000-8000-000000000302'
-rpc "$ACTOR_TOKEN" create_learning_case   "{\"p_operation_id\":\"$case_a_create\",\"p_organization_id\":\"$org_b\",\"p_student_id\":\"$student_b\",\"p_subject_profile_id\":\"$profile_b\",\"p_owner_assignment_id\":\"$assignment_b\",\"p_title\":\"Backup fixture verification case\",\"p_primary_action_text\":\"Complete first verification task\",\"p_primary_action_due_on\":\"2026-09-23\"}" >/dev/null
+rpc "$ACTOR_TOKEN" create_learning_case   "{\"p_operation_id\":\"$case_a_create\",\"p_organization_id\":\"$org_a\",\"p_student_id\":\"$student_a\",\"p_subject_profile_id\":\"$profile_a\",\"p_owner_assignment_id\":\"$case_assignment\",\"p_title\":\"Backup fixture verification case\",\"p_primary_action_text\":\"Complete first verification task\",\"p_primary_action_due_on\":\"2026-09-23\"}" >/dev/null
 
 case_a_id="$(
   docker exec "$DB_CONTAINER" psql -U postgres -d postgres -Atc     "select id from public.learning_cases where title='Backup fixture verification case'"
@@ -128,7 +108,7 @@ case_a_action_id="$(
   docker exec "$DB_CONTAINER" psql -U postgres -d postgres -Atc     "select id from public.learning_case_actions where case_id='$case_a_id'::uuid and status='pending' order by created_at_server limit 1"
 )"
 
-rpc "$ACTOR_TOKEN" record_verification_and_next_action   "{\"p_operation_id\":\"$case_a_verify\",\"p_organization_id\":\"$org_b\",\"p_student_id\":\"$student_b\",\"p_subject_profile_id\":\"$profile_b\",\"p_owner_assignment_id\":\"$assignment_b\",\"p_case_id\":\"$case_a_id\",\"p_current_primary_action_id\":\"$case_a_action_id\",\"p_expected_case_version\":1,\"p_expected_action_version\":1,\"p_verification_outcome\":\"partially_met\",\"p_verification_summary\":\"Backup fixture verification preserved.\",\"p_next_action_text\":\"Backup fixture next action\",\"p_next_action_due_on\":\"2026-09-24\"}" >/dev/null
+rpc "$ACTOR_TOKEN" record_verification_and_next_action   "{\"p_operation_id\":\"$case_a_verify\",\"p_organization_id\":\"$org_a\",\"p_student_id\":\"$student_a\",\"p_subject_profile_id\":\"$profile_a\",\"p_owner_assignment_id\":\"$case_assignment\",\"p_case_id\":\"$case_a_id\",\"p_current_primary_action_id\":\"$case_a_action_id\",\"p_expected_case_version\":1,\"p_expected_action_version\":1,\"p_verification_outcome\":\"partially_met\",\"p_verification_summary\":\"Backup fixture verification preserved.\",\"p_next_action_text\":\"Backup fixture next action\",\"p_next_action_due_on\":\"2026-09-24\"}" >/dev/null
 
 case_a_next_action_id="$(
   docker exec "$DB_CONTAINER" psql -U postgres -d postgres -Atc     "select id from public.learning_case_actions where case_id='$case_a_id'::uuid and status='pending' order by created_at_server desc limit 1"
@@ -143,7 +123,7 @@ case_b_stable='76000000-0000-4000-8000-000000000405'
 case_b_close='76000000-0000-4000-8000-000000000406'
 case_b_reopen='76000000-0000-4000-8000-000000000407'
 
-rpc "$ACTOR_TOKEN" create_learning_case   "{\"p_operation_id\":\"$case_b_create\",\"p_organization_id\":\"$org_b\",\"p_student_id\":\"$student_b\",\"p_subject_profile_id\":\"$profile_b\",\"p_owner_assignment_id\":\"$assignment_b\",\"p_title\":\"Backup fixture lifecycle case\",\"p_primary_action_text\":\"Lifecycle fixture primary action\",\"p_primary_action_due_on\":\"2026-09-23\"}" >/dev/null
+rpc "$ACTOR_TOKEN" create_learning_case   "{\"p_operation_id\":\"$case_b_create\",\"p_organization_id\":\"$org_a\",\"p_student_id\":\"$student_a\",\"p_subject_profile_id\":\"$profile_a\",\"p_owner_assignment_id\":\"$case_assignment\",\"p_title\":\"Backup fixture lifecycle case\",\"p_primary_action_text\":\"Lifecycle fixture primary action\",\"p_primary_action_due_on\":\"2026-09-23\"}" >/dev/null
 
 case_b_id="$(
   docker exec "$DB_CONTAINER" psql -U postgres -d postgres -Atc     "select id from public.learning_cases where title='Backup fixture lifecycle case'"
@@ -154,16 +134,16 @@ case_b_action_id="$(
 
 transition() {
   local operation="$1" expected="$2" target="$3"
-  rpc "$ACTOR_TOKEN" transition_learning_case_state     "{\"p_operation_id\":\"$operation\",\"p_organization_id\":\"$org_b\",\"p_student_id\":\"$student_b\",\"p_subject_profile_id\":\"$profile_b\",\"p_owner_assignment_id\":\"$assignment_b\",\"p_case_id\":\"$case_b_id\",\"p_expected_case_version\":$expected,\"p_target_state\":\"$target\"}" >/dev/null
+  rpc "$ACTOR_TOKEN" transition_learning_case_state     "{\"p_operation_id\":\"$operation\",\"p_organization_id\":\"$org_a\",\"p_student_id\":\"$student_a\",\"p_subject_profile_id\":\"$profile_a\",\"p_owner_assignment_id\":\"$case_assignment\",\"p_case_id\":\"$case_b_id\",\"p_expected_case_version\":$expected,\"p_target_state\":\"$target\"}" >/dev/null
 }
 transition "$case_b_confirm" 1 confirmed
 transition "$case_b_intervene" 2 intervening
 transition "$case_b_pending_verify" 3 pending_verification
 transition "$case_b_stable" 4 stable
 
-rpc "$ACTOR_TOKEN" close_learning_case   "{\"p_operation_id\":\"$case_b_close\",\"p_organization_id\":\"$org_b\",\"p_student_id\":\"$student_b\",\"p_subject_profile_id\":\"$profile_b\",\"p_owner_assignment_id\":\"$assignment_b\",\"p_case_id\":\"$case_b_id\",\"p_primary_action_id\":\"$case_b_action_id\",\"p_expected_case_version\":5,\"p_expected_action_version\":1}" >/dev/null
+rpc "$ACTOR_TOKEN" close_learning_case   "{\"p_operation_id\":\"$case_b_close\",\"p_organization_id\":\"$org_a\",\"p_student_id\":\"$student_a\",\"p_subject_profile_id\":\"$profile_a\",\"p_owner_assignment_id\":\"$case_assignment\",\"p_case_id\":\"$case_b_id\",\"p_primary_action_id\":\"$case_b_action_id\",\"p_expected_case_version\":5,\"p_expected_action_version\":1}" >/dev/null
 
-rpc "$ACTOR_TOKEN" reopen_learning_case   "{\"p_operation_id\":\"$case_b_reopen\",\"p_organization_id\":\"$org_b\",\"p_student_id\":\"$student_b\",\"p_subject_profile_id\":\"$profile_b\",\"p_owner_assignment_id\":\"$assignment_b\",\"p_case_id\":\"$case_b_id\",\"p_expected_case_version\":6,\"p_new_primary_action_text\":\"Recovered reopened primary action\",\"p_new_primary_action_due_on\":\"2026-09-27\"}" >/dev/null
+rpc "$ACTOR_TOKEN" reopen_learning_case   "{\"p_operation_id\":\"$case_b_reopen\",\"p_organization_id\":\"$org_a\",\"p_student_id\":\"$student_a\",\"p_subject_profile_id\":\"$profile_a\",\"p_owner_assignment_id\":\"$case_assignment\",\"p_case_id\":\"$case_b_id\",\"p_expected_case_version\":6,\"p_new_primary_action_text\":\"Recovered reopened primary action\",\"p_new_primary_action_due_on\":\"2026-09-27\"}" >/dev/null
 
 case_b_reopened_action_id="$(
   docker exec "$DB_CONTAINER" psql -U postgres -d postgres -Atc     "select id from public.learning_case_actions where case_id='$case_b_id'::uuid and status='pending' order by created_at_server desc limit 1"
@@ -250,10 +230,7 @@ value = {
   "assignment_a_new": "$assignment_a_new",
   "actor_a": "$actor_a",
   "actor_b": "$actor_b",
-  "org_b": "$org_b",
-  "student_b": "$student_b",
-  "profile_b": "$profile_b",
-  "assignment_b": "$assignment_b",
+  "case_assignment": "$case_assignment",
   "case_a_id": "$case_a_id",
   "case_a_action_id": "$case_a_action_id",
   "case_a_next_action_id": "$case_a_next_action_id",
