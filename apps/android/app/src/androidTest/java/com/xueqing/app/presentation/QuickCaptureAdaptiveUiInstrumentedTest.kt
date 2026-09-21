@@ -76,7 +76,9 @@ class QuickCaptureAdaptiveUiInstrumentedTest {
             }
         }
 
-        composeRule.onNodeWithTag("quick-capture-input").assertIsDisplayed()
+        composeRule.onNodeWithTag("quick-capture-input")
+            .performScrollTo()
+            .assertIsDisplayed()
         composeRule.onNodeWithTag("quick-capture-submit")
             .performScrollTo()
             .assertIsDisplayed()
