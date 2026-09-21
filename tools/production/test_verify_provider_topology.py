@@ -47,14 +47,17 @@ class ProviderTopologyVerifierTests(unittest.TestCase):
 
     def test_checked_in_manifest_remains_blocked_until_runtime_and_backup_evidence_exist(self) -> None:
         value = self.blocked
-        self.assertFalse(
+        self.assertTrue(
             value["hosted_environment_observation"]["native_production_project_provisioned"]
         )
-        self.assertFalse(
+        self.assertTrue(
             value["hosted_environment_observation"]["production_project_capacity_resolved"]
         )
+        self.assertFalse(
+            value["data_surfaces"]["edge_invitation_delivery"]["required_region_secret_configured"]
+        )
         self.assertIn(
-            "native_production_project_not_provisioned_and_region_not_verified",
+            "edge_required_region_secret_not_configured_and_runtime_region_not_proven",
             value["blockers"],
         )
         self.assertIn(
@@ -78,6 +81,9 @@ class ProviderTopologyVerifierTests(unittest.TestCase):
         value["hosted_environment_observation"]["native_production_project_provisioned"] = True
         value["hosted_environment_observation"]["production_project_capacity_resolved"] = True
         value["production_credentials"]["accepted"] = True
+        value["data_surfaces"]["edge_invitation_delivery"]["function_deployed"] = True
+        value["data_surfaces"]["edge_invitation_delivery"]["required_region_secret_configured"] = True
+        value["data_surfaces"]["edge_invitation_delivery"]["runtime_region_evidence"] = "fictional-runtime-region-evidence"
 
         for surface in value["data_surfaces"].values():
             surface["accepted"] = True
@@ -124,6 +130,24 @@ class ProviderTopologyVerifierTests(unittest.TestCase):
         self.assert_rejected(
             lambda value: value["primary_project_region"].__setitem__("region", "apac"),
             "exact provider region identifier",
+        )
+
+    def test_acceptance_requires_edge_region_secret_configuration(self) -> None:
+        self.assert_rejected(
+            lambda value: value["data_surfaces"]["edge_invitation_delivery"].__setitem__(
+                "required_region_secret_configured",
+                False,
+            ),
+            "server-side required-region configuration",
+        )
+
+    def test_acceptance_requires_concrete_edge_runtime_region_evidence(self) -> None:
+        self.assert_rejected(
+            lambda value: value["data_surfaces"]["edge_invitation_delivery"].__setitem__(
+                "runtime_region_evidence",
+                "pending-required-region-secret",
+            ),
+            "concrete Edge runtime-region evidence",
         )
 
     def test_acceptance_requires_resolved_production_project_capacity(self) -> None:
