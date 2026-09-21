@@ -45,7 +45,7 @@ class ProviderTopologyVerifierTests(unittest.TestCase):
             value["data_surfaces"]["storage"]["edge_cache_scope"],
         )
 
-    def test_checked_in_manifest_remains_blocked_until_runtime_and_backup_evidence_exist(self) -> None:
+    def test_checked_in_manifest_remains_blocked_only_until_runtime_region_probe(self) -> None:
         value = self.blocked
         self.assertTrue(
             value["hosted_environment_observation"]["native_production_project_provisioned"]
@@ -53,15 +53,13 @@ class ProviderTopologyVerifierTests(unittest.TestCase):
         self.assertTrue(
             value["hosted_environment_observation"]["production_project_capacity_resolved"]
         )
-        self.assertFalse(
-            value["data_surfaces"]["edge_invitation_delivery"]["required_region_secret_configured"]
-        )
-        self.assertIn(
-            "edge_required_region_secret_not_configured_and_runtime_region_not_proven",
-            value["blockers"],
-        )
-        self.assertIn(
-            "independent_database_and_private_storage_backup_not_proven",
+        self.assertTrue(value["data_surfaces"]["postgres"]["accepted"])
+        self.assertTrue(value["data_surfaces"]["auth"]["accepted"])
+        self.assertTrue(value["data_surfaces"]["storage"]["accepted"])
+        self.assertTrue(value["data_surfaces"]["logs_diagnostics"]["accepted"])
+        self.assertTrue(value["data_surfaces"]["backups"]["accepted"])
+        self.assertEqual(
+            ["hosted_edge_runtime_region_not_independently_probed"],
             value["blockers"],
         )
         with self.assertRaisesRegex(ValueError, "production topology is still blocked"):
@@ -82,7 +80,7 @@ class ProviderTopologyVerifierTests(unittest.TestCase):
         value["hosted_environment_observation"]["production_project_capacity_resolved"] = True
         value["production_credentials"]["accepted"] = True
         value["data_surfaces"]["edge_invitation_delivery"]["function_deployed"] = True
-        value["data_surfaces"]["edge_invitation_delivery"]["required_region_secret_configured"] = True
+        value["data_surfaces"]["edge_invitation_delivery"]["required_region_policy_source"] = "fictional-checked-in-region-policy"
         value["data_surfaces"]["edge_invitation_delivery"]["runtime_region_evidence"] = "fictional-runtime-region-evidence"
 
         for surface in value["data_surfaces"].values():
@@ -132,13 +130,28 @@ class ProviderTopologyVerifierTests(unittest.TestCase):
             "exact provider region identifier",
         )
 
-    def test_acceptance_requires_edge_region_secret_configuration(self) -> None:
+    def test_acceptance_requires_concrete_edge_region_policy(self) -> None:
         self.assert_rejected(
             lambda value: value["data_surfaces"]["edge_invitation_delivery"].__setitem__(
-                "required_region_secret_configured",
-                False,
+                "required_region_policy_source",
+                "pending",
             ),
-            "server-side required-region configuration",
+            "concrete server-side required-region policy",
+        )
+
+    def test_supabase_manifest_region_must_match_checked_in_deployment_policy(self) -> None:
+        def mutate(value: dict) -> None:
+            region = "ap-northeast-1"
+            value["primary_project_region"]["region"] = region
+            value["data_surfaces"]["postgres"]["at_rest_region"] = region
+            value["data_surfaces"]["auth"]["at_rest_region"] = region
+            value["data_surfaces"]["storage"]["metadata_region"] = region
+            value["data_surfaces"]["storage"]["object_origin_region"] = region
+            value["data_surfaces"]["edge_invitation_delivery"]["production_execution_region"] = region
+
+        self.assert_rejected(
+            mutate,
+            "checked-in Supabase hosted region policy must match accepted primary/Edge region",
         )
 
     def test_acceptance_requires_concrete_edge_runtime_region_evidence(self) -> None:
@@ -171,9 +184,10 @@ class ProviderTopologyVerifierTests(unittest.TestCase):
         value = copy.deepcopy(self.blocked)
         value["status"] = "accepted"
         value["blockers"] = []
-        value["hosted_environment_observation"]["native_production_project_provisioned"] = True
-        value["hosted_environment_observation"]["production_project_capacity_resolved"] = True
-        value["production_credentials"]["accepted"] = True
+        value["primary_project_region"]["evidence"] = "provisioned-project-evidence-required"
+        value["data_surfaces"]["edge_invitation_delivery"]["runtime_region_evidence"] = (
+            "fictional-runtime-region-evidence"
+        )
         for surface in value["data_surfaces"].values():
             surface["accepted"] = True
 
