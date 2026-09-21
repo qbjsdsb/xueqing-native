@@ -91,9 +91,9 @@ org_a='20000000-0000-0000-0000-000000000001'
 student_a='30000000-0000-0000-0000-000000000001'
 profile_a='40000000-0000-0000-0000-000000000001'
 case_assignment='50000000-0000-0000-0000-000000000001'
-handoff_student='30000000-0000-0000-0000-000000000003'
-handoff_profile='40000000-0000-0000-0000-000000000003'
-assignment_a_old='50000000-0000-0000-0000-000000000103'
+handoff_student="$student_a"
+handoff_profile="$profile_a"
+assignment_a_old="$case_assignment"
 assignment_a_new='50000000-0000-0000-0000-000000000104'
 
 # Case A: Verification + Next Action.
@@ -149,31 +149,19 @@ case_b_reopened_action_id="$(
   docker exec "$DB_CONTAINER" psql -U postgres -d postgres -Atc     "select id from public.learning_case_actions where case_id='$case_b_id'::uuid and status='pending' order by created_at_server desc limit 1"
 )"
 
-# Org A handoff is isolated on Student C so the baseline Observation/Attachment
-# replay for Student A remains independently valid.
+# Handoff occurs after Teacher A has created the historical Observation/Case
+# receipts above. The original assignment remains as immutable responsibility
+# history but becomes inactive; Teacher B owns the new live assignment.
 docker exec "$DB_CONTAINER" psql -U postgres -d postgres -v ON_ERROR_STOP=1 >/dev/null <<SQL
 begin;
 
-insert into public.student_subject_profiles (
-    id, organization_id, student_id, subject_key, active
-) values (
-    '$handoff_profile'::uuid,
-    '$org_a'::uuid,
-    '$handoff_student'::uuid,
-    'chinese',
-    true
-);
-
-insert into public.student_teacher_assignments (
-    id, organization_id, student_id, subject_profile_id, teacher_app_user_id, active
-) values (
-    '$assignment_a_old'::uuid,
-    '$org_a'::uuid,
-    '$handoff_student'::uuid,
-    '$handoff_profile'::uuid,
-    '$actor_a'::uuid,
-    false
-);
+update public.student_teacher_assignments
+   set active = false
+ where id = '$assignment_a_old'::uuid
+   and organization_id = '$org_a'::uuid
+   and student_id = '$handoff_student'::uuid
+   and subject_profile_id = '$handoff_profile'::uuid
+   and teacher_app_user_id = '$actor_a'::uuid;
 
 insert into public.student_teacher_assignments (
     id, organization_id, student_id, subject_profile_id, teacher_app_user_id, active
