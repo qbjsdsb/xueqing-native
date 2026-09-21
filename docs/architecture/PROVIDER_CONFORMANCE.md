@@ -56,3 +56,18 @@ Required only when private attachment Storage enters product scope:
 View, ViewModel and domain/application code never depend on provider SDK types. Adapter behavior is version-gated in CI before a provider/library upgrade is accepted.
 
 Passing one capability layer does **not** close the broader provider-conformance gate. Each layer closes only when the corresponding product capability exists and has executable evidence.
+
+
+## Multiple-provider portability
+
+Provider conformance also governs future second-provider support.
+
+The durable portability rules live in `docs/architecture/PROVIDER_PORTABILITY.md`.
+
+In particular:
+
+- each environment has one authoritative provider topology at a time;
+- second providers implement the same application contracts rather than branching domain rules;
+- live dual-write/fallback-write is prohibited;
+- application-owned AppUser/IdentityLink remains stable across provider migration;
+- a provider is supported only after the shared semantic conformance matrix passes for that provider.

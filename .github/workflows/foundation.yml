@@ -51,6 +51,7 @@ jobs:
             docs/architecture/DRAFT_ENGINE.md
             docs/architecture/PROJECTION_CONTRACT.md
             docs/architecture/PROVIDER_CONFORMANCE.md
+            docs/architecture/PROVIDER_PORTABILITY.md
             docs/architecture/TIME_SEMANTICS.md
             docs/architecture/LOCAL_DATA_SECURITY.md
             docs/architecture/THREAT_MODEL.md

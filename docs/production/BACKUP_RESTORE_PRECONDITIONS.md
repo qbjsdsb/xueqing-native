@@ -161,6 +161,16 @@ Provider-specific commands are allowed inside Infrastructure/operations tooling,
 
 Changing production provider is not required by this gate.
 
+The backup representation must nevertheless preserve provider portability:
+
+- Xueqing ids and application-owned identity remain canonical;
+- logical database export must not replace Xueqing ids with provider subjects;
+- private Attachment backup uses Xueqing logical object identity plus digest/length metadata;
+- command receipts/idempotency state are migration data, not disposable provider internals;
+- provider-specific restore tooling may exist behind operations adapters, but the archive/manifest contract must not require live dual-write.
+
+A later Supabase ↔ CloudBase migration rehearsal may reuse this evidence. Cross-provider restore is a separate acceptance result and is not implied by a same-provider disaster-recovery pass.
+
 ## Required negative tests after restore
 
 At minimum:

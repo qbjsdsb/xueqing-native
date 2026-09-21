@@ -21,6 +21,7 @@ frozen:
   ai_continuity: github-is-engineering-source-of-truth
   offline_access_lease_v1: 72h-max-same-boot-monotonic-with-rollback-detection
   organization_business_date: server-side-validated-timezone
+  provider_portability_v1: selectable-single-authority-multi-adapter-no-dual-write
 
 completed_gates:
   - windows-native-ux-prototype
@@ -66,6 +67,7 @@ next_execution:
   lines:
     - production-provider-region-data-residency-gate
   after_current_green:
+    - cloudbase-provider-conformance-spike
     - backup-storage-restore-gate
     - signing-and-recovery-gate
 
