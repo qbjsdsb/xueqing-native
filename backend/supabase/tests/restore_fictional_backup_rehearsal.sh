@@ -235,40 +235,41 @@ if target["table_fingerprints_sha256"] != expected["table_fingerprints_sha256"]:
     )
 PY
 
-# The logical restore above writes directly to PostgreSQL while the local API
-# stack is already running. A disaster-recovery acceptance must not let
-# PostgREST/Auth/Storage reuse pre-restore connections or runtime state. Recycle
-# the isolated target stack after the database fingerprint has been proven, then
-# reacquire its runtime endpoints/keys before any API-level semantic checks.
-supabase stop --workdir "$target_backend"
-supabase start --workdir "$target_backend"
+# Runtime isolation is part of restore acceptance. The source provider has
+# already been stopped, so every still-running local Supabase service must
+# belong to the fresh target project. Print only container names and fictional
+# assignment state; never print runtime credentials.
+mapfile -t running_supabase_containers < <(
+  docker ps --format '{{.Names}}' | grep 'supabase_' | sort || true
+)
+printf 'Restore runtime containers:\n'
+printf '  %s\n' "${running_supabase_containers[@]}"
 
-target_env="$(mktemp)"
-supabase status --workdir "$target_backend" -o env > "$target_env"
-set -a
-# shellcheck disable=SC1090
-source "$target_env"
-set +a
-rm -f "$target_env"
-
-: "${API_URL:?target API_URL missing after restore recycle}"
-: "${ANON_KEY:?target ANON_KEY missing after restore recycle}"
-: "${SERVICE_ROLE_KEY:?target SERVICE_ROLE_KEY missing after restore recycle}"
-: "${JWT_SECRET:?target JWT_SECRET missing after restore recycle}"
-
-api_url="${API_URL%/}"
-echo "::add-mask::$ANON_KEY"
-echo "::add-mask::$SERVICE_ROLE_KEY"
-
-db_container="$(
-  docker ps --filter 'name=supabase_db_xueqing-native-restore-rehearsal' \
-    --format '{{.Names}}' | head -n 1
+unexpected_runtime="$(
+  printf '%s\n' "${running_supabase_containers[@]}" \
+    | grep -v 'xueqing-native-restore-rehearsal$' \
+    || true
 )"
-if [[ -z "$db_container" ]]; then
-  echo 'Fresh restore database container was not found after API recycle.' >&2
-  docker ps -a >&2 || true
+if [[ -n "$unexpected_runtime" ]]; then
+  echo 'Fresh restore runtime still contains containers from another Supabase project:' >&2
+  printf '%s\n' "$unexpected_runtime" >&2
   exit 1
 fi
+
+mapfile -t running_db_containers < <(
+  printf '%s\n' "${running_supabase_containers[@]}" | grep '^supabase_db_' || true
+)
+if [[ "${#running_db_containers[@]}" -ne 1 || "${running_db_containers[0]}" != "$db_container" ]]; then
+  echo "Fresh restore expected exactly one target DB container ($db_container)." >&2
+  printf 'Running DB containers: %s\n' "${running_db_containers[*]:-none}" >&2
+  exit 1
+fi
+
+runtime_assignment_state="$(
+  docker exec "$db_container" psql -U postgres -d postgres -Atc \
+    "select coalesce(json_agg(json_build_object('id', id, 'teacher_app_user_id', teacher_app_user_id, 'active', active) order by id)::text, '[]') from public.student_teacher_assignments"
+)"
+printf 'Target DB assignment state before Data API proof: %s\n' "$runtime_assignment_state"
 
 actor_id='10000000-0000-0000-0000-000000000001'
 actor_b_id='10000000-0000-0000-0000-000000000002'
