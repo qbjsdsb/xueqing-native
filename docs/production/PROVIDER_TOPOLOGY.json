@@ -96,11 +96,14 @@
       "evidence": "free-plan-provider-managed-logs-accepted-no-log-drain-no-intentional-application-pii"
     },
     "backups": {
-      "database_backup": "independent-encrypted-logical-backup-required-outside-live-project",
+      "database_backup": "pg_dump-custom-format-no-owner-no-acl-logical-export",
       "storage_objects_in_database_backup": false,
-      "backup_residency": "non-mainland-private-encrypted-destination-class-accepted-exact-target-pending-backup-restore-gate",
+      "backup_residency": "operator-controlled-private-encrypted-off-project-destination-non-mainland-allowed-public-github-ci-forbidden",
       "independent_storage_object_backup_required": true,
-      "accepted": false
+      "accepted": true,
+      "storage_object_backup": "supabase-storage-s3-compatible-private-object-export-with-xueqing-locator-byte-length-mime-sha256-manifest",
+      "archive_encryption": "recipient-key-encrypted-archive-with-decryption-key-stored-separately",
+      "restore_rehearsal": "required-by-following-backup-storage-restore-gate"
     }
   },
   "production_credentials": {
@@ -110,8 +113,7 @@
     "accepted": true
   },
   "blockers": [
-    "hosted_edge_runtime_region_not_independently_probed",
-    "backup_mechanism_and_destination_policy_not_frozen"
+    "hosted_edge_runtime_region_not_independently_probed"
   ],
   "references": [
     "https://supabase.com/docs/guides/platform/regions",
