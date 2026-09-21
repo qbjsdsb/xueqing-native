@@ -86,7 +86,7 @@
     },
     "logs_diagnostics": {
       "application_pii_logging": "forbidden",
-      "provider_log_residency": "strict-single-region-not-required-provider-managed-logging-accepted-no-intentional-application-pii",
+      "provider_log_residency": "provider-managed-free-plan-logs-accepted-1-day-retention-no-intentional-application-pii",
       "log_drains": [],
       "public_ci_production_data": "forbidden",
       "accepted": true,
