@@ -1,10 +1,10 @@
 # Production Provider Decision Matrix
 
-Status: **decision support only — not production acceptance**
+Status: **operator topology selected — production evidence pending**
 
 Checked: 2026-09-21.
 
-This document turns current provider facts into Xueqing-specific production constraints. It does not select a jurisdiction on behalf of the operator.
+This document turns current provider facts into Xueqing-specific production constraints and records the operator's selected V1 topology. The selection is not production acceptance by itself; PR #63 still requires provisioned-project/runtime/backup evidence and the fail-closed topology validator.
 
 ## Current hosted environment observation
 
@@ -18,6 +18,25 @@ A read-only inspection of the connected Supabase account found:
 No current Xueqing Native production Supabase project is provisioned.
 
 Project refs, credentials and account secrets are intentionally not recorded here.
+
+## Selected V1 topology
+
+The operator has explicitly decided that V1 student/teacher data does **not** require mainland-China residency.
+
+The selected first authoritative topology is:
+
+- provider: **Supabase Hosted**;
+- exact primary region: **Singapore `ap-southeast-1`**;
+- PostgreSQL/Auth/Storage origin: Singapore project region;
+- private Attachment delivery: global CDN/edge transit **accepted for V1**, while the bucket remains private and Xueqing authorization remains authoritative;
+- Invitation Delivery execution: **`ap-southeast-1` required**, enforced by client regional invocation plus server-side `SB_REGION` fail-closed verification;
+- global API/gateway transit: **accepted for V1**;
+- strict single-region provider-log residency: **not required**, but intentional production PII/secret logging remains forbidden;
+- backup: independent encrypted database + private object backup outside the live project remains mandatory.
+
+The existing `xueqing-dev` project is not promoted to production. A distinct Xueqing Native production project must be provisioned and verified before this Gate can be accepted.
+
+After this Gate, execution order is **Backup/Restore → CloudBase second-provider conformance → Signing/Recovery → V1 RC**. A second provider is portability/recovery evidence, never active-active authority.
 
 ## Exact hosted project regions
 
@@ -76,11 +95,13 @@ Smart CDN on eligible paid plans can cache private/signed responses at the edge.
 
 Supabase also exposes an S3-compatible endpoint and a direct storage hostname. Current public documentation is not sufficient evidence that using those interfaces gives Xueqing a hard no-cross-region-cache guarantee for end-user Attachment reads.
 
-Therefore:
+Operator decision:
 
-- Xueqing keeps the CDN/data-residency item blocked;
-- cache-busting or a short browser TTL is not accepted as a residency control;
-- a future accepted topology must either explicitly accept provider edge caching, prove an origin-only access path, or move private Attachment object delivery to a provider/topology with the required residency guarantee.
+- Xueqing **accepts provider global CDN/edge delivery for V1** because strict single-jurisdiction byte residency is not a selected requirement;
+- the Attachment bucket remains private and per-user authorization remains mandatory;
+- CDN/cache location never becomes business authority and never weakens Teaching Fact / IdentityLink checks;
+- public buckets are not introduced to improve cacheability;
+- a future provider switch must document its own cache/delivery behavior rather than inheriting this acceptance automatically.
 
 ## Zero-paid production constraint
 
@@ -108,35 +129,22 @@ A zero-paid Xueqing production topology may still use a Free hosted runtime only
 
 Otherwise the production provider must change or the zero-paid constraint must be revisited explicitly.
 
-## Secondary candidate: Tencent CloudBase
+## Secondary provider target: Tencent CloudBase
 
-CloudBase is retained as a **candidate**, not an accepted provider.
+CloudBase is retained as the planned **second-provider portability target**, not an accepted provider and not a prerequisite to the first production topology.
 
-Current Tencent Cloud documentation states:
-
-- CloudBase primary supported region is Shanghai (`ap-shanghai`);
-- a CloudBase environment can be created with PostgreSQL as its database type;
-- Shanghai PostgreSQL environments can also use Cloud Functions, Cloud Storage, HTTP Gateway and Identity Authentication;
-- the Free Experience tier currently includes PostgreSQL but does not include database rollback;
-- Free Experience Cloud Functions have a fixed 3-second timeout;
-- CloudBase Storage integrates CDN by default, so "Shanghai bucket" is not by itself proof that every Attachment response remains only in Shanghai.
+Current Tencent Cloud documentation now exposes a Singapore CloudBase region in which environments use PostgreSQL and support Cloud Functions, Cloud Storage, HTTP Gateway and Identity Authentication. This makes **CloudBase Singapore** a useful later conformance target because a Supabase Singapore → CloudBase Singapore rehearsal can test provider portability without simultaneously changing the intended geographic deployment region.
 
 Implication for Xueqing:
 
-- if production policy requires primary data to remain in mainland China, CloudBase Shanghai is a materially more plausible hosted candidate than current Supabase Hosted region availability;
+- first production authority remains Supabase Hosted / `ap-southeast-1`;
+- Backup/Restore executes **before** #65 so the second-provider spike can reuse a proved provider-portable database/object archive contract;
 - **no compatibility is claimed yet**;
-- before selection, a dedicated provider-conformance spike must prove PostgreSQL semantics required by Xueqing, application-owned IdentityLink mapping, authorization/RLS-equivalent enforcement, command idempotency/locking, private Attachment authorization, provider-neutral projections, and backup/restore behavior;
-- existing Supabase conformance evidence remains useful as a semantic contract but cannot be copied as proof for CloudBase;
-- the zero-paid constraint still requires an independent backup/restore strategy because the current free experience does not include data rollback.
+- #65 must still prove PostgreSQL transaction semantics, application-owned IdentityLink mapping, authorization/RLS-equivalent enforcement, command idempotency/locking, provider-neutral projections, private Attachment authorization, trusted Invitation Delivery, and export/restore behavior;
+- existing Supabase conformance evidence is the semantic baseline, not proof that CloudBase passes;
+- no active-active production adapters, live dual-write, client provider fallback, or timestamp merge is allowed.
 
-CloudBase conformance is now a planned second-provider portability milestone after this residency Gate, regardless of which provider is selected for the first production topology.
-
-That sequencing has two different meanings:
-
-- if the selected production policy requires mainland-China residency, CloudBase conformance becomes a prerequisite to accepting CloudBase as the production topology and therefore materially blocks that production path;
-- if Supabase satisfies the selected first production topology, PR #63 may close on Supabase evidence first, and the queued CloudBase conformance spike still runs next as a portability milestone before Backup/Restore.
-
-Do not start the implementation in parallel with this Gate, and do not maintain active-active production adapters or dual-write live traffic.
+A later cross-provider restore/cutover rehearsal may use the same Singapore target, but the authoritative provider changes only through an explicit migration/recovery operation.
 
 References:
 
@@ -144,6 +152,8 @@ References:
 - https://cloud.tencent.com/document/product/876/127357
 - https://cloud.tencent.com/document/product/876/121347
 - https://cloud.tencent.com/document/product/876/46898
+- https://cloud.tencent.com/document/product/876/127357
+- https://cloudbase.cloud.tencent.com/blog/2026/07/27/singapore-region
 
 ## References
 
