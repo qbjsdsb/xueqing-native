@@ -84,7 +84,7 @@ class QuickCaptureVisualEvidenceInstrumentedTest {
         }
 
         val root = composeRule.onRoot(useUnmergedTree = true)
-        val image = root.captureToImage(timeoutMillis = 5_000).asAndroidBitmap()
+        val image = root.captureToImage().asAndroidBitmap()
         FileOutputStream(File(evidenceDir, "$name.png")).use { output ->
             check(image.compress(Bitmap.CompressFormat.PNG, 100, output)) {
                 "Could not write $name.png"

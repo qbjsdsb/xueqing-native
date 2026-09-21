@@ -302,6 +302,15 @@ jobs:
             done
           done
           find "$evidence_dir" -maxdepth 1 -type f -print -exec wc -c {} \;
+          evidence_count="$(find "$evidence_dir" -maxdepth 1 -type f | wc -l | tr -d ' ')"
+          if [ "$evidence_count" -ne 8 ]; then
+            echo "Expected exactly 8 Android final UX evidence files (4 PNG + 4 semantics), found $evidence_count." >&2
+            exit 1
+          fi
+          for name in "${names[@]}"; do
+            test -s "$evidence_dir/${name}.png"
+            test -s "$evidence_dir/${name}-semantics.txt"
+          done
 
       - name: Verify Android final UX instrumentation evidence executed
         shell: bash
@@ -428,7 +437,7 @@ jobs:
         with:
           name: android-final-ux-visual-evidence
           path: artifacts/android-final-ux/evidence
-          if-no-files-found: warn
+          if-no-files-found: error
           retention-days: 7
 
       - name: Upload Android encrypted-durability diagnostics
