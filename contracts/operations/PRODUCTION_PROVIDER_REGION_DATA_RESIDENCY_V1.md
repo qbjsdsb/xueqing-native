@@ -183,6 +183,24 @@ References:
 - https://supabase.com/docs/guides/platform/backups
 - https://supabase.com/docs/guides/observability/log-drains
 
+## Selected V1 operator policy — 2026-09-21
+
+The operator has explicitly selected a non-mainland production policy.
+
+For V1:
+
+- first authoritative provider candidate: **Supabase Hosted**;
+- exact primary region: **Singapore `ap-southeast-1`**;
+- PostgreSQL/Auth/Storage origin are expected to bind to that project region;
+- private Attachment global CDN/edge transit is explicitly accepted while the bucket remains private and Xueqing authorization remains authoritative;
+- Invitation Delivery must execute in `ap-southeast-1` and retain two-sided regional enforcement;
+- global API/gateway transit is accepted;
+- strict single-region provider-log residency is not required, but intentional application PII/secret logging remains forbidden;
+- independent encrypted logical database backup and independent private Attachment object backup remain mandatory outside the live project;
+- CloudBase is a later second-provider portability target, not an active-active peer and not a prerequisite to the first production topology.
+
+This policy removes the operator-decision blocker only. It does **not** replace evidence from an actual Xueqing Native production project, backup/restore proof, signing/recovery, or real-data readiness review.
+
 ## Acceptance
 
 This gate is accepted only when all of the following are true:
