@@ -130,6 +130,39 @@ class ProviderTopologyVerifierTests(unittest.TestCase):
             "concrete production-project region evidence",
         )
 
+    def test_acceptance_rejects_checked_in_policy_placeholders_as_evidence(self) -> None:
+        value = copy.deepcopy(self.blocked)
+        value["status"] = "accepted"
+        value["blockers"] = []
+        value["hosted_environment_observation"]["native_production_project_provisioned"] = True
+        value["production_credentials"]["accepted"] = True
+        for surface in value["data_surfaces"].values():
+            surface["accepted"] = True
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "concrete production-project region evidence",
+        ):
+            verifier.validate(value, True, REPO_ROOT)
+
+    def test_acceptance_rejects_pending_backup_destination_text(self) -> None:
+        self.assert_rejected(
+            lambda value: value["data_surfaces"]["backups"].__setitem__(
+                "backup_residency",
+                "non-mainland-private-encrypted-destination-pending-backup-restore-gate",
+            ),
+            "concrete backup-residency evidence",
+        )
+
+    def test_acceptance_rejects_required_only_backup_mechanism_text(self) -> None:
+        self.assert_rejected(
+            lambda value: value["data_surfaces"]["backups"].__setitem__(
+                "database_backup",
+                "independent-encrypted-logical-backup-required-outside-live-project",
+            ),
+            "concrete database backup mechanism",
+        )
+
     def test_acceptance_requires_credential_boundary_acceptance(self) -> None:
         self.assert_rejected(
             lambda value: value["production_credentials"].__setitem__("accepted", False),
