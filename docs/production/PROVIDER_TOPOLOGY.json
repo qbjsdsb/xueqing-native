@@ -130,7 +130,7 @@
     "connected_organization_plan": "free",
     "active_free_projects_observed": 2,
     "free_project_limit_observed": 2,
-    "distinct_production_project_capacity_available": false
+    "production_project_capacity_resolved": false
   },
   "deployment_constraints": {
     "zero_paid_dependency_target": true,
