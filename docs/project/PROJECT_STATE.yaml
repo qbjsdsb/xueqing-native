@@ -2,7 +2,7 @@ schema_version: 1
 project: xueqing-native
 phase: phase-1
 milestone: production-provider-region-data-residency-gate
-status: blocked-on-operator-decision
+status: active
 architecture_baseline: v1-accepted
 
 frozen:
@@ -69,15 +69,14 @@ open_gates:
 
 next_execution:
   parallel_limit: 1
-  lines: []
+  lines:
+    - production-provider-region-data-residency-gate
   manual_acceptance:
     - android-final-native-ux-acceptance
-  operator_blocked:
-    - production-provider-region-data-residency-gate
-  after_operator_decision:
-    - production-provider-region-data-residency-gate
-    - cloudbase-provider-conformance-spike
+  operator_blocked: []
+  after_current_green:
     - backup-storage-restore-gate
+    - cloudbase-provider-conformance-spike
     - signing-and-recovery-gate
     - v1-release-candidate-acceptance
 
