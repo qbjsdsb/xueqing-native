@@ -278,14 +278,26 @@ jobs:
           PY
           find apps/android/app/build/outputs/androidTest-results/connected/debug -name 'TEST-*.xml' -type f -exec cp {} "$diagnostic_dir" \; 2>/dev/null || true
 
-      - name: Collect Android UX screenshot and semantics evidence
+      - name: Regenerate and collect Android UX screenshot and semantics evidence
         if: always()
         shell: bash
         run: |
           set -euo pipefail
           adb="$ANDROID_HOME/platform-tools/adb"
+          app_apk='apps/android/app/build/outputs/apk/debug/app-debug.apk'
+          test_apk='apps/android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk'
           evidence_dir='artifacts/android-final-ux/evidence'
           mkdir -p "$evidence_dir"
+
+          test -f "$app_apk"
+          test -f "$test_apk"
+          "$adb" install -r "$app_apk"
+          "$adb" install -r "$test_apk"
+
+          "$adb" shell am instrument -w \
+            -e class com.xueqing.app.presentation.QuickCaptureVisualEvidenceInstrumentedTest \
+            com.xueqing.app.test/androidx.test.runner.AndroidJUnitRunner
+
           names=(
             compact-light-normal
             short-dark-200
@@ -296,11 +308,11 @@ jobs:
             for suffix in '.png' '-semantics.txt'; do
               source="files/android-ux-evidence/${name}${suffix}"
               target="$evidence_dir/${name}${suffix}"
-              if "$adb" shell run-as com.xueqing.app test -f "$source"; then
-                "$adb" exec-out run-as com.xueqing.app cat "$source" > "$target"
-              fi
+              "$adb" shell run-as com.xueqing.app test -f "$source"
+              "$adb" exec-out run-as com.xueqing.app cat "$source" > "$target"
             done
           done
+
           find "$evidence_dir" -maxdepth 1 -type f -print -exec wc -c {} \;
           evidence_count="$(find "$evidence_dir" -maxdepth 1 -type f | wc -l | tr -d ' ')"
           if [ "$evidence_count" -ne 8 ]; then
