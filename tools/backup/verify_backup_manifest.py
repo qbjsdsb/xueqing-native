@@ -9,6 +9,7 @@ import uuid
 
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 COMMIT_RE = re.compile(r"^[0-9a-f]{40}$")
+TABLE_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 REGION_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+){1,4}$")
 SECRET_KEY_RE = re.compile(
     r"(?:service[_-]?role|secret[_-]?key|database[_-]?password|db[_-]?password|"
@@ -35,7 +36,7 @@ CONSISTENCY_KEYS = {
 }
 DATABASE_KEYS = {
     "format", "tool", "tool_version", "archive_relative_path",
-    "byte_length", "sha256", "row_counts",
+    "byte_length", "sha256", "row_counts", "table_fingerprints_sha256",
 }
 STORAGE_KEYS = {"bucket_id", "private", "object_count", "objects"}
 OBJECT_KEYS = {
@@ -174,7 +175,21 @@ def validate(value: dict) -> None:
     row_counts = object_value(database["row_counts"], "database.row_counts")
     for table, count_value in row_counts.items():
         nonempty_string(table, "database.row_counts table")
+        require(TABLE_RE.fullmatch(table) is not None, f"database.row_counts contains unsafe table name: {table}")
         positive_int(count_value, f"database.row_counts.{table}", allow_zero=True)
+
+    fingerprints = object_value(
+        database["table_fingerprints_sha256"],
+        "database.table_fingerprints_sha256",
+    )
+    require(bool(fingerprints), "database.table_fingerprints_sha256 must not be empty")
+    require(
+        set(fingerprints) == set(row_counts),
+        "database table fingerprints must cover exactly the row-count tables",
+    )
+    for table, digest in fingerprints.items():
+        require(TABLE_RE.fullmatch(table) is not None, f"database fingerprints contain unsafe table name: {table}")
+        sha256(digest, f"database.table_fingerprints_sha256.{table}")
 
     storage = object_value(value["storage"], "storage")
     exact_keys(storage, STORAGE_KEYS, "storage")
