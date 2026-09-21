@@ -32,6 +32,7 @@ jobs:
         run: |
           set -euo pipefail
           python3 tools/backup/test_verify_backup_manifest.py
+          python3 tools/backup/test_compute_restore_order.py
 
       - name: Validate fictional manifest fixture
         shell: bash
