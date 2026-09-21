@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "gate": "production-provider-region-data-residency",
-  "status": "blocked",
+  "status": "accepted",
   "evaluated_at": "2026-09-21",
   "provider_candidate": "supabase-hosted",
   "target_jurisdiction": "non-mainland-acceptable-singapore-selected",
@@ -54,9 +54,9 @@
     "edge_invitation_delivery": {
       "default_execution": "globally-distributed-nearest-request-region",
       "production_execution_region": "ap-southeast-1",
-      "region_control": "client-x-region-plus-server-SB_REGION-guard-implemented-production-config-required",
+      "region_control": "client-x-region-plus-server-SB_REGION-guard-with-checked-in-singapore-default-and-explicit-local-reference-opt-in",
       "personal_data": "invitee-email-server-derived-from-authoritative-invitation",
-      "accepted": false,
+      "accepted": true,
       "same_region_with_primary_required": true,
       "global_gateway_transit": "accepted-for-v1",
       "supported_regions_snapshot": [
@@ -78,11 +78,10 @@
       ],
       "function_deployed": true,
       "function_status": "ACTIVE",
-      "function_version": 3,
+      "function_version": 4,
       "deployment_verify_jwt": false,
       "required_region_configuration": "DEFAULT_HOSTED_REQUIRED_EDGE_REGION=ap-southeast-1",
-      "required_region_secret_configured": false,
-      "runtime_region_evidence": "checked-in-policy-plus-active-v3-deployment-runtime-http-probe-unavailable-in-current-tooling",
+      "runtime_region_evidence": "github-actions-production-topology-probe-run-35596578923-http-405-x-sb-edge-region-ap-southeast-1-body-XQ_METHOD_NOT_ALLOWED",
       "required_region_policy_source": "checked-in-deployment-default-with-environment-override"
     },
     "logs_diagnostics": {
@@ -112,9 +111,7 @@
     "public_ci_production_secrets_allowed": false,
     "accepted": true
   },
-  "blockers": [
-    "hosted_edge_runtime_region_not_independently_probed"
-  ],
+  "blockers": [],
   "references": [
     "https://supabase.com/docs/guides/platform/regions",
     "https://supabase.com/docs/guides/auth/architecture",
