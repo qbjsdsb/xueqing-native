@@ -157,30 +157,7 @@ mapfile -t migrations < <(
     | sort
 )
 
-row_counts_json="$(
-  docker exec "$db_container" psql -U postgres -d postgres -At -F $'\t' <<'SQL' |
-select 'organizations', count(*) from public.organizations
-union all select 'app_users', count(*) from public.app_users
-union all select 'identity_links', count(*) from public.identity_links
-union all select 'memberships', count(*) from public.memberships
-union all select 'students', count(*) from public.students
-union all select 'student_subject_profiles', count(*) from public.student_subject_profiles
-union all select 'student_teacher_assignments', count(*) from public.student_teacher_assignments
-union all select 'observations', count(*) from public.observations
-union all select 'observation_attachments', count(*) from public.observation_attachments
-union all select 'operation_receipts', count(*) from public.operation_receipts
-order by 1;
-SQL
-  python3 -c '
-import json,sys
-rows={}
-for line in sys.stdin:
-    key,value=line.rstrip("\n").split("\t")
-    rows[key]=int(value)
-print(json.dumps(rows, separators=(",",":"), sort_keys=True))
-'
-)"
-
+table_state_json="$(bash tools/backup/snapshot_public_table_state.sh "$db_container")"
 migrations_json="$(
   printf '%s\n' "${migrations[@]}" | python3 -c '
 import json,sys
@@ -194,7 +171,7 @@ OBJECT_STARTED_AT="$object_started_at" OBJECT_FINISHED_AT="$object_finished_at" 
 DATABASE_SHA="$database_sha" DATABASE_SIZE="$database_size" \
 OBJECT_NAME="$object_name" OBJECT_SHA="$object_sha" OBJECT_SIZE="$actual_size" \
 ATTACHMENT_ID="$attachment_id" SCHEMA_SHA="$schema_sha" \
-MIGRATIONS_JSON="$migrations_json" ROW_COUNTS_JSON="$row_counts_json" \
+MIGRATIONS_JSON="$migrations_json" TABLE_STATE_JSON="$table_state_json" \
 python3 - "$output_dir/plain/manifest.json" <<'PY'
 import json
 import os
@@ -204,7 +181,7 @@ import uuid
 
 target = pathlib.Path(sys.argv[1])
 migrations = json.loads(os.environ["MIGRATIONS_JSON"])
-row_counts = json.loads(os.environ["ROW_COUNTS_JSON"])
+table_state = json.loads(os.environ["TABLE_STATE_JSON"])
 manifest = {
     "schema_version": 1,
     "archive_id": str(uuid.uuid4()),
@@ -234,7 +211,8 @@ manifest = {
         "archive_relative_path": "database/xueqing.dump",
         "byte_length": int(os.environ["DATABASE_SIZE"]),
         "sha256": os.environ["DATABASE_SHA"],
-        "row_counts": row_counts,
+        "row_counts": table_state["row_counts"],
+        "table_fingerprints_sha256": table_state["table_fingerprints_sha256"],
     },
     "storage": {
         "bucket_id": "teaching-attachments-v1",
