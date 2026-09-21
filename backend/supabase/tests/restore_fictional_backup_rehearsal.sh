@@ -608,6 +608,7 @@ history_file="$backup_dir/history_fixture.json"
 
 API_URL="$api_url" \
 ANON_KEY="$ANON_KEY" \
+SERVICE_ROLE_KEY="$SERVICE_ROLE_KEY" \
 DB_CONTAINER="$db_container" \
 ACTOR_TOKEN_A="$actor_token" \
 ACTOR_TOKEN_B="$actor_b_token" \
