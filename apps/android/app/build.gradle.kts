@@ -98,6 +98,7 @@ dependencies {
     androidTestImplementation("androidx.room:room-testing:$roomVersion")
     androidTestImplementation("androidx.work:work-testing:$workVersion")
     androidTestImplementation("androidx.compose.ui:ui-test-junit4")
+    androidTestImplementation("androidx.compose.ui:ui-test-junit4-accessibility")
     androidTestImplementation("androidx.lifecycle:lifecycle-runtime-compose:$lifecycleVersion") {
         version { strictly(lifecycleVersion) }
     }
