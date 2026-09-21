@@ -204,7 +204,7 @@ class ProviderTopologyVerifierTests(unittest.TestCase):
         )
 
     def test_acceptance_rejects_checked_in_policy_placeholders_as_evidence(self) -> None:
-        value = copy.deepcopy(self.blocked)
+        value = copy.deepcopy(self.checked_in)
         value["status"] = "accepted"
         value["blockers"] = []
         value["primary_project_region"]["evidence"] = "provisioned-project-evidence-required"
