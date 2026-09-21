@@ -87,25 +87,17 @@ function secretKey(): string {
   return value;
 }
 
-function isLocalProviderUrl(raw: string | null): boolean {
-  if (!raw) return false;
-  try {
-    const provider = new URL(raw);
-    return provider.hostname === "127.0.0.1" || provider.hostname === "localhost";
-  } catch {
-    return false;
-  }
+function localReferenceModeEnabled(): boolean {
+  return optionalEnvironment("XUEQING_LOCAL_REFERENCE_MODE") === "1";
 }
 
 function enforceRequiredExecutionRegion(): void {
+  // Local reference-provider CI/dev has no hosted-region identity and must opt
+  // in explicitly. Production leaves this unset, so hosted execution always
+  // enforces the audited Singapore policy.
+  if (localReferenceModeEnabled()) return;
+
   const configured = optionalEnvironment("XUEQING_REQUIRED_EDGE_REGION");
-  const providerUrl = optionalEnvironment("SUPABASE_URL");
-
-  // Local development intentionally has no hosted-region identity. Hosted
-  // deployments always enforce either the explicit environment override or
-  // the audited checked-in V1 deployment policy.
-  if (!configured && isLocalProviderUrl(providerUrl)) return;
-
   const required = configured ?? DEFAULT_HOSTED_REQUIRED_EDGE_REGION;
   const actual = optionalEnvironment("SB_REGION");
   if (!actual || actual !== required) {
