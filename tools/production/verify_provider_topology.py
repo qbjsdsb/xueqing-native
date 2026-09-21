@@ -5,7 +5,7 @@ from pathlib import Path
 import re
 import sys
 
-REGION_RE = re.compile(r"^[a-z]{2}(?:-gov)?-[a-z]+-\d+$")
+REGION_ID_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+){1,4}$")
 
 
 def fail(message: str) -> None:
