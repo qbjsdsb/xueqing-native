@@ -125,8 +125,14 @@ class ProviderTopologyVerifierTests(unittest.TestCase):
         verifier.validate(value, True, REPO_ROOT)
 
     def test_broad_region_label_is_not_an_exact_region_id(self) -> None:
+        def mutate(value: dict) -> None:
+            # Isolate the provider-neutral region-id grammar from the checked-in
+            # Supabase deployment-policy binding tested separately below.
+            value["provider_candidate"] = "fictional-provider"
+            value["primary_project_region"]["region"] = "apac"
+
         self.assert_rejected(
-            lambda value: value["primary_project_region"].__setitem__("region", "apac"),
+            mutate,
             "exact provider region identifier",
         )
 
