@@ -2,6 +2,10 @@ package com.xueqing.app.presentation
 
 import android.graphics.Bitmap
 import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.DarkMode
 import androidx.compose.ui.test.DeviceConfigurationOverride
 import androidx.compose.ui.test.FontScale
@@ -53,8 +57,12 @@ class QuickCaptureVisualEvidenceInstrumentedTest {
                     DeviceConfigurationOverride.DarkMode(darkMode),
             ) {
                 XueqingTheme {
-                    QuickCaptureScreen(
-                        state = QuickCaptureUiState(
+                    Surface(
+                        modifier = Modifier.fillMaxSize(),
+                        color = MaterialTheme.colorScheme.background,
+                    ) {
+                        QuickCaptureScreen(
+                            state = QuickCaptureUiState(
                             text = "视觉验收：概括题仍会遗漏限制条件，但学生已经能稳定定位关键句。",
                             teachingContextStatus = TeachingContextStatus.Ready,
                             studentDisplayName = "虚构学生甲",
@@ -69,9 +77,10 @@ class QuickCaptureVisualEvidenceInstrumentedTest {
                         onChooseStudent = {},
                         onPhotoSelected = {},
                         onRemovePhoto = {},
-                        onDiscard = {},
-                        onSubmit = {},
-                    )
+                            onDiscard = {},
+                            onSubmit = {},
+                        )
+                    }
                 }
             }
         }

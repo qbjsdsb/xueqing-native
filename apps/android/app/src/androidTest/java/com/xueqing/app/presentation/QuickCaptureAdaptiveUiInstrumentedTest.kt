@@ -1,5 +1,9 @@
 package com.xueqing.app.presentation
 
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.DarkMode
 import androidx.compose.ui.test.DeviceConfigurationOverride
 import androidx.compose.ui.test.FontScale
@@ -56,8 +60,12 @@ class QuickCaptureAdaptiveUiInstrumentedTest {
                     DeviceConfigurationOverride.DarkMode(darkMode),
             ) {
                 XueqingTheme {
-                    QuickCaptureScreen(
-                        state = QuickCaptureUiState(
+                    Surface(
+                        modifier = Modifier.fillMaxSize(),
+                        color = MaterialTheme.colorScheme.background,
+                    ) {
+                        QuickCaptureScreen(
+                            state = QuickCaptureUiState(
                             text = "大字号与窗口压力测试：这是一条较长的中文课堂观察，用来验证换行、滚动和提交入口不会被裁掉。",
                             teachingContextStatus = TeachingContextStatus.Ready,
                             studentDisplayName = "虚构学生甲",
@@ -69,9 +77,10 @@ class QuickCaptureAdaptiveUiInstrumentedTest {
                         onChooseStudent = {},
                         onPhotoSelected = {},
                         onRemovePhoto = {},
-                        onDiscard = {},
-                        onSubmit = {},
-                    )
+                            onDiscard = {},
+                            onSubmit = {},
+                        )
+                    }
                 }
             }
         }
