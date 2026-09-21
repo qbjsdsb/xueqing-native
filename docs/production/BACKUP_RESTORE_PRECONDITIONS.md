@@ -1,9 +1,10 @@
 # Backup + Storage Restore Gate — Preconditions
 
-Status: **handoff contract only**.
+Status: **active Phase 1 Gate — tracker #76**.
 
-The active execution line remains **Production Provider Region / Data Residency**.
-This document does not start or complete the Backup/Restore gate. It freezes what the next gate must prove once the production jurisdiction/provider topology is accepted.
+Production Provider Region / Data Residency was accepted and merged to `main` via PR #63. Backup + private Storage Restore is now the single automatic execution line.
+
+This document remains the acceptance baseline. Machine-readable archive semantics are frozen in `contracts/schemas/BACKUP_ARCHIVE_MANIFEST_V1.schema.json` and `contracts/operations/BACKUP_RESTORE_V1.md`.
 
 ## Why database restore is not enough
 
@@ -243,9 +244,9 @@ The future Backup/Restore PR must record:
 - measured RPO/RTO evidence;
 - known limitations.
 
-## Preconditions before the future gate starts
+## Preconditions before protected production execution
 
-Do not start a production-target restore rehearsal until the active residency gate has accepted:
+The residency gate has accepted the following prerequisites. Do not run a protected production backup/restore until the implementation also preserves them:
 
 - target jurisdiction;
 - exact production primary region/provider;
