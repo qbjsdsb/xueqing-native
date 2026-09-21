@@ -118,16 +118,70 @@ if [[ -z "$db_container" ]]; then
   exit 1
 fi
 
+sequence_count="$(
+  docker exec "$db_container" psql -U postgres -d postgres -Atc \
+    "select count(*) from pg_sequences where schemaname = 'public'"
+)"
+if [[ "$sequence_count" != '0' ]]; then
+  echo "Public sequences require an explicit restore strategy; found $sequence_count." >&2
+  exit 1
+fi
+
+docker exec -i "$db_container" psql -U postgres -d postgres -At > "$restore_root/restore-graph.json" <<'SQL'
+select pg_catalog.json_build_object(
+    'tables',
+    coalesce(
+        (
+            select pg_catalog.json_agg(table_name order by table_name)
+              from information_schema.tables
+             where table_schema = 'public'
+               and table_type = 'BASE TABLE'
+        ),
+        '[]'::json
+    ),
+    'foreign_keys',
+    coalesce(
+        (
+            select pg_catalog.json_agg(
+                pg_catalog.json_build_object(
+                    'child', child.relname,
+                    'parent', parent.relname
+                )
+                order by child.relname, parent.relname
+            )
+              from pg_catalog.pg_constraint as constraint_row
+              join pg_catalog.pg_class as child
+                on child.oid = constraint_row.conrelid
+              join pg_catalog.pg_namespace as child_namespace
+                on child_namespace.oid = child.relnamespace
+              join pg_catalog.pg_class as parent
+                on parent.oid = constraint_row.confrelid
+              join pg_catalog.pg_namespace as parent_namespace
+                on parent_namespace.oid = parent.relnamespace
+             where constraint_row.contype = 'f'
+               and child_namespace.nspname = 'public'
+               and parent_namespace.nspname = 'public'
+        ),
+        '[]'::json
+    )
+)::text;
+SQL
+
+python3 tools/backup/compute_restore_order.py \
+  "$restore_root/restore-graph.json" > "$restore_root/restore-order.txt"
+
 docker cp "$extract_dir/database/xueqing.dump" "$db_container:/tmp/xueqing.dump"
-docker exec "$db_container" pg_restore \
-  -U postgres -d postgres \
-  --data-only \
-  --no-owner \
-  --no-acl \
-  --disable-triggers \
-  --single-transaction \
-  --exit-on-error \
-  /tmp/xueqing.dump
+while IFS= read -r table; do
+  [[ -n "$table" ]] || continue
+  docker exec "$db_container" pg_restore \
+    -U postgres -d postgres \
+    --data-only \
+    --no-owner \
+    --no-acl \
+    --exit-on-error \
+    --table="public.$table" \
+    /tmp/xueqing.dump
+done < "$restore_root/restore-order.txt"
 
 python3 - "$manifest" > "$restore_root/row-counts.tsv" <<'PY'
 import json
