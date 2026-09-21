@@ -2,7 +2,7 @@
 
 Status: **handoff contract only**.
 
-The active execution line remains **Production Provider Region / Data Residency**.  
+The active execution line remains **Production Provider Region / Data Residency**.
 This document does not start or complete the Backup/Restore gate. It freezes what the next gate must prove once the production jurisdiction/provider topology is accepted.
 
 ## Why database restore is not enough
