@@ -1,4 +1,5 @@
 using Microsoft.UI.Xaml;
+using Microsoft.Windows.AppLifecycle;
 using Xueqing.Windows.Core.Agent;
 using Xueqing.Windows.Infrastructure.Auth;
 using Xueqing.Windows.Integration;
@@ -20,7 +21,7 @@ public partial class App : Application
 
     protected override async void OnLaunched(LaunchActivatedEventArgs args)
     {
-        _pendingAgentNavigation = AgentProtocolActivation.ReadCurrentNavigation();
+        _pendingAgentNavigation ??= AgentProtocolActivation.ReadCurrentNavigation();
 
         var localReferenceWorkspace =
             LocalReferenceProviderTeachingWorkspaceFactory.CreateFromEnvironment();
@@ -44,6 +45,35 @@ public partial class App : Application
         }
 
         await EnterProductionAsync();
+    }
+
+    internal void HandleRedirectedActivation(AppActivationArguments activation)
+    {
+        var request = AgentProtocolActivation.ReadNavigation(activation);
+        if (request is null)
+        {
+            _window?.Activate();
+            return;
+        }
+
+        // A redirected URI remains navigation input only. While signed out it
+        // stays pending until normal Session/Auth succeeds; once a MainWindow
+        // exists it is resolved only against that window's authoritative state.
+        _pendingAgentNavigation = request;
+
+        if (_window is MainWindow mainWindow)
+        {
+            var pending = ConsumePendingAgentNavigation();
+            if (pending is not null)
+            {
+                _ = mainWindow.ApplyAgentNavigationAsync(pending);
+            }
+
+            mainWindow.Activate();
+            return;
+        }
+
+        _window?.Activate();
     }
 
     private async Task EnterProductionAsync()

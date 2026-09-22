@@ -34,6 +34,12 @@ A protocol request is retained across the ordinary login boundary, then resolved
 against the authenticated application-owned workspace. An unresolved or ambiguous id
 must never manufacture context.
 
+The packaged Windows application is one main instance per Windows user session. A warm
+protocol activation is redirected to the already-running instance before XAML
+initialization in the new process. Redirected activation must reuse this same parser and
+the existing Auth/workspace authority path; it must not create a second app window or
+a second state/authority surface.
+
 ## Stable automation ids
 
 The following identifiers are compatibility surface in V1:
