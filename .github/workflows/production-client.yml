@@ -34,6 +34,7 @@ jobs:
         run: |
           set -euo pipefail
           python3 -B tools/deployment/test_verify_deployment_profile.py
+          python3 -B tools/deployment/test_verify_native_artifact_profile.py
           python3 -B tools/deployment/verify_deployment_profile.py \
             tools/deployment/fixtures/valid_deployment_profile.json
 
