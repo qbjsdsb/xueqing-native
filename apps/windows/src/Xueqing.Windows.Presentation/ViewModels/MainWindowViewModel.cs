@@ -87,6 +87,14 @@ public sealed record PendingLearningCaseRecoveryItem(
         : "待安排";
 }
 
+public enum MainWindowStartupMode
+{
+    Prototype,
+    SignedOut,
+    Authenticated,
+    ConfigurationUnavailable,
+}
+
 public sealed class MainWindowViewModel : ObservableObject
 {
     private readonly PersonalStudentWorkspaceCoordinator? _personalWorkspace;
@@ -101,8 +109,10 @@ public sealed class MainWindowViewModel : ObservableObject
     private readonly ICaseLifecycleRecoveryStore? _caseLifecycleRecovery;
     private readonly IOrganizationManagementReader? _organizationManagement;
     private readonly OrganizationInvitationWorkflowCoordinator? _organizationInvitationWorkflow;
+    private readonly MainWindowStartupMode _startupMode;
     private readonly bool _isPrototypeMode;
     private readonly List<StudentSummary> _allStudents;
+    private readonly string _startupStatusText;
     private readonly Dictionary<string, PersonalStudentWorkspaceItem> _authoritativeStudents = new(StringComparer.Ordinal);
     private readonly Dictionary<Guid, ActionProgressionTarget> _authoritativeTodayActionTargets = new();
     private readonly Dictionary<Guid, ActionProgressionTarget> _authoritativeFocusTargets = new();
@@ -124,11 +134,38 @@ public sealed class MainWindowViewModel : ObservableObject
     private bool _initialized;
 
     public MainWindowViewModel()
-        : this(null)
+        : this(null, MainWindowStartupMode.Prototype, string.Empty)
     {
     }
 
-    public MainWindowViewModel(PersonalTeachingWorkspaceServices? teachingWorkspace)
+    public MainWindowViewModel(PersonalTeachingWorkspaceServices teachingWorkspace)
+        : this(
+            teachingWorkspace ?? throw new ArgumentNullException(nameof(teachingWorkspace)),
+            MainWindowStartupMode.Authenticated,
+            string.Empty)
+    {
+    }
+
+    public static MainWindowViewModel CreateSignedOut(string? statusText = null) =>
+        new(
+            null,
+            MainWindowStartupMode.SignedOut,
+            string.IsNullOrWhiteSpace(statusText)
+                ? "请登录后查看教学工作区。"
+                : statusText.Trim());
+
+    public static MainWindowViewModel CreateConfigurationUnavailable(string? statusText = null) =>
+        new(
+            null,
+            MainWindowStartupMode.ConfigurationUnavailable,
+            string.IsNullOrWhiteSpace(statusText)
+                ? "当前客户端配置不可用，教学数据未加载。"
+                : statusText.Trim());
+
+    private MainWindowViewModel(
+        PersonalTeachingWorkspaceServices? teachingWorkspace,
+        MainWindowStartupMode startupMode,
+        string startupStatusText)
     {
         _personalWorkspace = teachingWorkspace?.Students;
         _learningFocus = teachingWorkspace?.LearningFocus;
@@ -150,8 +187,10 @@ public sealed class MainWindowViewModel : ObservableObject
                     teachingWorkspace.OrganizationInvitationDelivery,
                     teachingWorkspace.OrganizationInvitationRecovery)
                 : null;
-        _isPrototypeMode = teachingWorkspace is null;
-        _allStudents = _personalWorkspace is null
+        _startupMode = startupMode;
+        _isPrototypeMode = startupMode == MainWindowStartupMode.Prototype;
+        _startupStatusText = startupStatusText;
+        _allStudents = _isPrototypeMode
             ? SyntheticDataFactory.CreateStudents(1_000).ToList()
             : new List<StudentSummary>();
 
@@ -163,7 +202,7 @@ public sealed class MainWindowViewModel : ObservableObject
         PendingLearningCaseRecoveries = new ObservableCollection<PendingLearningCaseRecoveryItem>();
         PendingActionProgressionRecoveries = new ObservableCollection<PendingActionProgressionRecoveryItem>();
         PendingCaseLifecycleRecoveries = new ObservableCollection<PendingCaseLifecycleRecoveryItem>();
-        TodayActions = _personalWorkspace is null
+        TodayActions = _isPrototypeMode
             ? new ObservableCollection<TodayActionItem>(UxPrototypeFixtureFactory.CreateTodayActions())
             : new ObservableCollection<TodayActionItem>();
         OrganizationMembers = _isPrototypeMode
@@ -172,7 +211,7 @@ public sealed class MainWindowViewModel : ObservableObject
         LearningCase = UxPrototypeFixtureFactory.CreateLearningCase();
         _selectedStudent = Students.FirstOrDefault();
 
-        if (_personalWorkspace is null)
+        if (_isPrototypeMode)
         {
             _recentObservationsStatusText = "测试数据 · 最近记录";
             _currentFocusStatusText = "测试数据 · 当前关注";
@@ -180,6 +219,14 @@ public sealed class MainWindowViewModel : ObservableObject
             _todayStatusText = string.Empty;
             _organizationManagementStatusText = "测试数据 · 机构成员";
             _organizationName = "测试机构";
+        }
+        else if (_personalWorkspace is null)
+        {
+            _recentObservationsStatusText = _startupStatusText;
+            _currentFocusStatusText = _startupStatusText;
+            _caseHistoryStatusText = _startupStatusText;
+            _todayStatusText = _startupStatusText;
+            _organizationManagementStatusText = _startupStatusText;
         }
         else
         {
@@ -192,6 +239,15 @@ public sealed class MainWindowViewModel : ObservableObject
                 : "正在验证机构管理权限…";
         }
     }
+
+    public MainWindowStartupMode StartupMode => _startupMode;
+
+    public bool IsPrototypeMode => _isPrototypeMode;
+
+    public bool IsStartupUnavailable =>
+        !_isPrototypeMode && _personalWorkspace is null;
+
+    public string StartupStatusText => _startupStatusText;
 
     public ObservableCollection<StudentSummary> Students { get; }
 
@@ -217,7 +273,8 @@ public sealed class MainWindowViewModel : ObservableObject
 
     public bool IsAuthoritativeStudentWorkspace => _personalWorkspace is not null;
 
-    public bool IsOrganizationManagementAuthoritative => !_isPrototypeMode;
+    public bool IsOrganizationManagementAuthoritative =>
+        IsAuthoritativeStudentWorkspace && _organizationManagement is not null;
 
     public bool CanUseOrganizationWorkspace =>
         _isPrototypeMode || _organizationManagementSnapshot is not null;
@@ -419,7 +476,7 @@ public sealed class MainWindowViewModel : ObservableObject
             await RefreshAuthoritativeStudentsAsync(cancellationToken);
         }
 
-        if (!_isPrototypeMode)
+        if (IsAuthoritativeStudentWorkspace && _organizationManagement is not null)
         {
             await RefreshOrganizationManagementAsync(cancellationToken);
         }

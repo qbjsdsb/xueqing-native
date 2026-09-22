@@ -126,7 +126,13 @@ jobs:
             Add-AppxPackage -Path $packagePath.FullName -ForceApplicationShutdown -ErrorAction Stop
             $package = Get-AppxPackage -Name $packageName -ErrorAction Stop
             $executable = Join-Path $package.InstallLocation "$processName.exe"
-            Start-Process -FilePath $executable | Out-Null
+            $env:XUEQING_WINDOWS_PROTOTYPE_MODE = '1'
+            try {
+              Start-Process -FilePath $executable | Out-Null
+            }
+            finally {
+              Remove-Item Env:\XUEQING_WINDOWS_PROTOTYPE_MODE -ErrorAction SilentlyContinue
+            }
             ./tools/ux/run-windows-native-ux-smoke.ps1 -ProcessName $processName -EvidenceDirectory $evidenceDirectory
           }
           finally {

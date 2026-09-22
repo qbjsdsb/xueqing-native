@@ -1,7 +1,5 @@
-using Xueqing.Windows.Core.Services;
 using Windows.Storage;
-using Xueqing.Windows.Infrastructure.Remote;
-using Xueqing.Windows.LocalData;
+using Xueqing.Windows.Core.Services;
 
 namespace Xueqing.Windows.Integration;
 
@@ -40,127 +38,16 @@ internal static class LocalReferenceProviderTeachingWorkspaceFactory
                 "Local reference-provider mode is restricted to an explicit loopback URL and cannot connect to remote environments.");
         }
 
-        var httpClient = new HttpClient
-        {
-            Timeout = TimeSpan.FromSeconds(20),
-        };
-
+        var httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(20) };
         ValueTask<string?> AccessTokenProvider(CancellationToken _) =>
             ValueTask.FromResult<string?>(accessToken);
 
-        var bootstrapReader = new PostgrestPersonalBootstrapReader(
+        return ProviderTeachingWorkspaceBuilder.Create(
             httpClient,
             projectUri,
             apiKey,
-            AccessTokenProvider);
-        var organizationManagementReader = new PostgrestOrganizationManagementReader(
-            httpClient,
-            projectUri,
-            apiKey,
-            AccessTokenProvider);
-        var organizationInvitationCommand = new PostgrestOrganizationInvitationCommand(
-            httpClient,
-            projectUri,
-            apiKey,
-            AccessTokenProvider);
-        var organizationInvitationAcceptance = new PostgrestAcceptOrganizationInvitationCommand(
-            httpClient,
-            projectUri,
-            apiKey,
-            AccessTokenProvider);
-        var organizationInvitationDelivery =
-            new SupabaseOrganizationInvitationDeliveryCommand(
-                httpClient,
-                projectUri,
-                apiKey,
-                AccessTokenProvider);
-        var organizationInvitationRecovery =
-            new WindowsOrganizationInvitationRecoveryStore(
-                projectUri.GetLeftPart(UriPartial.Authority),
-                ApplicationData.Current);
-        var recentReader = new PostgrestStudentRecentObservationsReader(
-            httpClient,
-            projectUri,
-            apiKey,
-            AccessTokenProvider);
-        var focusReader = new PostgrestStudentLearningFocusReader(
-            httpClient,
-            projectUri,
-            apiKey,
-            AccessTokenProvider);
-        var caseHistoryReader = new PostgrestStudentLearningCasesReader(
-            httpClient,
-            projectUri,
-            apiKey,
-            AccessTokenProvider);
-        var todayReader = new PostgrestPersonalTodayActionsReader(
-            httpClient,
-            projectUri,
-            apiKey,
-            AccessTokenProvider);
-        var createLearningCase = new PostgrestCreateLearningCaseCommand(
-            httpClient,
-            projectUri,
-            apiKey,
-            AccessTokenProvider);
-        var createLearningCaseRecovery = new WindowsCreateLearningCaseRecoveryStore(
+            AccessTokenProvider,
             projectUri.GetLeftPart(UriPartial.Authority),
             ApplicationData.Current);
-
-        var actionProgressionRecovery = new WindowsActionProgressionRecoveryStore(
-            projectUri.GetLeftPart(UriPartial.Authority),
-            ApplicationData.Current);
-        var actionProgression = new ActionProgressionCommandCoordinator(
-            new PostgrestReschedulePrimaryActionCommand(
-                httpClient,
-                projectUri,
-                apiKey,
-                AccessTokenProvider),
-            new PostgrestRecordVerificationAndNextActionCommand(
-                httpClient,
-                projectUri,
-                apiKey,
-                AccessTokenProvider),
-            actionProgressionRecovery);
-
-        var caseLifecycleRecovery = new WindowsCaseLifecycleRecoveryStore(
-            projectUri.GetLeftPart(UriPartial.Authority),
-            ApplicationData.Current);
-        var caseLifecycle = new CaseLifecycleCommandCoordinator(
-            new PostgrestTransitionLearningCaseStateCommand(
-                httpClient,
-                projectUri,
-                apiKey,
-                AccessTokenProvider),
-            new PostgrestCloseLearningCaseCommand(
-                httpClient,
-                projectUri,
-                apiKey,
-                AccessTokenProvider),
-            new PostgrestReopenLearningCaseCommand(
-                httpClient,
-                projectUri,
-                apiKey,
-                AccessTokenProvider),
-            caseLifecycleRecovery);
-
-        return new PersonalTeachingWorkspaceServices(
-            new PersonalStudentWorkspaceCoordinator(
-                bootstrapReader,
-                new StudentRecentObservationsCoordinator(recentReader)),
-            new StudentLearningFocusCoordinator(focusReader),
-            new StudentLearningCasesCoordinator(caseHistoryReader),
-            new PersonalTodayActionsCoordinator(todayReader),
-            createLearningCase,
-            createLearningCaseRecovery,
-            actionProgression,
-            actionProgressionRecovery,
-            caseLifecycle,
-            caseLifecycleRecovery,
-            organizationManagementReader,
-            organizationInvitationCommand,
-            organizationInvitationAcceptance,
-            organizationInvitationDelivery,
-            organizationInvitationRecovery);
     }
 }

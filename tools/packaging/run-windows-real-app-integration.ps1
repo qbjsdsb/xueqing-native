@@ -251,11 +251,13 @@ function Launch-And-WaitForReport {
         Stop-Process -Force -ErrorAction SilentlyContinue
 
     $env:XUEQING_WINDOWS_INTEGRATION_PROBE = '1'
+    $env:XUEQING_WINDOWS_PROTOTYPE_MODE = '1'
     try {
         Start-Process -FilePath $executable | Out-Null
     }
     finally {
         Remove-Item Env:\XUEQING_WINDOWS_INTEGRATION_PROBE -ErrorAction SilentlyContinue
+        Remove-Item Env:\XUEQING_WINDOWS_PROTOTYPE_MODE -ErrorAction SilentlyContinue
     }
 
     $deadline = [DateTimeOffset]::UtcNow.AddSeconds(45)

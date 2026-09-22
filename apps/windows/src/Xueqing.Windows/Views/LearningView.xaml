@@ -96,7 +96,7 @@
             </ScrollViewer>
 
             <Grid
-                Visibility="{Binding IsAuthoritativeStudentWorkspace, Converter={StaticResource BooleanToVisibilityConverter}, ConverterParameter=Invert}">
+                Visibility="{Binding IsPrototypeMode, Converter={StaticResource BooleanToVisibilityConverter}}">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="*" />
@@ -151,6 +151,23 @@
                     </ListView.ItemTemplate>
                 </ListView>
             </Grid>
+
+            <StackPanel
+                MaxWidth="680"
+                HorizontalAlignment="Left"
+                VerticalAlignment="Top"
+                Spacing="8"
+                Visibility="{Binding IsStartupUnavailable, Converter={StaticResource BooleanToVisibilityConverter}}">
+                <TextBlock
+                    FontSize="20"
+                    FontWeight="SemiBold"
+                    Text="教学工作区暂不可用" />
+                <TextBlock
+                    AutomationProperties.AutomationId="LearningWorkspaceUnavailable"
+                    Opacity="0.68"
+                    Text="{Binding StartupStatusText}"
+                    TextWrapping="Wrap" />
+            </StackPanel>
         </Grid>
     </Grid>
 </UserControl>
