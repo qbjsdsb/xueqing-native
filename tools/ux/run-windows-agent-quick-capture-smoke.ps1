@@ -143,7 +143,7 @@ function Ensure-StudentContextLoaded {
 
     $draft = Wait-Until -TimeoutSeconds 8 -FailureMessage 'Observation draft editor did not become available from the authoritative Student context.' -Condition {
         $candidate = Find-ByAutomationId -Root $Root -AutomationId 'ObservationDraftText'
-        if ($null -ne $candidate) {
+        if ($null -ne $candidate -and $candidate.Current.IsEnabled) {
             return $candidate
         }
 
