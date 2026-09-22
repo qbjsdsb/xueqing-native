@@ -74,6 +74,30 @@ Provider subject remains provider identity evidence only. Business identity cont
 
 Logout, revoked identity, unrecoverable refresh failure and environment change fail closed. Background workers must acquire a current session at execution time and must never persist an access token in Durable Intent / Outbox payloads.
 
+## Refresh-token persistence and rotation
+
+Refresh tokens are session credentials and are not part of the public deployment profile.
+
+Native production clients must keep them in a device/user-bound secure vault:
+
+- Windows: DPAPI `CurrentUser`, with a refresh-token-specific purpose and deployment trust scope;
+- Android: a non-exportable Android Keystore AES-GCM key plus an authenticated envelope in `noBackupFilesDir`;
+- refresh-token key material must not reuse the SQLCipher/database-key wrapping key or Durable Intent storage;
+- access tokens remain process-local and are never persisted in the refresh-token vault.
+
+Refresh rotation is **durability first**:
+
+1. call the provider refresh endpoint with the currently persisted refresh token;
+2. if the provider returns a rotated token pair, validate it;
+3. securely commit the new refresh token;
+4. only after that commit succeeds may the new access token become `Usable`.
+
+If secure persistence fails, the new access token remains unavailable. If transport result is retryable or unknown, retain the previous refresh token and remain `RefreshRequired`; do not fabricate success and do not erase the only recovery credential. A provider-declared invalid/revoked refresh clears the vault and transitions to `Invalid`.
+
+Authentication mutations are serialized per process so two refreshes cannot race one-time token rotation. Explicit account switching is not ordinary sign-in: the previous account/local scope must be closed before another provider session is established.
+
+Local sign-out clears the secure refresh-token vault and process-local access token even if remote revocation cannot be confirmed. The client must surface that remote revocation was unconfirmed rather than claiming success.
+
 ## Platform composition
 
 Windows production composition reuses accepted PostgREST readers/commands and their access-token provider seam. Local-reference loopback composition remains development/CI only.
