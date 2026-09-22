@@ -27,6 +27,7 @@ public sealed record AgentNavigationRequest(
         if (uri is null ||
             !uri.IsAbsoluteUri ||
             !string.Equals(uri.Scheme, Scheme, StringComparison.OrdinalIgnoreCase) ||
+            !uri.IsDefaultPort ||
             !string.IsNullOrEmpty(uri.Query) ||
             !string.IsNullOrEmpty(uri.Fragment) ||
             !string.IsNullOrEmpty(uri.UserInfo))
