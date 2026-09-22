@@ -293,46 +293,56 @@ docker exec -i "$db_container" psql -U postgres -d postgres -v ON_ERROR_STOP=1 \
   -v observation_operation="$observation_operation" \
   -v attachment_id="$attachment_id" \
   -v attachment_operation="$attachment_operation" >/dev/null <<'SQL'
+select pg_catalog.set_config('xq.actor_id', :'actor_id', false);
+select pg_catalog.set_config('xq.organization_id', :'organization_id', false);
+select pg_catalog.set_config('xq.student_id', :'student_id', false);
+select pg_catalog.set_config('xq.profile_id', :'profile_id', false);
+select pg_catalog.set_config('xq.assignment_id', :'assignment_id', false);
+select pg_catalog.set_config('xq.observation_id', :'observation_id', false);
+select pg_catalog.set_config('xq.observation_operation', :'observation_operation', false);
+select pg_catalog.set_config('xq.attachment_id', :'attachment_id', false);
+select pg_catalog.set_config('xq.attachment_operation', :'attachment_operation', false);
+
 do $xq$
 begin
-    if not exists (select 1 from public.app_users where id = :'actor_id'::uuid) then
+    if not exists (select 1 from public.app_users where id = pg_catalog.current_setting('xq.actor_id')::uuid) then
         raise exception 'XQ_RESTORE_APP_USER_ID_MISSING';
     end if;
-    if not exists (select 1 from public.organizations where id = :'organization_id'::uuid) then
+    if not exists (select 1 from public.organizations where id = pg_catalog.current_setting('xq.organization_id')::uuid) then
         raise exception 'XQ_RESTORE_ORGANIZATION_ID_MISSING';
     end if;
-    if not exists (select 1 from public.students where id = :'student_id'::uuid) then
+    if not exists (select 1 from public.students where id = pg_catalog.current_setting('xq.student_id')::uuid) then
         raise exception 'XQ_RESTORE_STUDENT_ID_MISSING';
     end if;
     if not exists (
-        select 1 from public.student_subject_profiles where id = :'profile_id'::uuid
+        select 1 from public.student_subject_profiles where id = pg_catalog.current_setting('xq.profile_id')::uuid
     ) then
         raise exception 'XQ_RESTORE_PROFILE_ID_MISSING';
     end if;
     if not exists (
-        select 1 from public.student_teacher_assignments where id = :'assignment_id'::uuid
+        select 1 from public.student_teacher_assignments where id = pg_catalog.current_setting('xq.assignment_id')::uuid
     ) then
         raise exception 'XQ_RESTORE_ASSIGNMENT_ID_MISSING';
     end if;
     if not exists (
         select 1 from public.observations
-         where id = :'observation_id'::uuid
-           and operation_id = :'observation_operation'::uuid
+         where id = pg_catalog.current_setting('xq.observation_id')::uuid
+           and operation_id = pg_catalog.current_setting('xq.observation_operation')::uuid
     ) then
         raise exception 'XQ_RESTORE_OBSERVATION_ID_MISSING';
     end if;
     if not exists (
         select 1 from public.observation_attachments
-         where id = :'attachment_id'::uuid
-           and operation_id = :'attachment_operation'::uuid
+         where id = pg_catalog.current_setting('xq.attachment_id')::uuid
+           and operation_id = pg_catalog.current_setting('xq.attachment_operation')::uuid
     ) then
         raise exception 'XQ_RESTORE_ATTACHMENT_ID_MISSING';
     end if;
     if not exists (
         select 1 from public.operation_receipts
          where operation_id in (
-             :'observation_operation'::uuid,
-             :'attachment_operation'::uuid
+             pg_catalog.current_setting('xq.observation_operation')::uuid,
+             pg_catalog.current_setting('xq.attachment_operation')::uuid
          )
          group by true
         having count(*) = 2
