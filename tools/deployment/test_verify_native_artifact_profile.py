@@ -77,6 +77,34 @@ with tempfile.TemporaryDirectory() as directory:
     else:
         raise AssertionError("expected privileged marker rejection")
 
+    # Plain database protocol strings can legitimately be embedded by runtime
+    # libraries and are not credentials by themselves.
+    benign_protocol = b"postgres" + b"ql://" + b"database-host.invalid/example"
+    benign = root / "benign-protocol.apk"
+    make_artifact(
+        benign,
+        "assets/deployment_profile.json",
+        {"classes2.dex": benign_protocol},
+    )
+    module.verify_artifact(benign, "android-apk", SOURCE)
+
+    # A URI containing an inline username/password is credential material.
+    credential_uri = (
+        b"postgres" + b"ql://" + b"fictional-user:fictional-password@db.invalid/example"
+    )
+    database_secret = root / "database-secret.apk"
+    make_artifact(
+        database_secret,
+        "assets/deployment_profile.json",
+        {"assets/accidental.txt": credential_uri},
+    )
+    try:
+        module.verify_artifact(database_secret, "android-apk", SOURCE)
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("expected credential-bearing database URI rejection")
+
     credential_container = root / "credential.msix"
     make_artifact(
         credential_container,
