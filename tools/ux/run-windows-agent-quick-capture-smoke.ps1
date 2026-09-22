@@ -141,31 +141,49 @@ function Navigate-ToStudents {
 function Ensure-StudentContextLoaded {
     param([Parameter(Mandatory = $true)][System.Windows.Automation.AutomationElement]$Root)
 
-    $draft = Wait-Until -TimeoutSeconds 8 -FailureMessage 'Observation draft editor did not become available from the authoritative Student context.' -Condition {
-        $candidate = Find-ByAutomationId -Root $Root -AutomationId 'ObservationDraftText'
-        if ($null -ne $candidate -and $candidate.Current.IsEnabled) {
-            return $candidate
+    # Bootstrap selects the first authoritative Student before the Students view
+    # is necessarily materialized. Selecting that already-selected ListItem
+    # would not reliably raise SelectionChanged, so force one semantic
+    # deselect/search/reselect cycle through public UIA surfaces.
+    $search = Wait-Until -FailureMessage 'Student search box is unavailable for Agent acceptance.' -Condition {
+        Find-ByAutomationId -Root $Root -AutomationId 'StudentSearchBox'
+    }
+    $searchValue = Get-ValuePattern -Element $search
+    $searchValue.SetValue('__agent_acceptance_no_match__')
+
+    Wait-Until -FailureMessage 'Student search did not clear the previous selection.' -Condition {
+        $list = Find-ByAutomationId -Root $Root -AutomationId 'StudentList'
+        if ($null -eq $list) {
+            return $false
         }
 
+        return @(Find-ListItems -List $list).Count -eq 0
+    } | Out-Null
+
+    $searchValue.SetValue('虚构学生0001')
+    $studentItem = Wait-Until -FailureMessage 'Fictional Agent-acceptance Student was not exposed as one native ListItem.' -Condition {
         $list = Find-ByAutomationId -Root $Root -AutomationId 'StudentList'
         if ($null -eq $list) {
             return $null
         }
 
         $items = @(Find-ListItems -List $list)
-        if ($items.Count -eq 0) {
+        if ($items.Count -ne 1) {
             return $null
         }
 
-        try {
-            Invoke-Element -Element $items[0]
+        return $items[0]
+    }
+    Invoke-Element -Element $studentItem
+
+    return Wait-Until -TimeoutSeconds 20 -FailureMessage 'Observation draft editor did not become enabled after an explicit authoritative Student selection.' -Condition {
+        $candidate = Find-ByAutomationId -Root $Root -AutomationId 'ObservationDraftText'
+        if ($null -ne $candidate -and $candidate.Current.IsEnabled) {
+            return $candidate
         }
-        catch [System.Management.Automation.MethodInvocationException] {
-        }
+
         return $null
     }
-
-    return $draft
 }
 
 function Start-Xueqing {
