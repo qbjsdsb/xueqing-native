@@ -1,6 +1,8 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Automation;
 using Xueqing.Windows.Core.Models;
+using Xueqing.Windows.Core.Agent;
 using Xueqing.Windows.ViewModels;
 
 namespace Xueqing.Windows.Views;
@@ -10,6 +12,88 @@ public sealed partial class TodayView : UserControl
     public TodayView()
     {
         InitializeComponent();
+    }
+
+    private void RetryPendingLearningCaseButton_Loaded(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button button &&
+            button.Tag is CreateLearningCaseRequest request &&
+            request.OperationId != Guid.Empty)
+        {
+            AutomationProperties.SetAutomationId(
+                button,
+                AgentAutomationIds.RecoveryLearningCase(request.OperationId));
+        }
+    }
+
+    private void RetryPendingActionProgressionButton_Loaded(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button button &&
+            button.Tag is ActionProgressionRecoveryIntent intent &&
+            intent.OperationId != Guid.Empty)
+        {
+            AutomationProperties.SetAutomationId(
+                button,
+                AgentAutomationIds.RecoveryAction(intent.OperationId));
+        }
+    }
+
+    private void RetryPendingCaseLifecycleButton_Loaded(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button button &&
+            button.Tag is CaseLifecycleRecoveryIntent intent &&
+            intent.OperationId != Guid.Empty)
+        {
+            AutomationProperties.SetAutomationId(
+                button,
+                AgentAutomationIds.RecoveryCaseLifecycle(intent.OperationId));
+        }
+    }
+
+    private void RescheduleActionButton_Loaded(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button button)
+        {
+            return;
+        }
+
+        ApplyActionProgressionVisibility(button);
+        if (button.Tag is TodayActionItem item &&
+            Guid.TryParse(item.Id, out var actionId) &&
+            actionId != Guid.Empty)
+        {
+            AutomationProperties.SetAutomationId(
+                button,
+                AgentAutomationIds.TodayReschedule(actionId));
+        }
+    }
+
+    private void VerifyActionButton_Loaded(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button button)
+        {
+            return;
+        }
+
+        ApplyActionProgressionVisibility(button);
+        if (button.Tag is TodayActionItem item &&
+            Guid.TryParse(item.Id, out var actionId) &&
+            actionId != Guid.Empty)
+        {
+            AutomationProperties.SetAutomationId(
+                button,
+                AgentAutomationIds.TodayVerify(actionId));
+        }
+    }
+
+    private void ApplyActionProgressionVisibility(Button button)
+    {
+        if (DataContext is MainWindowViewModel viewModel)
+        {
+            button.Visibility = viewModel.SupportsActionProgression
+                ? Visibility.Visible
+                : Visibility.Collapsed;
+        }
     }
 
     private async void RetryPendingLearningCase_Click(object sender, RoutedEventArgs e)
@@ -79,16 +163,6 @@ public sealed partial class TodayView : UserControl
         await resultDialog.ShowAsync();
     }
 
-    private void ActionProgressionButton_Loaded(object sender, RoutedEventArgs e)
-    {
-        if (sender is Button button &&
-            DataContext is MainWindowViewModel viewModel)
-        {
-            button.Visibility = viewModel.SupportsActionProgression
-                ? Visibility.Visible
-                : Visibility.Collapsed;
-        }
-    }
 
     private async void RescheduleAction_Click(object sender, RoutedEventArgs e)
     {
