@@ -283,7 +283,7 @@ observation_id="$(cat "$backup_dir/observation_id")"
 attachment_id="$(cat "$backup_dir/attachment_id")"
 raw_text="$(cat "$backup_dir/raw_text")"
 
-docker exec "$db_container" psql -U postgres -d postgres -v ON_ERROR_STOP=1 \
+docker exec -i "$db_container" psql -U postgres -d postgres -v ON_ERROR_STOP=1 \
   -v actor_id="$actor_id" \
   -v organization_id="$organization_id" \
   -v student_id="$student_id" \
