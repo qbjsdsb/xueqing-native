@@ -22,6 +22,12 @@ internal static class Program
 
         var current = AppInstance.GetCurrent();
         var activation = current.GetActivatedEventArgs();
+
+        // Scrub orphaned instance registrations before claiming the stable
+        // single-instance key. This matters after forced/crash termination:
+        // Windows App SDK removes dead registrations while enumerating
+        // instances, avoiding redirection to a process that no longer exists.
+        _ = AppInstance.GetInstances();
         var instance = AppInstance.FindOrRegisterForKey(MainInstanceKey);
 
         if (!instance.IsCurrent)
