@@ -6,6 +6,7 @@ on:
       - 'contracts/operations/PRODUCTION_CLIENT_DEPLOYMENT_SESSION_V1.md'
       - 'contracts/schemas/DEPLOYMENT_PROFILE_V1.schema.json'
       - 'tools/deployment/**'
+      - 'deployment/**'
       - '.github/workflows/production-client.yml'
       - 'apps/windows/**'
       - 'apps/android/**'
@@ -25,6 +26,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Validate deployment profile contract
         shell: bash
@@ -33,6 +36,38 @@ jobs:
           python3 -B tools/deployment/test_verify_deployment_profile.py
           python3 -B tools/deployment/verify_deployment_profile.py \
             tools/deployment/fixtures/valid_deployment_profile.json
+
+      - name: Render exact-source production profile
+        shell: bash
+        env:
+          SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SOURCE_COMMIT"
+          rendered="$RUNNER_TEMP/xueqing-production-deployment-profile.json"
+          python3 -B tools/deployment/render_deployment_profile.py \
+            deployment/production_profile.template.json \
+            "$rendered" \
+            "$SOURCE_COMMIT"
+          python3 -B tools/deployment/verify_deployment_profile.py "$rendered"
+          python3 - "$rendered" "$SOURCE_COMMIT" <<'PY'
+          import json
+          import pathlib
+          import sys
+
+          value = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
+          assert value["source"]["commit"] == sys.argv[2]
+          assert value["profile_id"] == "xueqing-prod-sg-v1"
+          assert value["environment_id"] == "production-sg-v1"
+          assert value["trust_domain_id"] == "xueqing-native-prod-sg"
+          assert value["required_edge_region"] == "ap-southeast-1"
+          assert value["capabilities"] == [
+              "auth",
+              "database-rpc",
+              "edge-functions",
+              "private-storage",
+          ]
+          PY
 
       - name: Reject committed session material in deployment tooling
         shell: bash
@@ -43,7 +78,7 @@ jobs:
             --exclude='test_verify_deployment_profile.py' \
             --exclude='verify_deployment_profile.py' \
             '(refresh_token|access_token|service[_-]?role|sb_secret_|postgres(ql)?://)' \
-            tools/deployment contracts/schemas/DEPLOYMENT_PROFILE_V1.schema.json; then
+            tools/deployment deployment contracts/schemas/DEPLOYMENT_PROFILE_V1.schema.json; then
             echo 'Deployment profile/tooling contains forbidden session or privileged credential material.' >&2
             exit 1
           fi

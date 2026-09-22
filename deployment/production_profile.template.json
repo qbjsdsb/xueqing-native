@@ -1,0 +1,20 @@
+{
+  "contract": "deployment_profile_v1",
+  "profile_id": "xueqing-prod-sg-v1",
+  "environment_id": "production-sg-v1",
+  "trust_domain_id": "xueqing-native-prod-sg",
+  "provider_id": "supabase",
+  "project_origin": "https://vwcolaxwlauxhxwpeazt.supabase.co",
+  "publishable_key": "sb_publishable_LiQJhoknVavH1fZHTv5Hcg_xQVqaD3C",
+  "required_edge_region": "ap-southeast-1",
+  "capabilities": [
+    "auth",
+    "database-rpc",
+    "edge-functions",
+    "private-storage"
+  ],
+  "source": {
+    "repository": "qbjsdsb/xueqing-native",
+    "commit": "__SOURCE_COMMIT__"
+  }
+}

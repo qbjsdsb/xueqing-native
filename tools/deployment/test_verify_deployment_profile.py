@@ -45,3 +45,48 @@ service_jwt = "eyJhbGciOiJub25lIn0." + payload + ".fictional"
 rejected(lambda v: v.__setitem__("publishable_key", service_jwt), "service-role JWT")
 
 print("deployment profile validator tests passed")
+
+
+# The production profile is a template because a checked-in file cannot
+# self-contain the SHA of the commit that contains itself. Release/CI renders
+# the exact source SHA and validates the final shippable profile.
+RENDERER_PATH = ROOT / "tools/deployment/render_deployment_profile.py"
+PRODUCTION_TEMPLATE = ROOT / "deployment/production_profile.template.json"
+renderer_spec = importlib.util.spec_from_file_location(
+    "render_deployment_profile",
+    RENDERER_PATH,
+)
+renderer = importlib.util.module_from_spec(renderer_spec)
+assert renderer_spec.loader is not None
+renderer_spec.loader.exec_module(renderer)
+
+production_template = json.loads(PRODUCTION_TEMPLATE.read_text(encoding="utf-8"))
+rendered = renderer.render_profile(
+    production_template,
+    "89abcdef0123456789abcdef0123456789abcdef",
+)
+module.validate_profile(rendered)
+assert rendered["profile_id"] == "xueqing-prod-sg-v1"
+assert rendered["environment_id"] == "production-sg-v1"
+assert rendered["trust_domain_id"] == "xueqing-native-prod-sg"
+assert rendered["required_edge_region"] == "ap-southeast-1"
+assert rendered["source"]["commit"] == "89abcdef0123456789abcdef0123456789abcdef"
+
+try:
+    renderer.render_profile(production_template, "not-a-commit")
+except ValueError:
+    pass
+else:
+    raise AssertionError("expected production renderer to reject malformed source SHA")
+
+wrong_placeholder = copy.deepcopy(production_template)
+wrong_placeholder["source"]["commit"] = "0123456789abcdef0123456789abcdef01234567"
+try:
+    renderer.render_profile(
+        wrong_placeholder,
+        "89abcdef0123456789abcdef0123456789abcdef",
+    )
+except ValueError:
+    pass
+else:
+    raise AssertionError("expected renderer to reject a template with frozen provenance")
