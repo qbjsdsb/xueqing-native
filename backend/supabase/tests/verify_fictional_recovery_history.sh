@@ -127,7 +127,7 @@ former_operation="$(new_operation_id)"
 current_operation="$(new_operation_id)"
 revoked_operation="$(new_operation_id)"
 
-docker exec "$DB_CONTAINER" psql -U postgres -d postgres -v ON_ERROR_STOP=1 \
+docker exec -i "$DB_CONTAINER" psql -U postgres -d postgres -v ON_ERROR_STOP=1 \
   -v assignment_old="$assignment_a_old" \
   -v assignment_new="$assignment_a_new" \
   -v actor_a="$actor_a" \
@@ -281,7 +281,7 @@ if [[ "$RPC_STATUS" =~ ^2 ]] || [[ "$RPC_BODY" != *"XQ_OPERATION_REUSED_WITH_DIF
 fi
 
 # Direct state assertions keep the recovery semantics explicit and auditable.
-docker exec "$DB_CONTAINER" psql -U postgres -d postgres -v ON_ERROR_STOP=1 \
+docker exec -i "$DB_CONTAINER" psql -U postgres -d postgres -v ON_ERROR_STOP=1 \
   -v actor_a="$actor_a" \
   -v actor_b="$actor_b" \
   -v assignment_old="$assignment_a_old" \
