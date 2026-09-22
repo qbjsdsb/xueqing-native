@@ -156,7 +156,7 @@ case_b_reopened_action_id="$(
 # This fixture is fail-closed: UPDATE 0 is not a handoff. The source snapshot is
 # allowed to proceed only after the database proves exactly the intended
 # A-inactive/B-active authority state for this teaching scope.
-docker exec "$DB_CONTAINER" psql -U postgres -d postgres -v ON_ERROR_STOP=1 \
+docker exec -i "$DB_CONTAINER" psql -U postgres -d postgres -v ON_ERROR_STOP=1 \
   -v assignment_old="$assignment_a_old" \
   -v assignment_new="$assignment_a_new" \
   -v org_id="$org_a" \
@@ -234,7 +234,7 @@ SQL
 
 # Preserve one explicitly revoked provider link independently of the recovered
 # Teacher A/B links.
-docker exec "$DB_CONTAINER" psql -U postgres -d postgres -v ON_ERROR_STOP=1 >/dev/null <<'SQL'
+docker exec -i "$DB_CONTAINER" psql -U postgres -d postgres -v ON_ERROR_STOP=1 >/dev/null <<'SQL'
 update public.identity_links
    set active = false
  where app_user_id = '10000000-0000-0000-0000-000000000003'::uuid
