@@ -8,6 +8,7 @@ import com.xueqing.app.application.attachment.AttachmentReadUnknownReason
 import com.xueqing.app.application.attachment.AttachmentUploadRejection
 import com.xueqing.app.application.attachment.AttachmentUploadResult
 import com.xueqing.app.application.attachment.CommitObservationAttachmentRejection
+import com.xueqing.app.application.attachment.CommitObservationAttachmentReceipt
 import com.xueqing.app.application.attachment.CommitObservationAttachmentRequest
 import com.xueqing.app.application.attachment.ObservationAttachmentUploadRequest
 import java.util.UUID
