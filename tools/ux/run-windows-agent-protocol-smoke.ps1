@@ -109,7 +109,7 @@ try {
 
     Invoke-XueqingProtocol -Uri $ProtocolUri
     $auth = Wait-ForSignedOutAuthBoundary
-    $cold = Get-XueqingProcesses
+    $cold = @(Get-XueqingProcesses)
     if ($cold.Count -lt 1) {
         throw 'Protocol activation did not create an installed Xueqing process.'
     }
@@ -119,7 +119,7 @@ try {
     Invoke-XueqingProtocol -Uri $ProtocolUri
     Start-Sleep -Seconds 3
 
-    $warm = Get-XueqingProcesses
+    $warm = @(Get-XueqingProcesses)
     $warmIds = @($warm | Select-Object -ExpandProperty Id)
     if ($warm.Count -lt 1) {
         throw 'Warm protocol activation unexpectedly left no Xueqing process.'
