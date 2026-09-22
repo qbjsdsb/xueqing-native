@@ -5,6 +5,11 @@ backup_dir="${1:?usage: restore_fictional_backup_rehearsal.sh BACKUP_DIR}"
 archive="$backup_dir/archive.tar.gpg"
 key_file="$backup_dir/rehearsal.key"
 
+now_ms() {
+  date +%s%3N
+}
+restore_started_ms="$(now_ms)"
+
 [[ -s "$archive" && -s "$key_file" ]] || {
   echo 'Encrypted rehearsal archive/key are missing.' >&2
   exit 1
@@ -25,6 +30,7 @@ cleanup() {
 }
 trap cleanup EXIT
 
+integrity_started_ms="$(now_ms)"
 gpg --batch --yes --pinentry-mode loopback \
   --passphrase-file "$key_file" \
   --decrypt --output "$restore_root/archive.tar" "$archive"
@@ -59,6 +65,7 @@ verify(value["database"])
 for item in value["storage"]["objects"]:
     verify(item)
 PY
+integrity_finished_ms="$(now_ms)"
 
 # A restore target must be reconstructed from versioned source, never by
 # copying the already-running source provider directory. The source workdir
@@ -180,6 +187,7 @@ SQL
 python3 tools/backup/compute_restore_order.py \
   "$restore_root/restore-graph.json" > "$restore_root/restore-order.txt"
 
+db_restore_started_ms="$(now_ms)"
 docker cp "$extract_dir/database/xueqing.dump" "$db_container:/tmp/xueqing.dump"
 while IFS= read -r table; do
   [[ -n "$table" ]] || continue
@@ -234,6 +242,7 @@ if target["table_fingerprints_sha256"] != expected["table_fingerprints_sha256"]:
         "restored canonical table fingerprint mismatch: " + ", ".join(differences)
     )
 PY
+db_restore_finished_ms="$(now_ms)"
 
 # Runtime isolation is part of restore acceptance. The source provider has
 # already been stopped, so every still-running local Supabase service must
@@ -371,7 +380,353 @@ for item in value["storage"]["objects"]:
 PY
 
 bucket='teaching-attachments-v1'
-while IFS=$'\t' read -r locator object_file mime expected_size expected_sha; do
+object_restore_started_ms="$(now_ms)"
+while IFS= object_file mime expected_size expected_sha; do
+  curl --fail-with-body --silent --show-error \
+    -X POST "$api_url/storage/v1/object/$bucket/$locator" \
+    -H "apikey: $SERVICE_ROLE_KEY" \
+    -H "Authorization: Bearer $SERVICE_ROLE_KEY" \
+    -H "Content-Type: $mime" \
+    --data-binary "@$object_file" >/dev/null
+
+  downloaded="$(mktemp)"
+  curl --fail-with-body --silent --show-error \
+    -X GET "$api_url/storage/v1/object/authenticated/$bucket/$locator" \
+    -H "apikey: $SERVICE_ROLE_KEY" \
+    -H "Authorization: Bearer $SERVICE_ROLE_KEY" \
+    --output "$downloaded"
+
+  actual_size="$(wc -c < "$downloaded" | tr -d ' ')"
+  actual_sha="$(sha256sum "$downloaded" | awk '{print $1}')"
+  rm -f "$downloaded"
+
+  [[ "$actual_size" == "$expected_size" ]] || {
+    echo "Restored object size mismatch for $locator" >&2
+    exit 1
+  }
+  [[ "$actual_sha" == "$expected_sha" ]] || {
+    echo "Restored object digest mismatch for $locator" >&2
+    exit 1
+  }
+
+  anon_status="$(
+    curl --silent --output /dev/null --write-out '%{http_code}' \
+      -X GET "$api_url/storage/v1/object/authenticated/$bucket/$locator" \
+      -H "apikey: $ANON_KEY" || true
+  )"
+  if [[ "$anon_status" =~ ^2 ]]; then
+    echo "Anonymous private Attachment read unexpectedly succeeded for $locator" >&2
+    exit 1
+  fi
+done < "$restore_root/objects.tsv"
+object_restore_finished_ms="$(now_ms)"
+
+json_get() {
+  local expression="$1"
+  python3 -c '
+import json,sys
+expression=sys.argv[1]
+current=json.load(sys.stdin)
+for part in expression.split("."):
+    current=current[int(part)] if isinstance(current,list) else current[part]
+if isinstance(current,(dict,list)):
+    print(json.dumps(current,ensure_ascii=False,separators=(",",":")))
+elif current is None:
+    print("")
+else:
+    print(current)
+' "$expression"
+}
+
+jwt_claim() {
+  local token="$1" claim="$2"
+  python3 -c '
+import base64,json,sys
+token,claim=sys.argv[1],sys.argv[2]
+payload=token.split(".")[1]
+payload += "=" * (-len(payload)%4)
+claims=json.loads(base64.urlsafe_b64decode(payload.encode()).decode())
+value=claims.get(claim)
+print("" if value is None else value)
+' "$token" "$claim"
+}
+
+create_auth_identity() {
+  local email="$1" password="$2"
+  local user_response user_id session token issuer subject
+
+  user_response="$(
+    curl --fail-with-body --silent --show-error \
+      -X POST "$api_url/auth/v1/admin/users" \
+      -H "apikey: $SERVICE_ROLE_KEY" \
+      -H "Authorization: Bearer $SERVICE_ROLE_KEY" \
+      -H 'Content-Type: application/json' \
+      --data "{\"email\":\"$email\",\"password\":\"$password\",\"email_confirm\":true}"
+  )"
+  user_id="$(printf '%s' "$user_response" | json_get id)"
+
+  session="$(
+    curl --fail-with-body --silent --show-error \
+      -X POST "$api_url/auth/v1/token?grant_type=password" \
+      -H "apikey: $ANON_KEY" \
+      -H 'Content-Type: application/json' \
+      --data "{\"email\":\"$email\",\"password\":\"$password\"}"
+  )"
+  token="$(printf '%s' "$session" | json_get access_token)"
+  issuer="$(jwt_claim "$token" iss)"
+  subject="$(jwt_claim "$token" sub)"
+
+  [[ -n "$user_id" && -n "$token" && -n "$issuer" && "$subject" == "$user_id" ]] || {
+    echo "Fresh provider identity creation failed for $email." >&2
+    exit 1
+  }
+
+  echo "::add-mask::$token" >&2
+  printf '%s|%s|%s|%s\n' "$user_id" "$token" "$issuer" "$subject"
+}
+
+suffix="${GITHUB_RUN_ID:-local}-${GITHUB_RUN_ATTEMPT:-0}"
+actor_email="restore-actor-a-$suffix@example.com"
+actor_b_email="restore-actor-b-$suffix@example.com"
+unlinked_email="restore-unlinked-$suffix@example.com"
+actor_password="$(python3 -c 'import secrets,string; a=string.ascii_letters+string.digits; print("Xq!"+ "".join(secrets.choice(a) for _ in range(24)))')"
+actor_b_password="$(python3 -c 'import secrets,string; a=string.ascii_letters+string.digits; print("Xq!"+ "".join(secrets.choice(a) for _ in range(24)))')"
+unlinked_password="$(python3 -c 'import secrets,string; a=string.ascii_letters+string.digits; print("Xq!"+ "".join(secrets.choice(a) for _ in range(24)))')"
+echo "::add-mask::$actor_password"
+echo "::add-mask::$actor_b_password"
+echo "::add-mask::$unlinked_password"
+
+actor_identity="$(create_auth_identity "$actor_email" "$actor_password")"
+IFS='|' read -r actor_provider_user actor_token actor_issuer actor_subject <<<"$actor_identity"
+actor_b_identity="$(create_auth_identity "$actor_b_email" "$actor_b_password")"
+IFS='|' read -r actor_b_provider_user actor_b_token actor_b_issuer actor_b_subject <<<"$actor_b_identity"
+unlinked_identity="$(create_auth_identity "$unlinked_email" "$unlinked_password")"
+IFS='|' read -r unlinked_provider_user unlinked_token unlinked_issuer unlinked_subject <<<"$unlinked_identity"
+
+observation_operation="$(cat "$backup_dir/observation_operation_id")"
+attachment_operation="$(cat "$backup_dir/attachment_operation_id")"
+observation_id="$(cat "$backup_dir/observation_id")"
+attachment_id="$(cat "$backup_dir/attachment_id")"
+raw_text="$(cat "$backup_dir/raw_text")"
+
+actor_id='10000000-0000-0000-0000-000000000001'
+organization_id='20000000-0000-0000-0000-000000000001'
+student_id='30000000-0000-0000-0000-000000000001'
+profile_id='40000000-0000-0000-0000-000000000001'
+assignment_id='50000000-0000-0000-0000-000000000001'
+
+rpc_call() {
+  local token="$1" function_name="$2" payload="$3" out
+  out="$(mktemp)"
+  RPC_STATUS="$(
+    curl --silent --show-error --output "$out" --write-out '%{http_code}' \
+      -X POST "$api_url/rest/v1/rpc/$function_name" \
+      -H "apikey: $ANON_KEY" \
+      -H "Authorization: Bearer $token" \
+      -H 'Content-Type: application/json' \
+      --data "$payload" || true
+  )"
+  RPC_BODY="$(cat "$out")"
+  rm -f "$out"
+}
+
+prelink_operation='76000000-0000-4000-8000-000000000200'
+prelink_payload="{\"p_operation_id\":\"$prelink_operation\",\"p_organization_id\":\"$organization_id\",\"p_student_id\":\"$student_id\",\"p_subject_profile_id\":\"$profile_id\",\"p_assignment_id\":\"$assignment_id\",\"p_raw_text\":\"Fresh provider identity must not map implicitly.\",\"p_client_capture_metadata\":{\"fixture\":true}}"
+rpc_call "$actor_token" create_observation "$prelink_payload"
+if [[ "$RPC_STATUS" =~ ^2 ]] || [[ "$RPC_BODY" != *"XQ_ACTOR_NOT_FOUND"* ]]; then
+  echo "Fresh provider identity A unexpectedly mapped before explicit recovery relink: $RPC_STATUS $RPC_BODY" >&2
+  exit 1
+fi
+
+actor_b_prelink_operation='76000000-0000-4000-8000-000000000202'
+actor_b_prelink_payload="{\"p_operation_id\":\"$actor_b_prelink_operation\",\"p_organization_id\":\"$organization_id\",\"p_student_id\":\"$student_id\",\"p_subject_profile_id\":\"$profile_id\",\"p_assignment_id\":\"$assignment_id\",\"p_raw_text\":\"Fresh provider identity B must not map implicitly.\",\"p_client_capture_metadata\":{\"fixture\":true}}"
+rpc_call "$actor_b_token" create_observation "$actor_b_prelink_payload"
+if [[ "$RPC_STATUS" =~ ^2 ]] || [[ "$RPC_BODY" != *"XQ_ACTOR_NOT_FOUND"* ]]; then
+  echo "Fresh provider identity B unexpectedly mapped before explicit recovery relink: $RPC_STATUS $RPC_BODY" >&2
+  exit 1
+fi
+
+docker exec -i "$db_container" psql -U postgres -d postgres -v ON_ERROR_STOP=1 \
+  -v actor_id="$actor_id" \
+  -v actor_b_id="$actor_b_id" \
+  -v new_issuer="$actor_issuer" \
+  -v new_subject="$actor_subject" \
+  -v actor_b_issuer="$actor_b_issuer" \
+  -v actor_b_subject="$actor_b_subject" >/dev/null <<'SQL'
+begin;
+update public.identity_links
+   set active = false
+ where app_user_id in (:'actor_id'::uuid, :'actor_b_id'::uuid)
+   and provider_key = 'supabase'
+   and active;
+
+insert into public.identity_links (
+    app_user_id,
+    provider_key,
+    issuer,
+    external_subject,
+    active
+) values
+    (
+        :'actor_id'::uuid,
+        'supabase',
+        :'new_issuer',
+        :'new_subject',
+        true
+    ),
+    (
+        :'actor_b_id'::uuid,
+        'supabase',
+        :'actor_b_issuer',
+        :'actor_b_subject',
+        true
+    );
+commit;
+SQL
+
+active_link_count="$(
+  docker exec "$db_container" psql -U postgres -d postgres -Atc \
+    "select count(*) from public.identity_links where app_user_id in ('$actor_id'::uuid, '$actor_b_id'::uuid) and provider_key = 'supabase' and active"
+)"
+[[ "$active_link_count" == '2' ]] || {
+  echo "Recovery relink expected exactly two active provider identities for A/B, got $active_link_count." >&2
+  exit 1
+}
+
+observation_payload="{\"p_operation_id\":\"$observation_operation\",\"p_organization_id\":\"$organization_id\",\"p_student_id\":\"$student_id\",\"p_subject_profile_id\":\"$profile_id\",\"p_assignment_id\":\"$assignment_id\",\"p_raw_text\":\"$raw_text\",\"p_client_capture_metadata\":{\"fixture\":true,\"source\":\"backup-restore-rehearsal\"}}"
+rpc_call "$actor_token" create_observation "$observation_payload"
+[[ "$RPC_STATUS" =~ ^2 ]] || {
+  echo "Restored CreateObservation same-operation replay failed: $RPC_STATUS $RPC_BODY" >&2
+  exit 1
+}
+restored_observation_id="$(
+  printf '%s' "$RPC_BODY" | python3 -c 'import json,sys; print(json.load(sys.stdin)["observation_id"])'
+)"
+[[ "$restored_observation_id" == "$observation_id" ]] || {
+  echo 'CreateObservation replay returned a different observation id.' >&2
+  exit 1
+}
+
+different_payload="{\"p_operation_id\":\"$observation_operation\",\"p_organization_id\":\"$organization_id\",\"p_student_id\":\"$student_id\",\"p_subject_profile_id\":\"$profile_id\",\"p_assignment_id\":\"$assignment_id\",\"p_raw_text\":\"Different payload must fail.\",\"p_client_capture_metadata\":{\"fixture\":true,\"source\":\"backup-restore-rehearsal\"}}"
+rpc_call "$actor_token" create_observation "$different_payload"
+if [[ "$RPC_STATUS" =~ ^2 ]] || [[ "$RPC_BODY" != *"XQ_OPERATION_REUSED_WITH_DIFFERENT_PAYLOAD"* ]]; then
+  echo "Different-payload replay did not fail closed: $RPC_STATUS $RPC_BODY" >&2
+  exit 1
+fi
+
+attachment_payload="{\"p_operation_id\":\"$attachment_operation\",\"p_organization_id\":\"$organization_id\",\"p_student_id\":\"$student_id\",\"p_subject_profile_id\":\"$profile_id\",\"p_assignment_id\":\"$assignment_id\",\"p_observation_id\":\"$observation_id\",\"p_attachment_id\":\"$attachment_id\"}"
+rpc_call "$actor_token" commit_observation_attachment "$attachment_payload"
+[[ "$RPC_STATUS" =~ ^2 ]] || {
+  echo "Restored Attachment same-operation replay failed: $RPC_STATUS $RPC_BODY" >&2
+  exit 1
+}
+
+unlinked_operation='76000000-0000-4000-8000-000000000201'
+unlinked_payload="{\"p_operation_id\":\"$unlinked_operation\",\"p_organization_id\":\"$organization_id\",\"p_student_id\":\"$student_id\",\"p_subject_profile_id\":\"$profile_id\",\"p_assignment_id\":\"$assignment_id\",\"p_raw_text\":\"Unlinked actor must fail.\",\"p_client_capture_metadata\":{\"fixture\":true}}"
+rpc_call "$unlinked_token" create_observation "$unlinked_payload"
+if [[ "$RPC_STATUS" =~ ^2 ]]; then
+  echo 'Unlinked provider identity unexpectedly created a Teaching Fact after restore.' >&2
+  exit 1
+fi
+
+make_legacy_tuple_jwt() {
+  JWT_SUBJECT="$1" JWT_ISSUER="$2" python3 - <<'PY'
+import base64
+import hashlib
+import hmac
+import json
+import os
+import time
+
+def b64url(value: bytes) -> str:
+    return base64.urlsafe_b64encode(value).rstrip(b"=").decode("ascii")
+
+now = int(time.time())
+header = {"alg": "HS256", "typ": "JWT"}
+payload = {
+    "iss": os.environ["JWT_ISSUER"],
+    "sub": os.environ["JWT_SUBJECT"],
+    "aud": "authenticated",
+    "role": "authenticated",
+    "iat": now,
+    "exp": now + 3600,
+}
+encoded_header = b64url(json.dumps(header, separators=(",", ":")).encode())
+encoded_payload = b64url(json.dumps(payload, separators=(",", ":")).encode())
+signing_input = f"{encoded_header}.{encoded_payload}".encode()
+signature = hmac.new(
+    os.environ["JWT_SECRET"].encode(),
+    signing_input,
+    hashlib.sha256,
+).digest()
+print(f"{encoded_header}.{encoded_payload}.{b64url(signature)}")
+PY
+}
+
+revoked_token="$(make_legacy_tuple_jwt 'a0000000-0000-0000-0000-000000000003' 'supabase-demo')"
+echo "::add-mask::$revoked_token"
+
+history_file="$backup_dir/history_fixture.json"
+[[ -s "$history_file" ]] || {
+  echo "Recovery history fixture metadata is missing." >&2
+  exit 1
+}
+
+API_URL="$api_url" \
+ANON_KEY="$ANON_KEY" \
+SERVICE_ROLE_KEY="$SERVICE_ROLE_KEY" \
+DB_CONTAINER="$db_container" \
+ACTOR_TOKEN_A="$actor_token" \
+ACTOR_TOKEN_B="$actor_b_token" \
+REVOKED_TOKEN="$revoked_token" \
+bash backend/supabase/tests/verify_fictional_recovery_history.sh "$history_file"
+
+observation_count="$(
+  docker exec "$db_container" psql -U postgres -d postgres -Atc \
+    "select count(*) from public.observations where operation_id = '$observation_operation'::uuid"
+)"
+attachment_count="$(
+  docker exec "$db_container" psql -U postgres -d postgres -Atc \
+    "select count(*) from public.observation_attachments where operation_id = '$attachment_operation'::uuid"
+)"
+if [[ "$observation_count" != '1' || "$attachment_count" != '1' ]]; then
+  echo "Idempotency continuity failed after restore: observations=$observation_count attachments=$attachment_count" >&2
+  exit 1
+fi
+
+restore_finished_ms="$(now_ms)"
+integrity_validation_duration_ms="$((integrity_finished_ms - integrity_started_ms))"
+database_restore_duration_ms="$((db_restore_finished_ms - db_restore_started_ms))"
+object_restore_duration_ms="$((object_restore_finished_ms - object_restore_started_ms))"
+semantic_validation_duration_ms="$((restore_finished_ms - object_restore_finished_ms))"
+restore_total_duration_ms="$((restore_finished_ms - restore_started_ms))"
+
+INTEGRITY_VALIDATION_DURATION_MS="$integrity_validation_duration_ms" \
+DATABASE_RESTORE_DURATION_MS="$database_restore_duration_ms" \
+OBJECT_RESTORE_DURATION_MS="$object_restore_duration_ms" \
+SEMANTIC_VALIDATION_DURATION_MS="$semantic_validation_duration_ms" \
+RESTORE_TOTAL_DURATION_MS="$restore_total_duration_ms" \
+python3 - "$backup_dir/restore_metrics.json" <<'PY'
+import json
+import os
+import pathlib
+import sys
+
+metrics = {
+    "integrity_validation_duration_ms": int(os.environ["INTEGRITY_VALIDATION_DURATION_MS"]),
+    "database_restore_duration_ms": int(os.environ["DATABASE_RESTORE_DURATION_MS"]),
+    "object_restore_duration_ms": int(os.environ["OBJECT_RESTORE_DURATION_MS"]),
+    "semantic_validation_duration_ms": int(os.environ["SEMANTIC_VALIDATION_DURATION_MS"]),
+    "restore_total_duration_ms": int(os.environ["RESTORE_TOTAL_DURATION_MS"]),
+}
+pathlib.Path(sys.argv[1]).write_text(
+    json.dumps(metrics, indent=2, sort_keys=True) + "\n",
+    encoding="utf-8",
+)
+PY
+
+echo 'Fresh isolated restore rehearsal passed: database rows, private object bytes, digests, authorization and operation replay remained coherent.'
+\t' read -r locator object_file mime expected_size expected_sha; do
   curl --fail-with-body --silent --show-error \
     -X POST "$api_url/storage/v1/object/$bucket/$locator" \
     -H "apikey: $SERVICE_ROLE_KEY" \
