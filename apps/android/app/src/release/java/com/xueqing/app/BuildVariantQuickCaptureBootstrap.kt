@@ -1,17 +1,16 @@
 package com.xueqing.app
 
+import android.content.Context
 import com.xueqing.app.application.bootstrap.PersonalBootstrapRemote
-import com.xueqing.app.application.bootstrap.PersonalBootstrapResult
 
 /**
- * Release builds intentionally have no hard-coded session or fixture identity.
- * The later Session/Auth conformance work replaces this boundary with the live
- * authenticated composition.
+ * Compatibility wrapper for the former release stub. The authoritative release
+ * composition now lives in BuildVariantRuntimeHooks/ProductionClientRuntime.
  */
 object BuildVariantQuickCaptureBootstrap {
-    const val ENVIRONMENT_ID = "release-unconfigured"
+    fun environmentId(context: Context): String =
+        BuildVariantRuntimeHooks.environmentId(context)
 
-    fun remote(): PersonalBootstrapRemote = PersonalBootstrapRemote {
-        PersonalBootstrapResult.AuthenticationRequired
-    }
+    fun remote(context: Context): PersonalBootstrapRemote =
+        BuildVariantRuntimeHooks.bootstrapRemote(context)
 }
