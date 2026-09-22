@@ -368,6 +368,51 @@
                             SelectedItem="{Binding SelectedTeachingContext, Mode=TwoWay}"
                             SelectionChanged="SubjectContextBox_SelectionChanged" />
 
+                        <StackPanel
+                            Spacing="8"
+                            Visibility="{Binding SupportsObservationCapture, Converter={StaticResource BooleanToVisibilityConverter}}">
+                            <TextBlock
+                                FontSize="16"
+                                FontWeight="SemiBold"
+                                Text="课堂观察" />
+                            <TextBox
+                                x:Name="ObservationDraftBox"
+                                MinHeight="96"
+                                MaxLength="10000"
+                                AcceptsReturn="True"
+                                AutomationProperties.AutomationId="ObservationDraftText"
+                                AutomationProperties.Name="课堂观察草稿"
+                                IsEnabled="{Binding CanEditObservationDraft}"
+                                PlaceholderText="记录刚刚发生的学习表现、错误或证据"
+                                Text="{Binding ObservationDraftText, Mode=OneWay}"
+                                TextChanged="ObservationDraftBox_TextChanged"
+                                TextWrapping="Wrap" />
+                            <Grid ColumnSpacing="12">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock
+                                    AutomationProperties.AutomationId="ObservationDraftStatus"
+                                    AutomationProperties.Name="课堂观察草稿状态"
+                                    Opacity="0.68"
+                                    Text="{Binding ObservationDraftStatusText}"
+                                    TextWrapping="Wrap" />
+                                <Button
+                                    Grid.Column="1"
+                                    AutomationProperties.AutomationId="ObservationSubmit"
+                                    AutomationProperties.Name="提交课堂观察"
+                                    Click="ObservationSubmit_Click"
+                                    Content="{Binding ObservationSubmitLabel}"
+                                    IsEnabled="{Binding CanSubmitObservationDraft}" />
+                            </Grid>
+                        </StackPanel>
+
+                        <Border
+                            Height="1"
+                            Background="{ThemeResource SystemControlForegroundBaseLowBrush}"
+                            Visibility="{Binding SupportsObservationCapture, Converter={StaticResource BooleanToVisibilityConverter}}" />
+
                         <StackPanel Spacing="8">
                             <TextBlock
                                 FontSize="16"

@@ -103,6 +103,10 @@ public sealed class MainWindowViewModel : ObservableObject
     private readonly PersonalTodayActionsCoordinator? _today;
     private readonly ICreateLearningCaseCommand? _createLearningCase;
     private readonly ICreateLearningCaseRecoveryStore? _createLearningCaseRecovery;
+    private readonly ObservationQuickCaptureCoordinator? _observationCapture;
+    private readonly SemaphoreSlim _observationDraftSaveGate = new(1, 1);
+    private readonly object _observationDraftRevisionGate = new();
+    private readonly Dictionary<long, long> _observationDraftLatestRevisionByGeneration = new();
     private readonly ActionProgressionCommandCoordinator? _actionProgression;
     private readonly IActionProgressionRecoveryStore? _actionProgressionRecovery;
     private readonly CaseLifecycleCommandCoordinator? _caseLifecycle;
@@ -131,6 +135,15 @@ public sealed class MainWindowViewModel : ObservableObject
     private string _organizationManagementStatusText = string.Empty;
     private string _organizationName = string.Empty;
     private OrganizationManagementSnapshot? _organizationManagementSnapshot;
+    private Guid? _observationDraftActorAppUserId;
+    private ObservationDraftScope? _observationDraftScope;
+    private long _observationDraftEpoch;
+    private long _observationCaptureGeneration;
+    private long _observationDraftRevision;
+    private string _observationDraftText = string.Empty;
+    private string _observationDraftStatusText = string.Empty;
+    private bool _observationDraftHasPendingIntent;
+    private bool _observationDraftBusy;
     private bool _initialized;
 
     public MainWindowViewModel()
@@ -173,6 +186,7 @@ public sealed class MainWindowViewModel : ObservableObject
         _today = teachingWorkspace?.Today;
         _createLearningCase = teachingWorkspace?.CreateLearningCase;
         _createLearningCaseRecovery = teachingWorkspace?.CreateLearningCaseRecovery;
+        _observationCapture = teachingWorkspace?.ObservationCapture;
         _actionProgression = teachingWorkspace?.ActionProgression;
         _actionProgressionRecovery = teachingWorkspace?.ActionProgressionRecovery;
         _caseLifecycle = teachingWorkspace?.CaseLifecycle;
@@ -339,6 +353,66 @@ public sealed class MainWindowViewModel : ObservableObject
     public bool SupportsCaseLifecycle =>
         _caseLifecycle is not null && _caseLifecycleRecovery is not null;
 
+    public bool SupportsObservationCapture => _observationCapture is not null;
+
+    public string ObservationDraftText
+    {
+        get => _observationDraftText;
+        private set
+        {
+            if (SetProperty(ref _observationDraftText, value))
+            {
+                OnPropertyChanged(nameof(CanSubmitObservationDraft));
+            }
+        }
+    }
+
+    public string ObservationDraftStatusText
+    {
+        get => _observationDraftStatusText;
+        private set => SetProperty(ref _observationDraftStatusText, value);
+    }
+
+    public bool ObservationDraftHasPendingIntent
+    {
+        get => _observationDraftHasPendingIntent;
+        private set
+        {
+            if (SetProperty(ref _observationDraftHasPendingIntent, value))
+            {
+                NotifyObservationCaptureAvailability();
+            }
+        }
+    }
+
+    public bool ObservationDraftBusy
+    {
+        get => _observationDraftBusy;
+        private set
+        {
+            if (SetProperty(ref _observationDraftBusy, value))
+            {
+                NotifyObservationCaptureAvailability();
+            }
+        }
+    }
+
+    public bool CanEditObservationDraft =>
+        SupportsObservationCapture &&
+        _observationDraftScope is not null &&
+        !ObservationDraftHasPendingIntent &&
+        !ObservationDraftBusy;
+
+    public bool CanSubmitObservationDraft =>
+        SupportsObservationCapture &&
+        _observationDraftScope is not null &&
+        !ObservationDraftBusy &&
+        (ObservationDraftHasPendingIntent ||
+         !string.IsNullOrWhiteSpace(ObservationDraftText));
+
+    public string ObservationSubmitLabel =>
+        ObservationDraftHasPendingIntent ? "重新确认" : "提交";
+
     public string SearchPlaceholderText => IsAuthoritativeStudentWorkspace
         ? "搜索姓名或学科"
         : "搜索姓名、学号或学科";
@@ -378,7 +452,11 @@ public sealed class MainWindowViewModel : ObservableObject
                     : "可读取当前关注。";
                 CaseHistoryStatusText = value is null
                     ? (SelectedTeachingContexts.Count > 1 ? "选择学科后可查看全部 Case。" : "暂无可读取的教学上下文。")
-                    : "按需查看全部 Case。";
+                    : "按需查看全部 Case.";
+                ResetObservationCaptureUiState(
+                    value is null
+                        ? "选择任教学科后可记录课堂观察。"
+                        : "正在读取本机课堂观察草稿…");
             }
         }
     }
@@ -853,6 +931,204 @@ public sealed class MainWindowViewModel : ObservableObject
         {
             ApplyFocusState(focusState);
         }
+
+        await LoadObservationCaptureAsync(
+            selected,
+            bootstrap.ActorAppUserId,
+            cancellationToken);
+    }
+
+    public async Task UpdateObservationDraftAsync(
+        string text,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+
+        var capture = _observationCapture;
+        var actorAppUserId = _observationDraftActorAppUserId;
+        var scope = _observationDraftScope;
+        if (capture is null ||
+            actorAppUserId is null ||
+            scope is null ||
+            ObservationDraftHasPendingIntent ||
+            ObservationDraftBusy)
+        {
+            return;
+        }
+
+        if (string.Equals(ObservationDraftText, text, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        ObservationDraftText = text;
+        ObservationDraftStatusText = "正在安全保存到本机…";
+
+        var generation = Volatile.Read(ref _observationCaptureGeneration);
+        var revision = Interlocked.Increment(ref _observationDraftRevision);
+        lock (_observationDraftRevisionGate)
+        {
+            _observationDraftLatestRevisionByGeneration[generation] = revision;
+        }
+
+        var epoch = _observationDraftEpoch;
+        await _observationDraftSaveGate.WaitAsync(cancellationToken);
+        try
+        {
+            if (!IsLatestObservationDraftRevision(generation, revision))
+            {
+                return;
+            }
+
+            bool saved;
+            try
+            {
+                saved = await capture.SaveDraftAsync(
+                    actorAppUserId.Value,
+                    scope,
+                    epoch,
+                    text,
+                    cancellationToken);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch
+            {
+                if (generation == Volatile.Read(ref _observationCaptureGeneration) &&
+                    IsLatestObservationDraftRevision(generation, revision))
+                {
+                    ObservationDraftStatusText =
+                        "草稿暂时无法安全保存。当前内容仍保留在窗口中，请不要关闭应用。";
+                }
+                return;
+            }
+
+            if (generation != Volatile.Read(ref _observationCaptureGeneration) ||
+                !IsLatestObservationDraftRevision(generation, revision))
+            {
+                return;
+            }
+
+            if (saved)
+            {
+                ObservationDraftStatusText = "草稿已安全保存到本机。";
+            }
+            else
+            {
+                _observationDraftScope = null;
+                ObservationDraftStatusText =
+                    "草稿版本已经变化。为避免覆盖另一窗口的内容，已停止继续编辑，请重新选择学科。";
+                NotifyObservationCaptureAvailability();
+            }
+        }
+        finally
+        {
+            _observationDraftSaveGate.Release();
+            if (generation != Volatile.Read(ref _observationCaptureGeneration))
+            {
+                lock (_observationDraftRevisionGate)
+                {
+                    _observationDraftLatestRevisionByGeneration.Remove(generation);
+                }
+            }
+        }
+    }
+
+    public async Task<CreateObservationResult> SubmitObservationDraftAsync(
+        CancellationToken cancellationToken = default)
+    {
+        var capture = _observationCapture;
+        var actorAppUserId = _observationDraftActorAppUserId;
+        var scope = _observationDraftScope;
+        var selected = SelectedTeachingContext;
+        var bootstrap = _personalWorkspace?.Current.Status == PersonalStudentWorkspaceStatus.Ready
+            ? _personalWorkspace.Current.Bootstrap
+            : null;
+
+        if (capture is null ||
+            actorAppUserId is null ||
+            scope is null ||
+            selected is null ||
+            bootstrap is null ||
+            bootstrap.ActorAppUserId != actorAppUserId.Value ||
+            !ContainsExactContext(bootstrap, selected.Context))
+        {
+            return CreateObservationResult.Failed(
+                CreateObservationFailureKind.AuthorityChanged,
+                "XQ_CLIENT_TEACHING_CONTEXT_UNAVAILABLE");
+        }
+
+        ObservationDraftBusy = true;
+        ObservationDraftStatusText = ObservationDraftHasPendingIntent
+            ? "正在重新确认上次提交…"
+            : "正在提交课堂观察…";
+
+        CreateObservationResult result;
+        await _observationDraftSaveGate.WaitAsync(cancellationToken);
+        try
+        {
+            result = ObservationDraftHasPendingIntent
+                ? await capture.RetryPendingAsync(
+                    actorAppUserId.Value,
+                    scope,
+                    cancellationToken)
+                : await capture.SubmitAsync(
+                    actorAppUserId.Value,
+                    scope,
+                    _observationDraftEpoch,
+                    Guid.NewGuid(),
+                    ObservationDraftText,
+                    DateTimeOffset.UtcNow,
+                    new Dictionary<string, string>
+                    {
+                        ["source"] = "windows_quick_capture",
+                    },
+                    cancellationToken);
+        }
+        finally
+        {
+            _observationDraftSaveGate.Release();
+            ObservationDraftBusy = false;
+        }
+
+        if (result.Failure?.Kind is
+            CreateObservationFailureKind.AuthenticationRequired or
+            CreateObservationFailureKind.AuthorityChanged)
+        {
+            await RefreshAuthoritativeStudentsAsync(cancellationToken);
+            return result;
+        }
+
+        if (result.IsSuccess &&
+            (ReferenceEquals(selected, SelectedTeachingContext) ||
+             selected == SelectedTeachingContext))
+        {
+            var recentState = await _personalWorkspace!.LoadRecentAsync(
+                selected.Context,
+                cancellationToken);
+            if (ReferenceEquals(selected, SelectedTeachingContext) ||
+                selected == SelectedTeachingContext)
+            {
+                ApplyRecentState(recentState);
+            }
+        }
+
+        await LoadObservationCaptureAsync(
+            selected,
+            actorAppUserId.Value,
+            cancellationToken);
+
+        if (ReferenceEquals(selected, SelectedTeachingContext) ||
+            selected == SelectedTeachingContext)
+        {
+            ObservationDraftStatusText = ObservationSubmissionStatusText(
+                result,
+                ObservationDraftHasPendingIntent);
+        }
+
+        return result;
     }
 
     public async Task LoadSelectedCaseHistoryAsync(CancellationToken cancellationToken = default)
@@ -2489,6 +2765,138 @@ public sealed class MainWindowViewModel : ObservableObject
         }
     }
 
+    private async Task LoadObservationCaptureAsync(
+        TeachingContextOption selected,
+        Guid actorAppUserId,
+        CancellationToken cancellationToken)
+    {
+        var capture = _observationCapture;
+        if (capture is null)
+        {
+            return;
+        }
+
+        var generation = Interlocked.Increment(ref _observationCaptureGeneration);
+        var scope = ToObservationDraftScope(selected.Context);
+        _observationDraftActorAppUserId = actorAppUserId;
+        _observationDraftScope = scope;
+        _observationDraftEpoch = 0;
+        ObservationDraftHasPendingIntent = false;
+        ObservationDraftBusy = true;
+        ObservationDraftText = string.Empty;
+        ObservationDraftStatusText = "正在读取本机课堂观察草稿…";
+        NotifyObservationCaptureAvailability();
+
+        try
+        {
+            var state = await capture.OpenAsync(
+                actorAppUserId,
+                scope,
+                cancellationToken);
+
+            if (generation != Volatile.Read(ref _observationCaptureGeneration) ||
+                (!ReferenceEquals(selected, SelectedTeachingContext) &&
+                 selected != SelectedTeachingContext))
+            {
+                return;
+            }
+
+            _observationDraftEpoch = state.Draft.Epoch;
+            ObservationDraftText = state.DisplayText;
+            ObservationDraftHasPendingIntent = state.HasPendingIntent;
+            ObservationDraftBusy = false;
+            ObservationDraftStatusText = state.PendingIntent is not null
+                ? "发现上次尚未确认的提交。原文已冻结，只能用“重新确认”继续同一次操作。"
+                : state.Draft.Recovered is not null
+                    ? "已恢复本机草稿；继续输入会自动安全保存。"
+                    : "输入内容会自动安全保存到本机。";
+            NotifyObservationCaptureAvailability();
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch
+        {
+            if (generation != Volatile.Read(ref _observationCaptureGeneration))
+            {
+                return;
+            }
+
+            _observationDraftActorAppUserId = null;
+            _observationDraftScope = null;
+            ObservationDraftBusy = false;
+            ObservationDraftStatusText =
+                "无法安全读取本机课堂观察草稿，已停止编辑以避免覆盖。";
+            NotifyObservationCaptureAvailability();
+        }
+    }
+
+    private void ResetObservationCaptureUiState(string statusText)
+    {
+        Interlocked.Increment(ref _observationCaptureGeneration);
+        _observationDraftActorAppUserId = null;
+        _observationDraftScope = null;
+        _observationDraftEpoch = 0;
+        ObservationDraftText = string.Empty;
+        ObservationDraftHasPendingIntent = false;
+        ObservationDraftBusy = false;
+        ObservationDraftStatusText = SupportsObservationCapture
+            ? statusText
+            : string.Empty;
+        NotifyObservationCaptureAvailability();
+    }
+
+    private bool IsLatestObservationDraftRevision(long generation, long revision)
+    {
+        lock (_observationDraftRevisionGate)
+        {
+            return _observationDraftLatestRevisionByGeneration.TryGetValue(
+                       generation,
+                       out var latest) &&
+                   latest == revision;
+        }
+    }
+
+    private void NotifyObservationCaptureAvailability()
+    {
+        OnPropertyChanged(nameof(CanEditObservationDraft));
+        OnPropertyChanged(nameof(CanSubmitObservationDraft));
+        OnPropertyChanged(nameof(ObservationSubmitLabel));
+    }
+
+    private static string ObservationSubmissionStatusText(
+        CreateObservationResult result,
+        bool hasPendingIntent)
+    {
+        if (result.IsSuccess)
+        {
+            return hasPendingIntent
+                ? "服务器已确认课堂观察；本机恢复状态仍待清理，请用“重新确认”继续同一次操作。"
+                : "课堂观察已提交，服务器最近记录已刷新。";
+        }
+
+        return result.Failure?.Kind switch
+        {
+            CreateObservationFailureKind.AuthenticationRequired =>
+                "登录状态已失效；同一次提交已安全保留，重新登录后继续确认。",
+            CreateObservationFailureKind.AuthorityChanged =>
+                "当前教学权限已经变化；草稿仍安全保存在本机，本次未继续提交。",
+            CreateObservationFailureKind.Validation =>
+                "输入未通过校验；草稿仍保留，可修改后重新提交。",
+            CreateObservationFailureKind.OperationConflict =>
+                "提交标识发生冲突；草稿仍保留，本次已停止。",
+            CreateObservationFailureKind.LocalDurabilityFailure =>
+                "本机草稿或恢复状态无法安全更新；为避免丢失或重复，本次已停止。",
+            CreateObservationFailureKind.ResultUnknown =>
+                "提交结果尚未确认；原文已冻结，只能用“重新确认”继续同一次操作。",
+            CreateObservationFailureKind.Transient =>
+                "服务暂时不可用；原文已冻结，稍后用“重新确认”继续同一次操作。",
+            _ =>
+                "服务器结果无法验证；原文已冻结，避免生成第二次提交。",
+        };
+    }
+
     private bool RecentSnapshotContains(
         PersonalTeachingContext context,
         Guid observationId)
@@ -2519,6 +2927,14 @@ public sealed class MainWindowViewModel : ObservableObject
             Students.Add(student);
         }
     }
+
+    private static ObservationDraftScope ToObservationDraftScope(
+        PersonalTeachingContext context) =>
+        new(
+            context.OrganizationId,
+            context.StudentId,
+            context.SubjectProfileId,
+            context.AssignmentId);
 
     private static StudentLearningScope ToLearningScope(PersonalTeachingContext context) =>
         new(context.OrganizationId, context.StudentId, context.SubjectProfileId);

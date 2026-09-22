@@ -105,6 +105,32 @@ public sealed partial class StudentsView : UserControl
         }
     }
 
+    private async void ObservationDraftBox_TextChanged(
+        object sender,
+        TextChangedEventArgs e)
+    {
+        if (sender is not TextBox textBox ||
+            DataContext is not MainWindowViewModel viewModel ||
+            !viewModel.SupportsObservationCapture ||
+            string.Equals(
+                textBox.Text,
+                viewModel.ObservationDraftText,
+                StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        await viewModel.UpdateObservationDraftAsync(textBox.Text);
+    }
+
+    private async void ObservationSubmit_Click(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is MainWindowViewModel viewModel)
+        {
+            await viewModel.SubmitObservationDraftAsync();
+        }
+    }
+
     private async void RefreshAuthoritativeStudents_Click(object sender, RoutedEventArgs e)
     {
         if (DataContext is MainWindowViewModel viewModel)

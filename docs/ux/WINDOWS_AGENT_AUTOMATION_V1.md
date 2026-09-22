@@ -62,6 +62,15 @@ Shell/auth:
 - `AuthRetry`
 - `AuthClearSession`
 - `AuthStatus`
+- `ObservationDraftText`
+- `ObservationDraftStatus`
+- `ObservationSubmit`
+
+For Windows Quick Capture, `ObservationDraftText` is the editable durable-draft
+Value surface, `ObservationDraftStatus` exposes whether the current text is safe on
+device / unavailable / frozen for retry, and `ObservationSubmit` is the explicit
+consequential-write boundary. Agent acceptance stops before invoking
+`ObservationSubmit` unless the user explicitly authorizes the write.
 
 Student/Learning surface ids remain governed by their existing native UX smoke contract.
 Renaming a frozen id requires coordinated automation-test and contract updates.
