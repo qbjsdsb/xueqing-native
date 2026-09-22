@@ -137,6 +137,11 @@ jobs:
             finally {
               Remove-Item Env:\XUEQING_WINDOWS_PROTOTYPE_MODE -ErrorAction SilentlyContinue
             }
+
+            ./tools/ux/run-windows-agent-quick-capture-smoke.ps1 `
+              -ExecutablePath $executable `
+              -ProcessName $processName `
+              -DiagnosticOutput (Join-Path $diagnosticDirectory 'windows-agent-quick-capture.json')
           }
           finally {
             Get-Process -Name $processName -ErrorAction SilentlyContinue |
