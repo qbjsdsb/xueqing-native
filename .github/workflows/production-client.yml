@@ -30,15 +30,16 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python3 tools/deployment/test_verify_deployment_profile.py
-          python3 tools/deployment/verify_deployment_profile.py \
+          python3 -B tools/deployment/test_verify_deployment_profile.py
+          python3 -B tools/deployment/verify_deployment_profile.py \
             tools/deployment/fixtures/valid_deployment_profile.json
 
       - name: Reject committed session material in deployment tooling
         shell: bash
         run: |
           set -euo pipefail
-          if grep -RniE \
+          if grep -RIniE \
+            --exclude-dir='__pycache__' \
             --exclude='test_verify_deployment_profile.py' \
             --exclude='verify_deployment_profile.py' \
             '(refresh_token|access_token|service[_-]?role|sb_secret_|postgres(ql)?://)' \
