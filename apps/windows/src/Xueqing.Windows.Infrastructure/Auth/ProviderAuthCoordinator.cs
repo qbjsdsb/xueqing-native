@@ -81,10 +81,18 @@ public sealed class ProviderAuthCoordinator
         await _mutationGate.WaitAsync(cancellationToken);
         try
         {
-            if (_tokenSource.Snapshot.Status != ProviderSessionStatus.SignedOut)
+            var status = _tokenSource.Snapshot.Status;
+            if (status is not (ProviderSessionStatus.SignedOut or ProviderSessionStatus.Invalid))
             {
                 throw new InvalidOperationException(
-                    "Explicit sign-in requires a signed-out session. Account switching must close the previous local scope first.");
+                    "Explicit sign-in requires a signed-out/invalid session. Account switching must close the previous local scope first.");
+            }
+
+            if (status == ProviderSessionStatus.Invalid &&
+                await _refreshTokenVault.LoadAsync(cancellationToken) is not null)
+            {
+                throw new InvalidOperationException(
+                    "Invalid session cannot re-authenticate while a refresh credential remains persisted.");
             }
 
             var tokens = await _transport.SignInWithPasswordAsync(

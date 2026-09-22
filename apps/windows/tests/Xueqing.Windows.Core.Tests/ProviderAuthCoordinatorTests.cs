@@ -127,6 +127,31 @@ public sealed class ProviderAuthCoordinatorTests
         Assert.IsNull(await source.GetCurrentAccessTokenAsync());
     }
 
+
+    [TestMethod]
+    public async Task Invalid_session_can_reauthenticate_only_after_refresh_vault_is_clear()
+    {
+        var source = CreateSource();
+        source.Invalidate();
+        var vault = new FakeVault(null);
+        var transport = new FakeTransport
+        {
+            SignInResult = new(
+                "reauth-access",
+                "reauth-refresh",
+                DateTimeOffset.UtcNow.AddMinutes(10)),
+        };
+        var coordinator = new ProviderAuthCoordinator(source, vault, transport);
+
+        await coordinator.SignInWithPasswordAsync(
+            "fictional@example.invalid",
+            "fictional-password");
+
+        Assert.AreEqual(ProviderSessionStatus.Usable, source.Snapshot.Status);
+        Assert.AreEqual("reauth-refresh", vault.Value);
+        Assert.AreEqual("reauth-access", await source.GetCurrentAccessTokenAsync());
+    }
+
     [TestMethod]
     [SupportedOSPlatform("windows")]
     public async Task Dpapi_refresh_token_vault_roundtrips_without_plaintext_and_is_scope_bound()

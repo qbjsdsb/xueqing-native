@@ -3,6 +3,7 @@ package com.xueqing.app.infrastructure.auth
 import com.xueqing.app.infrastructure.remote.ProviderSessionStatus
 import com.xueqing.app.infrastructure.remote.ProviderSessionTokenSource
 import java.time.Instant
+import java.util.concurrent.CancellationException
 import java.util.concurrent.atomic.AtomicBoolean
 
 data class ProviderAuthTokens(
@@ -59,8 +60,17 @@ class ProviderAuthCoordinator(
     suspend fun signInWithPassword(email: String, password: String) = serialized {
         require(email.isNotBlank()) { "Email must not be blank." }
         require(password.isNotBlank()) { "Password must not be blank." }
-        check(tokenSource.snapshot.status == ProviderSessionStatus.SignedOut) {
-            "Explicit sign-in requires a signed-out session. Account switching must close the previous local scope first."
+        val status = tokenSource.snapshot.status
+        check(
+            status == ProviderSessionStatus.SignedOut ||
+                status == ProviderSessionStatus.Invalid
+        ) {
+            "Explicit sign-in requires a signed-out/invalid session. Account switching must close the previous local scope first."
+        }
+        if (status == ProviderSessionStatus.Invalid) {
+            check(refreshTokenVault.load() == null) {
+                "Invalid session cannot re-authenticate while a refresh credential remains persisted."
+            }
         }
 
         val tokens = transport.signInWithPassword(email, password)
@@ -89,6 +99,8 @@ class ProviderAuthCoordinator(
             remoteConfirmed = try {
                 transport.signOutLocal(accessToken)
                 true
+            } catch (error: CancellationException) {
+                throw error
             } catch (_: Exception) {
                 false
             }
@@ -120,6 +132,8 @@ class ProviderAuthCoordinator(
 
         val result = try {
             transport.refresh(persistedRefreshToken)
+        } catch (error: CancellationException) {
+            throw error
         } catch (_: Exception) {
             return ProviderRefreshOutcome.RefreshRequired
         }

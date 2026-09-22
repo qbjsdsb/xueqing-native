@@ -3,6 +3,7 @@ package com.xueqing.app.infrastructure.auth
 import com.xueqing.app.infrastructure.remote.ProviderSessionStatus
 import com.xueqing.app.infrastructure.remote.ProviderSessionTokenSource
 import java.time.Instant
+import kotlin.coroutines.startCoroutine
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertThrows
@@ -138,6 +139,36 @@ class ProviderAuthCoordinatorTest {
 
         assertEquals(ProviderSessionStatus.SignedOut, source.snapshot.status)
         assertNull(source.currentAccessToken())
+    }
+
+
+    @Test
+    fun `invalid session may reauthenticate only after revoked vault is cleared`() {
+        val source = source()
+        source.invalidate()
+        val vault = FakeVault(null)
+        val coordinator = coordinator(
+            source,
+            vault,
+            FakeTransport(
+                signInResult = ProviderAuthTokens(
+                    "reauth-access",
+                    "reauth-refresh",
+                    now.plusSeconds(600),
+                ),
+            ),
+        )
+
+        runSuspend {
+            coordinator.signInWithPassword(
+                "fictional@example.invalid",
+                "fictional-password",
+            )
+        }
+
+        assertEquals(ProviderSessionStatus.Usable, source.snapshot.status)
+        assertEquals("reauth-refresh", vault.value)
+        assertEquals("reauth-access", source.currentAccessToken())
     }
 
     private fun source() = ProviderSessionTokenSource(
