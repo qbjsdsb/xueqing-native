@@ -101,7 +101,7 @@ class HttpStorageTransport(
             } else {
                 connection.errorStream
             }
-            val body = stream?.use { it.readNBytes(MAX_DOWNLOAD_BYTES + 1) } ?: byteArrayOf()
+            val body = stream?.use { readBounded(it, MAX_DOWNLOAD_BYTES + 1) } ?: byteArrayOf()
             StorageDownloadTransportResult.Response(
                 statusCode = statusCode,
                 body = body,
@@ -151,6 +151,25 @@ class HttpStorageTransport(
         } finally {
             connection.disconnect()
         }
+    }
+
+    private fun readBounded(
+        stream: java.io.InputStream,
+        limit: Int,
+    ): ByteArray {
+        require(limit > 0)
+        val output = java.io.ByteArrayOutputStream(minOf(limit, 64 * 1024))
+        val buffer = ByteArray(16 * 1024)
+        var remaining = limit
+
+        while (remaining > 0) {
+            val count = stream.read(buffer, 0, minOf(buffer.size, remaining))
+            if (count < 0) break
+            if (count == 0) continue
+            output.write(buffer, 0, count)
+            remaining -= count
+        }
+        return output.toByteArray()
     }
 
     private fun validateLocator(bucketId: String, objectName: String) {
