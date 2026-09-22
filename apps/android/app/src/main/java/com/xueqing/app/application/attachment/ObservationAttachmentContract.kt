@@ -138,3 +138,42 @@ sealed interface AttachmentCommitResult {
 fun interface AttachmentCommandRemote {
     fun commit(request: CommitObservationAttachmentRequest): AttachmentCommitResult
 }
+
+
+enum class AttachmentReadUnknownReason {
+    Timeout,
+    NetworkFailure,
+    ServerFailure,
+}
+
+enum class AttachmentReadRejection {
+    AccessDenied,
+    InvalidMetadata,
+    UnexpectedResponse,
+}
+
+sealed interface AttachmentReadResult {
+    data class Loaded(
+        val contentType: String,
+        val bytes: ByteArray,
+    ) : AttachmentReadResult
+
+    data object AuthenticationRequired : AttachmentReadResult
+
+    data class UnknownResult(
+        val reason: AttachmentReadUnknownReason,
+    ) : AttachmentReadResult
+
+    data class Rejected(
+        val rejection: AttachmentReadRejection,
+    ) : AttachmentReadResult
+}
+
+fun interface AttachmentReadRemote {
+    /**
+     * Reads only an Attachment already represented by an authoritative commit
+     * receipt. Implementations must revalidate the canonical locator before
+     * issuing a provider request.
+     */
+    fun read(receipt: CommitObservationAttachmentReceipt): AttachmentReadResult
+}

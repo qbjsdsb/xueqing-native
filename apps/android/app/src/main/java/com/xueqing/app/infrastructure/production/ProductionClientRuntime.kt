@@ -39,6 +39,7 @@ import com.xueqing.app.infrastructure.remote.ProviderSessionTokenSource
 import com.xueqing.app.infrastructure.remote.SupabaseCommitObservationAttachmentAdapter
 import com.xueqing.app.infrastructure.remote.SupabaseCreateObservationAdapter
 import com.xueqing.app.infrastructure.remote.SupabaseObservationAttachmentStorageAdapter
+import com.xueqing.app.infrastructure.remote.SupabaseObservationAttachmentReadAdapter
 import com.xueqing.app.infrastructure.remote.SupabasePersonalBootstrapAdapter
 import com.xueqing.app.infrastructure.remote.SupabasePersonalTodayActionsAdapter
 import com.xueqing.app.infrastructure.remote.SupabaseStudentLearningFocusAdapter
@@ -64,6 +65,7 @@ class ProductionClientRuntime private constructor(
     private val rawFocusRemote: StudentLearningFocusRemote,
     private val observationRemote: SupabaseCreateObservationAdapter,
     private val attachmentStorageRemote: SupabaseObservationAttachmentStorageAdapter,
+    val attachmentReadRemote: SupabaseObservationAttachmentReadAdapter,
     private val attachmentCommandRemote: SupabaseCommitObservationAttachmentAdapter,
 ) : ClientSessionController {
     private val processScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -355,6 +357,10 @@ class ProductionClientRuntime private constructor(
                     transport = rpcTransport,
                 ),
                 attachmentStorageRemote = SupabaseObservationAttachmentStorageAdapter(
+                    sessionTokenSource = tokenSource,
+                    transport = storageTransport,
+                ),
+                attachmentReadRemote = SupabaseObservationAttachmentReadAdapter(
                     sessionTokenSource = tokenSource,
                     transport = storageTransport,
                 ),

@@ -2,6 +2,9 @@ package com.xueqing.app.infrastructure.remote
 
 import com.xueqing.app.application.attachment.AttachmentCommitResult
 import com.xueqing.app.application.attachment.AttachmentCommitUnknownReason
+import com.xueqing.app.application.attachment.AttachmentReadRejection
+import com.xueqing.app.application.attachment.AttachmentReadResult
+import com.xueqing.app.application.attachment.AttachmentReadUnknownReason
 import com.xueqing.app.application.attachment.AttachmentUploadRejection
 import com.xueqing.app.application.attachment.AttachmentUploadResult
 import com.xueqing.app.application.attachment.CommitObservationAttachmentRejection
@@ -71,6 +74,148 @@ class SupabaseObservationAttachmentAdapterTest {
             (mismatch as AttachmentUploadResult.Rejected).rejection,
         )
         assertTrue(mismatchTransport.calls.isEmpty())
+    }
+
+    @Test
+    fun attachment_read_uses_authoritative_receipt_and_exact_private_locator() {
+        val receipt = committedReceipt()
+        val transport = RecordingDownloadTransport(
+            StorageDownloadTransportResult.Response(
+                statusCode = 200,
+                body = byteArrayOf(1, 2, 3, 4),
+                contentType = "image/png",
+            ),
+        )
+        val adapter = SupabaseObservationAttachmentReadAdapter(
+            SessionTokenSource { "session-token" },
+            transport,
+        )
+
+        val result = adapter.read(receipt)
+
+        assertTrue(result is AttachmentReadResult.Loaded)
+        val loaded = result as AttachmentReadResult.Loaded
+        assertEquals("image/png", loaded.contentType)
+        assertTrue(byteArrayOf(1, 2, 3, 4).contentEquals(loaded.bytes))
+        val call = transport.calls.single()
+        assertEquals("teaching-attachments-v1", call.bucketId)
+        assertEquals(receipt.objectName, call.objectName)
+        assertEquals("session-token", call.accessToken)
+    }
+
+    @Test
+    fun attachment_read_without_session_fails_closed_before_storage_call() {
+        val transport = RecordingDownloadTransport(
+            StorageDownloadTransportResult.Response(
+                200,
+                byteArrayOf(1, 2, 3, 4),
+                "image/png",
+            ),
+        )
+        val adapter = SupabaseObservationAttachmentReadAdapter(
+            SessionTokenSource { null },
+            transport,
+        )
+
+        assertTrue(adapter.read(committedReceipt()) is AttachmentReadResult.AuthenticationRequired)
+        assertTrue(transport.calls.isEmpty())
+    }
+
+    @Test
+    fun attachment_read_rejects_forged_or_mismatched_metadata_before_or_after_transport() {
+        val base = committedReceipt()
+        val transport = RecordingDownloadTransport(
+            StorageDownloadTransportResult.Response(
+                200,
+                byteArrayOf(1, 2, 3, 4),
+                "image/png",
+            ),
+        )
+        val adapter = SupabaseObservationAttachmentReadAdapter(
+            SessionTokenSource { "session-token" },
+            transport,
+        )
+
+        val forged = adapter.read(
+            base.copy(objectName = base.objectName + "/forged"),
+        )
+        assertTrue(forged is AttachmentReadResult.Rejected)
+        assertEquals(
+            AttachmentReadRejection.InvalidMetadata,
+            (forged as AttachmentReadResult.Rejected).rejection,
+        )
+        assertTrue(transport.calls.isEmpty())
+
+        transport.result = StorageDownloadTransportResult.Response(
+            200,
+            byteArrayOf(1, 2, 3),
+            "image/png",
+        )
+        val wrongSize = adapter.read(base)
+        assertTrue(wrongSize is AttachmentReadResult.Rejected)
+        assertEquals(
+            AttachmentReadRejection.InvalidMetadata,
+            (wrongSize as AttachmentReadResult.Rejected).rejection,
+        )
+
+        transport.result = StorageDownloadTransportResult.Response(
+            200,
+            byteArrayOf(1, 2, 3, 4),
+            "image/jpeg",
+        )
+        val wrongType = adapter.read(base)
+        assertTrue(wrongType is AttachmentReadResult.Rejected)
+        assertEquals(
+            AttachmentReadRejection.InvalidMetadata,
+            (wrongType as AttachmentReadResult.Rejected).rejection,
+        )
+    }
+
+    @Test
+    fun attachment_read_maps_private_denial_and_transient_transport_without_inventing_success() {
+        val receipt = committedReceipt()
+        val transport = RecordingDownloadTransport(
+            StorageDownloadTransportResult.Response(403, byteArrayOf(), "application/json"),
+        )
+        val adapter = SupabaseObservationAttachmentReadAdapter(
+            SessionTokenSource { "session-token" },
+            transport,
+        )
+
+        val denied = adapter.read(receipt)
+        assertTrue(denied is AttachmentReadResult.Rejected)
+        assertEquals(
+            AttachmentReadRejection.AccessDenied,
+            (denied as AttachmentReadResult.Rejected).rejection,
+        )
+
+        transport.result = StorageDownloadTransportResult.Response(
+            404,
+            byteArrayOf(),
+            "application/json",
+        )
+        val hidden = adapter.read(receipt)
+        assertTrue(hidden is AttachmentReadResult.Rejected)
+        assertEquals(
+            AttachmentReadRejection.AccessDenied,
+            (hidden as AttachmentReadResult.Rejected).rejection,
+        )
+
+        transport.result = StorageDownloadTransportResult.Timeout
+        val timeout = adapter.read(receipt)
+        assertTrue(timeout is AttachmentReadResult.UnknownResult)
+        assertEquals(
+            AttachmentReadUnknownReason.Timeout,
+            (timeout as AttachmentReadResult.UnknownResult).reason,
+        )
+
+        transport.result = StorageDownloadTransportResult.NetworkFailure
+        val network = adapter.read(receipt)
+        assertTrue(network is AttachmentReadResult.UnknownResult)
+        assertEquals(
+            AttachmentReadUnknownReason.NetworkFailure,
+            (network as AttachmentReadResult.UnknownResult).reason,
+        )
     }
 
     @Test
@@ -155,6 +300,27 @@ class SupabaseObservationAttachmentAdapterTest {
         assertEquals(request.operationId, result.operationId)
     }
 
+    private fun committedReceipt(): CommitObservationAttachmentReceipt {
+        val request = commitRequest()
+        return CommitObservationAttachmentReceipt(
+            command = "commit_observation_attachment_v1",
+            operationId = request.operationId,
+            attachmentId = request.attachmentId,
+            observationId = request.observationId,
+            actorAppUserId = UUID.fromString("10000000-0000-0000-0000-000000000001"),
+            organizationId = request.organizationId,
+            studentId = request.studentId,
+            subjectProfileId = request.subjectProfileId,
+            subjectKey = "chinese",
+            assignmentId = request.assignmentId,
+            bucketId = "teaching-attachments-v1",
+            objectName = canonicalObjectName(request),
+            contentType = "image/png",
+            byteSize = 4,
+            serverCommittedAt = java.time.Instant.parse("2026-09-20T12:00:00Z"),
+        )
+    }
+
     private fun uploadRequest() = ObservationAttachmentUploadRequest(
         objectName = "v1/org/20000000-0000-0000-0000-000000000001/" +
             "student/30000000-0000-0000-0000-000000000001/" +
@@ -218,6 +384,17 @@ class SupabaseObservationAttachmentAdapterTest {
         val calls = mutableListOf<StorageUploadCall>()
 
         override fun upload(call: StorageUploadCall): StorageTransportResult {
+            calls += call
+            return result
+        }
+    }
+
+    private class RecordingDownloadTransport(
+        var result: StorageDownloadTransportResult,
+    ) : StorageDownloadTransport {
+        val calls = mutableListOf<StorageDownloadCall>()
+
+        override fun download(call: StorageDownloadCall): StorageDownloadTransportResult {
             calls += call
             return result
         }

@@ -27,13 +27,34 @@ fun interface StorageTransport {
     fun upload(call: StorageUploadCall): StorageTransportResult
 }
 
+data class StorageDownloadCall(
+    val bucketId: String,
+    val objectName: String,
+    val accessToken: String,
+)
+
+sealed interface StorageDownloadTransportResult {
+    data class Response(
+        val statusCode: Int,
+        val body: ByteArray,
+        val contentType: String?,
+    ) : StorageDownloadTransportResult
+
+    data object Timeout : StorageDownloadTransportResult
+    data object NetworkFailure : StorageDownloadTransportResult
+}
+
+fun interface StorageDownloadTransport {
+    fun download(call: StorageDownloadCall): StorageDownloadTransportResult
+}
+
 class HttpStorageTransport(
     baseUrl: String,
     private val publishableKey: String,
     private val connectTimeoutMillis: Int = 15_000,
     private val readTimeoutMillis: Int = 30_000,
     allowInsecureLoopbackForDevelopment: Boolean = false,
-) : StorageTransport {
+) : StorageTransport, StorageDownloadTransport {
     private val normalizedBaseUrl = baseUrl.trimEnd('/')
 
     init {
@@ -58,11 +79,45 @@ class HttpStorageTransport(
         require(readTimeoutMillis > 0)
     }
 
+    override fun download(call: StorageDownloadCall): StorageDownloadTransportResult {
+        validateLocator(call.bucketId, call.objectName)
+        require(call.accessToken.isNotBlank())
+
+        val connection = URI.create(
+            "${normalizedBaseUrl}/storage/v1/object/authenticated/${call.bucketId}/${call.objectName}",
+        ).toURL().openConnection() as HttpURLConnection
+
+        return try {
+            connection.requestMethod = "GET"
+            connection.connectTimeout = connectTimeoutMillis
+            connection.readTimeout = readTimeoutMillis
+            connection.setRequestProperty("apikey", publishableKey)
+            connection.setRequestProperty("Authorization", "Bearer ${call.accessToken}")
+            connection.setRequestProperty("Accept", "image/jpeg, image/png, image/webp")
+
+            val statusCode = connection.responseCode
+            val stream = if (statusCode in 200..299) {
+                connection.inputStream
+            } else {
+                connection.errorStream
+            }
+            val body = stream?.use { it.readNBytes(MAX_DOWNLOAD_BYTES + 1) } ?: byteArrayOf()
+            StorageDownloadTransportResult.Response(
+                statusCode = statusCode,
+                body = body,
+                contentType = connection.contentType,
+            )
+        } catch (_: SocketTimeoutException) {
+            StorageDownloadTransportResult.Timeout
+        } catch (_: IOException) {
+            StorageDownloadTransportResult.NetworkFailure
+        } finally {
+            connection.disconnect()
+        }
+    }
+
     override fun upload(call: StorageUploadCall): StorageTransportResult {
-        require(call.bucketId.matches(SAFE_SEGMENT)) { "Invalid Storage bucket id." }
-        require(call.objectName.matches(SAFE_OBJECT_NAME)) { "Invalid Storage object name." }
-        require(!call.objectName.startsWith('/') && !call.objectName.endsWith('/'))
-        require(!call.objectName.contains("//") && !call.objectName.contains(".."))
+        validateLocator(call.bucketId, call.objectName)
         require(call.accessToken.isNotBlank())
         require(call.contentType in ALLOWED_CONTENT_TYPES)
         require(call.body.isNotEmpty())
@@ -98,10 +153,18 @@ class HttpStorageTransport(
         }
     }
 
+    private fun validateLocator(bucketId: String, objectName: String) {
+        require(bucketId.matches(SAFE_SEGMENT)) { "Invalid Storage bucket id." }
+        require(objectName.matches(SAFE_OBJECT_NAME)) { "Invalid Storage object name." }
+        require(!objectName.startsWith('/') && !objectName.endsWith('/'))
+        require(!objectName.contains("//") && !objectName.contains(".."))
+    }
+
     private companion object {
         val DEVELOPMENT_LOOPBACK_HOSTS = setOf("127.0.0.1", "localhost", "10.0.2.2")
         val SAFE_SEGMENT = Regex("^[a-z0-9-]+$")
         val SAFE_OBJECT_NAME = Regex("^[a-z0-9-/]+$")
+        const val MAX_DOWNLOAD_BYTES = 6_291_456
         val ALLOWED_CONTENT_TYPES = setOf("image/jpeg", "image/png", "image/webp")
     }
 }
