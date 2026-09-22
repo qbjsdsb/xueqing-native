@@ -1,0 +1,48 @@
+name: production-client
+
+on:
+  pull_request:
+    paths:
+      - 'contracts/operations/PRODUCTION_CLIENT_DEPLOYMENT_SESSION_V1.md'
+      - 'contracts/schemas/DEPLOYMENT_PROFILE_V1.schema.json'
+      - 'tools/deployment/**'
+      - '.github/workflows/production-client.yml'
+      - 'apps/windows/**'
+      - 'apps/android/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-client-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  deployment-profile-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+
+      - name: Validate deployment profile contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/deployment/test_verify_deployment_profile.py
+          python3 tools/deployment/verify_deployment_profile.py \
+            tools/deployment/fixtures/valid_deployment_profile.json
+
+      - name: Reject committed session material in deployment tooling
+        shell: bash
+        run: |
+          set -euo pipefail
+          if grep -RniE \
+            --exclude='test_verify_deployment_profile.py' \
+            --exclude='verify_deployment_profile.py' \
+            '(refresh_token|access_token|service[_-]?role|sb_secret_|postgres(ql)?://)' \
+            tools/deployment contracts/schemas/DEPLOYMENT_PROFILE_V1.schema.json; then
+            echo 'Deployment profile/tooling contains forbidden session or privileged credential material.' >&2
+            exit 1
+          fi
