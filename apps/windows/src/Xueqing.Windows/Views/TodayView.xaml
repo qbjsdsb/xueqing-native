@@ -65,6 +65,7 @@
                                 Grid.Column="1"
                                 VerticalAlignment="Center"
                                 AutomationProperties.Name="重新确认尚未确认的学情问题提交"
+                                Loaded="RetryPendingLearningCaseButton_Loaded"
                                 Click="RetryPendingLearningCase_Click"
                                 Content="重新确认"
                                 Tag="{Binding Request}" />
@@ -103,6 +104,7 @@
                                 Grid.Column="1"
                                 VerticalAlignment="Center"
                                 AutomationProperties.Name="重新确认尚未确认的行动操作"
+                                Loaded="RetryPendingActionProgressionButton_Loaded"
                                 Click="RetryPendingActionProgression_Click"
                                 Content="重新确认"
                                 Tag="{Binding Intent}" />
@@ -141,6 +143,7 @@
                                 Grid.Column="1"
                                 VerticalAlignment="Center"
                                 AutomationProperties.Name="重新确认尚未确认的 Case 生命周期操作"
+                                Loaded="RetryPendingCaseLifecycleButton_Loaded"
                                 Click="RetryPendingCaseLifecycle_Click"
                                 Content="重新确认"
                                 Tag="{Binding Intent}" />
@@ -186,14 +189,14 @@
                                 <Button
                                     Visibility="Collapsed"
                                     AutomationProperties.Name="调整行动日期"
-                                    Loaded="ActionProgressionButton_Loaded"
+                                    Loaded="RescheduleActionButton_Loaded"
                                     Click="RescheduleAction_Click"
                                     Content="改期"
                                     Tag="{Binding}" />
                                 <Button
                                     Visibility="Collapsed"
                                     AutomationProperties.Name="验证并安排下一步"
-                                    Loaded="ActionProgressionButton_Loaded"
+                                    Loaded="VerifyActionButton_Loaded"
                                     Click="VerifyAction_Click"
                                     Content="验证"
                                     Tag="{Binding}" />
