@@ -64,6 +64,7 @@ completed_gates:
 open_gates:
   - android-final-native-ux-acceptance
   - production-client-deployment-profile-session-auth
+  - windows-agent-readiness
   - cloudbase-provider-conformance-spike
   - signing-and-recovery-gate
   - v1-release-candidate-acceptance
@@ -76,6 +77,7 @@ next_execution:
     - android-final-native-ux-acceptance
   operator_blocked: []
   after_current_green:
+    - windows-agent-readiness
     - cloudbase-provider-conformance-spike
     - signing-and-recovery-gate
     - v1-release-candidate-acceptance
