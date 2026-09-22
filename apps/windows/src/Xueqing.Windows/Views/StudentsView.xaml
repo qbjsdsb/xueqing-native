@@ -179,6 +179,7 @@
                         <Button
                             Grid.Column="1"
                             VerticalAlignment="Top"
+                            AutomationProperties.AutomationId="RefreshAuthoritativeStudents"
                             AutomationProperties.Name="刷新任教学员与最近记录"
                             Click="RefreshAuthoritativeStudents_Click"
                             Content="刷新"
@@ -427,14 +428,14 @@
                                                     <Button
                                                         Visibility="Collapsed"
                                                         AutomationProperties.Name="调整当前关注的行动日期"
-                                                        Loaded="ActionProgressionButton_Loaded"
+                                                        Loaded="RescheduleFocusActionButton_Loaded"
                                                         Click="RescheduleFocusAction_Click"
                                                         Content="改期"
                                                         Tag="{Binding}" />
                                                     <Button
                                                         Visibility="Collapsed"
                                                         AutomationProperties.Name="验证当前关注并安排下一步"
-                                                        Loaded="ActionProgressionButton_Loaded"
+                                                        Loaded="VerifyFocusActionButton_Loaded"
                                                         Click="VerifyFocusAction_Click"
                                                         Content="验证"
                                                         Tag="{Binding}" />
@@ -569,6 +570,7 @@
                                                 Margin="12,0,0,0"
                                                 VerticalAlignment="Top"
                                                 AutomationProperties.Name="从这条课堂观察形成学情问题"
+                                                Loaded="CreateLearningCaseButton_Loaded"
                                                 Click="CreateLearningCase_Click"
                                                 Content="形成学情问题"
                                                 Tag="{Binding}" />
