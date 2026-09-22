@@ -253,16 +253,16 @@ class ProviderAuthCoordinatorTest {
     }
 
     private fun <T> runSuspend(block: suspend () -> T): T {
-        var result: Result<T>? = null
+        var completion: Result<T>? = null
         block.startCoroutine(
             object : kotlin.coroutines.Continuation<T> {
                 override val context = kotlin.coroutines.EmptyCoroutineContext
 
-                override fun resumeWith(value: Result<T>) {
-                    result = value
+                override fun resumeWith(result: Result<T>) {
+                    completion = result
                 }
             },
         )
-        return checkNotNull(result).getOrThrow()
+        return checkNotNull(completion).getOrThrow()
     }
 }
