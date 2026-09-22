@@ -141,6 +141,10 @@ class ProductionClientRuntime private constructor(
         )
         try {
             authCoordinator.signInWithPassword(email, password)
+            // A later successful auth mutation must release a process-start
+            // failure; otherwise the synchronous read barrier would keep
+            // returning ConfigurationUnavailable after the session recovered.
+            startupFailure = null
             mutableSessionState.value = ClientSessionState(
                 ClientSessionStage.Authenticated,
             )
@@ -173,7 +177,11 @@ class ProductionClientRuntime private constructor(
             "正在重新连接…",
         )
         try {
-            applyRefreshOutcome(authCoordinator.restore())
+            val outcome = authCoordinator.restore()
+            // Restore may succeed after a transient vault/provider failure at
+            // process start. Do not let that old failure poison future reads.
+            startupFailure = null
+            applyRefreshOutcome(outcome)
         } catch (_: Throwable) {
             mutableSessionState.value = ClientSessionState(
                 ClientSessionStage.ReconnectRequired,
@@ -201,6 +209,9 @@ class ProductionClientRuntime private constructor(
         )
         try {
             val outcome = authCoordinator.signOut()
+            // A confirmed local session mutation means the auth/runtime
+            // boundary is usable again even if initial process restore failed.
+            startupFailure = null
             mutableSessionState.value = ClientSessionState(
                 ClientSessionStage.SignedOut,
                 if (outcome == ProviderSignOutOutcome.LocalOnlyRemoteUnconfirmed) {
