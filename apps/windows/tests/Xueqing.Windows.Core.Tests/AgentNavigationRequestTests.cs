@@ -54,6 +54,7 @@ public sealed class AgentNavigationRequestTests
     [DataRow("xueqing://unknown")]
     [DataRow("xueqing://today/extra")]
     [DataRow("xueqing://student/not-a-guid")]
+    [DataRow("xueqing://student:1234/11111111-1111-4111-8111-111111111111")]
     [DataRow("xueqing://student/11111111-1111-4111-8111-111111111111/extra")]
     [DataRow("xueqing://student/11111111-1111-4111-8111-111111111111?organization=aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")]
     [DataRow("xueqing://learning/22222222-2222-4222-8222-222222222222#submit")]
