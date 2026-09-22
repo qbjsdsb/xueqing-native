@@ -186,18 +186,19 @@ function Stop-Xueqing {
 function Read-CreateObservationCallCount {
     param([Parameter(Mandatory = $true)][string]$StatePath)
 
-    return [int](Wait-Until -TimeoutSeconds 5 -FailureMessage 'Loopback provider call counter is unavailable.' -Condition {
-        if (-not (Test-Path $StatePath)) {
-            return $null
+    $deadline = [DateTimeOffset]::UtcNow.AddSeconds(5)
+    do {
+        if (Test-Path $StatePath) {
+            $value = (Get-Content $StatePath -Raw).Trim()
+            if ($value -match '^\d+$') {
+                return [int]$value
+            }
         }
 
-        $value = (Get-Content $StatePath -Raw).Trim()
-        if ($value -notmatch '^\d+$') {
-            return $null
-        }
+        Start-Sleep -Milliseconds 100
+    } while ([DateTimeOffset]::UtcNow -lt $deadline)
 
-        return $value
-    })
+    throw 'Loopback provider call counter is unavailable.'
 }
 
 function Start-LoopbackProvider {
