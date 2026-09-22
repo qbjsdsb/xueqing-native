@@ -1,0 +1,58 @@
+name: hosted-production-e2e
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_fictional_mutation:
+        description: 'Create temporary fictional Auth/business fixtures and clean them up after the run'
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hosted-production-e2e
+  cancel-in-progress: false
+
+jobs:
+  hosted-fictional-acceptance:
+    if: ${{ inputs.confirm_fictional_mutation }}
+    environment: production-acceptance
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      XUEQING_ACCEPTANCE_SERVICE_ROLE_KEY: ${{ secrets.XUEQING_ACCEPTANCE_SERVICE_ROLE_KEY }}
+
+    steps:
+      - name: Checkout exact selected source
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Require protected acceptance credential
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$XUEQING_ACCEPTANCE_SERVICE_ROLE_KEY"
+          echo "::add-mask::$XUEQING_ACCEPTANCE_SERVICE_ROLE_KEY"
+
+      - name: Render exact-source production profile
+        shell: bash
+        run: |
+          set -euo pipefail
+          profile="$RUNNER_TEMP/deployment_profile.json"
+          python3 -B tools/deployment/render_deployment_profile.py             deployment/production_profile.template.json             "$profile"             "$(git rev-parse HEAD)"
+          python3 -B tools/deployment/verify_deployment_profile.py "$profile"
+          python3 - "$profile" >> "$GITHUB_ENV" <<'PY'
+          import json, pathlib, sys
+          p=json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
+          print("XUEQING_ACCEPTANCE_API_URL="+p["project_origin"])
+          print("XUEQING_ACCEPTANCE_PUBLISHABLE_KEY="+p["publishable_key"])
+          print("XUEQING_ACCEPTANCE_EDGE_REGION="+p["required_edge_region"])
+          PY
+
+      - name: Run isolated hosted fictional acceptance
+        shell: bash
+        run: bash tools/production/run-hosted-production-e2e.sh
