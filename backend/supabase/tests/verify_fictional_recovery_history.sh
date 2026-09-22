@@ -187,11 +187,10 @@ api_assignment_snapshot="$(
     -H "Authorization: Bearer $SERVICE_ROLE_KEY"
 )"
 
-api_assignment_snapshot_parity=true
-if ! API_ASSIGNMENT_SNAPSHOT="$api_assignment_snapshot" \
-  ASSIGNMENT_OLD="$assignment_a_old" ASSIGNMENT_NEW="$assignment_a_new" \
-  ACTOR_A="$actor_a" ACTOR_B="$actor_b" \
-  python3 - <<'PY'
+API_ASSIGNMENT_SNAPSHOT="$api_assignment_snapshot" \
+ASSIGNMENT_OLD="$assignment_a_old" ASSIGNMENT_NEW="$assignment_a_new" \
+ACTOR_A="$actor_a" ACTOR_B="$actor_b" \
+python3 - <<'PY'
 import json
 import os
 
@@ -208,10 +207,6 @@ if old["teacher_app_user_id"] != os.environ["ACTOR_A"] or old["active"] is not F
 if new["teacher_app_user_id"] != os.environ["ACTOR_B"] or new["active"] is not True:
     raise SystemExit(f"Data API current assignment state mismatch: {new}")
 PY
-then
-  api_assignment_snapshot_parity=false
-  echo "Direct service-role Data API assignment parity diverged; continuing product-RPC restore proof before failing the Gate." >&2
-fi
 
 rpc_call "$ACTOR_TOKEN_A" get_personal_bootstrap_v1 '{}'
 require_success "Former teacher restored personal bootstrap"
@@ -361,10 +356,5 @@ begin
 end;
 $xq$;
 SQL
-
-if [[ "$api_assignment_snapshot_parity" != 'true' ]]; then
-  echo "Product restore checks completed, but direct service-role Data API assignment parity still diverges from restored PostgreSQL state." >&2
-  exit 1
-fi
 
 echo "Restored business history semantics passed: Case/Action replay, lifecycle, handoff, revoked identity and sent Invitation Delivery remain coherent."
