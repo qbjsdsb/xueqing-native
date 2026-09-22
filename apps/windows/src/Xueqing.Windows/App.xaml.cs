@@ -13,15 +13,34 @@ public partial class App : Application
     private Window? _window;
     private ProductionProviderClientRuntime? _productionRuntime;
     private AgentNavigationRequest? _pendingAgentNavigation;
+    private bool _startupStarted;
 
     public App()
     {
         InitializeComponent();
     }
 
-    protected override async void OnLaunched(LaunchActivatedEventArgs args)
+    protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
-        _pendingAgentNavigation ??= AgentProtocolActivation.ReadCurrentNavigation();
+        _ = args;
+        StartInitialActivation(AgentProtocolActivation.ReadCurrentNavigation());
+    }
+
+    internal void HandleInitialActivation(AppActivationArguments activation)
+    {
+        StartInitialActivation(AgentProtocolActivation.ReadNavigation(activation));
+    }
+
+    private async void StartInitialActivation(AgentNavigationRequest? navigation)
+    {
+        _pendingAgentNavigation ??= navigation;
+
+        if (_startupStarted)
+        {
+            return;
+        }
+
+        _startupStarted = true;
 
         var localReferenceWorkspace =
             LocalReferenceProviderTeachingWorkspaceFactory.CreateFromEnvironment();
