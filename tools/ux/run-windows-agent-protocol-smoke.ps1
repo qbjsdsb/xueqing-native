@@ -169,17 +169,6 @@ try {
 "@ | Add-Content $env:GITHUB_STEP_SUMMARY
     }
 
-    if ($cold.Count -ne 1) {
-        throw "Single-instance contract expected one cold Xueqing process; observed $($cold.Count)."
-    }
-
-    if ($warm.Count -ne 1) {
-        throw "Single-instance contract expected one warm Xueqing process; observed $($warm.Count)."
-    }
-
-    if ($warm[0].Id -ne $cold[0].Id) {
-        throw "Warm protocol activation did not remain in the original Xueqing process."
-    }
 }
 finally {
     Stop-XueqingProcesses

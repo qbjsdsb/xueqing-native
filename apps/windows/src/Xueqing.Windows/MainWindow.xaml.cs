@@ -12,7 +12,6 @@ public sealed partial class MainWindow : Window
     private AgentNavigationRequest? _initialAgentNavigation;
     private bool _organizationWorkspace;
     private bool _signingOut;
-    private bool _agentNavigationReady;
 
     public MainWindowViewModel ViewModel { get; }
 
@@ -52,7 +51,6 @@ public sealed partial class MainWindow : Window
         ApplyWorkspace(isOrganization: false);
         await ViewModel.InitializeAsync();
         ApplyOrganizationWorkspaceAccess();
-        _agentNavigationReady = true;
         await ApplyInitialAgentNavigationAsync();
     }
 
@@ -60,30 +58,11 @@ public sealed partial class MainWindow : Window
     {
         var request = _initialAgentNavigation;
         _initialAgentNavigation = null;
-        if (request is not null)
+        if (request is null)
         {
-            await ApplyAgentNavigationCoreAsync(request);
-        }
-    }
-
-    internal Task ApplyAgentNavigationAsync(AgentNavigationRequest request)
-    {
-        ArgumentNullException.ThrowIfNull(request);
-
-        if (!_agentNavigationReady)
-        {
-            // Bootstrap still owns the authority transition. Keep only the
-            // latest navigation request and resolve it after initialization.
-            _initialAgentNavigation = request;
-            return Task.CompletedTask;
+            return;
         }
 
-        return ApplyAgentNavigationCoreAsync(request);
-    }
-
-    private async Task ApplyAgentNavigationCoreAsync(
-        AgentNavigationRequest request)
-    {
         ApplyWorkspace(isOrganization: false);
 
         switch (request.Kind)

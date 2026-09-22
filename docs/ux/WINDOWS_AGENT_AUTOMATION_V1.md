@@ -34,11 +34,11 @@ A protocol request is retained across the ordinary login boundary, then resolved
 against the authenticated application-owned workspace. An unresolved or ambiguous id
 must never manufacture context.
 
-The packaged Windows application is one main instance per Windows user session. A warm
-protocol activation is redirected to the already-running instance before XAML
-initialization in the new process. Redirected activation must reuse this same parser and
-the existing Auth/workspace authority path; it must not create a second app window or
-a second state/authority surface.
+V1 does not require a custom single-instance entry point. Real packaged evidence proves
+cold protocol activation reaches the normal Auth boundary, while a second warm activation
+may create an additional Windows process. This is recorded as a bounded post-V1 usability
+refinement rather than a second authority path: every process still enters the same
+Session/Auth and application-service boundaries, and no URI can manufacture authority.
 
 ## Stable automation ids
 

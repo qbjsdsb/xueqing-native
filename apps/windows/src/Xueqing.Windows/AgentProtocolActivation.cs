@@ -10,23 +10,8 @@ internal static class AgentProtocolActivation
     {
         try
         {
-            return ReadNavigation(
-                AppInstance.GetCurrent().GetActivatedEventArgs());
-        }
-        catch
-        {
-            // External activation is never allowed to prevent normal startup.
-            return null;
-        }
-    }
-
-    public static AgentNavigationRequest? ReadNavigation(
-        AppActivationArguments? activation)
-    {
-        try
-        {
-            if (activation is null ||
-                activation.Kind != ExtendedActivationKind.Protocol ||
+            var activation = AppInstance.GetCurrent().GetActivatedEventArgs();
+            if (activation.Kind != ExtendedActivationKind.Protocol ||
                 activation.Data is not IProtocolActivatedEventArgs protocolArgs)
             {
                 return null;
@@ -40,8 +25,9 @@ internal static class AgentProtocolActivation
         }
         catch
         {
-            // Malformed/unsupported activation fails closed to the ordinary
-            // authenticated application path.
+            // External activation is never allowed to prevent normal startup.
+            // Malformed/unsupported activation therefore fails closed to the
+            // ordinary authenticated application path.
             return null;
         }
     }
