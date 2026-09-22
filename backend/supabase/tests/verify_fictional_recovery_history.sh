@@ -135,13 +135,21 @@ docker exec -i "$DB_CONTAINER" psql -U postgres -d postgres -v ON_ERROR_STOP=1 \
   -v former_operation="$former_operation" \
   -v current_operation="$current_operation" \
   -v revoked_operation="$revoked_operation" >/dev/null <<'SQL'
+select pg_catalog.set_config('xq.assignment_old', :'assignment_old', false);
+select pg_catalog.set_config('xq.assignment_new', :'assignment_new', false);
+select pg_catalog.set_config('xq.actor_a', :'actor_a', false);
+select pg_catalog.set_config('xq.actor_b', :'actor_b', false);
+select pg_catalog.set_config('xq.former_operation', :'former_operation', false);
+select pg_catalog.set_config('xq.current_operation', :'current_operation', false);
+select pg_catalog.set_config('xq.revoked_operation', :'revoked_operation', false);
+
 do $xq$
 begin
     if not exists (
         select 1
           from public.student_teacher_assignments
-         where id = :'assignment_old'::uuid
-           and teacher_app_user_id = :'actor_a'::uuid
+         where id = pg_catalog.current_setting('xq.assignment_old')::uuid
+           and teacher_app_user_id = pg_catalog.current_setting('xq.actor_a')::uuid
            and not active
     ) then
         raise exception 'XQ_RESTORE_FORMER_ASSIGNMENT_NOT_INACTIVE_BEFORE_AUTH_TEST';
@@ -150,8 +158,8 @@ begin
     if not exists (
         select 1
           from public.student_teacher_assignments
-         where id = :'assignment_new'::uuid
-           and teacher_app_user_id = :'actor_b'::uuid
+         where id = pg_catalog.current_setting('xq.assignment_new')::uuid
+           and teacher_app_user_id = pg_catalog.current_setting('xq.actor_b')::uuid
            and active
     ) then
         raise exception 'XQ_RESTORE_CURRENT_ASSIGNMENT_NOT_ACTIVE_BEFORE_AUTH_TEST';
@@ -161,9 +169,9 @@ begin
         select 1
           from public.operation_receipts
          where operation_id in (
-             :'former_operation'::uuid,
-             :'current_operation'::uuid,
-             :'revoked_operation'::uuid
+             pg_catalog.current_setting('xq.former_operation')::uuid,
+             pg_catalog.current_setting('xq.current_operation')::uuid,
+             pg_catalog.current_setting('xq.revoked_operation')::uuid
          )
     ) then
         raise exception 'XQ_RESTORE_AUTH_TEST_OPERATION_ID_COLLISION';
@@ -290,31 +298,40 @@ docker exec -i "$DB_CONTAINER" psql -U postgres -d postgres -v ON_ERROR_STOP=1 \
   -v case_b="$case_b_id" \
   -v delivery="$delivery_id" \
   -v handoff_observation="$handoff_observation_id" >/dev/null <<'SQL'
+select pg_catalog.set_config('xq.actor_a', :'actor_a', false);
+select pg_catalog.set_config('xq.actor_b', :'actor_b', false);
+select pg_catalog.set_config('xq.assignment_old', :'assignment_old', false);
+select pg_catalog.set_config('xq.assignment_new', :'assignment_new', false);
+select pg_catalog.set_config('xq.case_a', :'case_a', false);
+select pg_catalog.set_config('xq.case_b', :'case_b', false);
+select pg_catalog.set_config('xq.delivery', :'delivery', false);
+select pg_catalog.set_config('xq.handoff_observation', :'handoff_observation', false);
+
 do $xq$
 begin
     if exists (
         select 1 from public.student_teacher_assignments
-         where id = :'assignment_old'::uuid and active
+         where id = pg_catalog.current_setting('xq.assignment_old')::uuid and active
     ) then
         raise exception 'XQ_RESTORE_FORMER_ASSIGNMENT_REACTIVATED';
     end if;
     if not exists (
         select 1 from public.student_teacher_assignments
-         where id = :'assignment_new'::uuid
-           and teacher_app_user_id = :'actor_b'::uuid
+         where id = pg_catalog.current_setting('xq.assignment_new')::uuid
+           and teacher_app_user_id = pg_catalog.current_setting('xq.actor_b')::uuid
            and active
     ) then
         raise exception 'XQ_RESTORE_CURRENT_ASSIGNMENT_MISSING';
     end if;
     if not exists (
         select 1 from public.learning_cases
-         where id = :'case_a'::uuid and version = 2
+         where id = pg_catalog.current_setting('xq.case_a')::uuid and version = 2
     ) then
         raise exception 'XQ_RESTORE_VERIFICATION_CASE_VERSION_LOST';
     end if;
     if not exists (
         select 1 from public.learning_cases
-         where id = :'case_b'::uuid and state = 'intervening' and version = 7
+         where id = pg_catalog.current_setting('xq.case_b')::uuid and state = 'intervening' and version = 7
     ) then
         raise exception 'XQ_RESTORE_LIFECYCLE_STATE_LOST';
     end if;
@@ -330,14 +347,14 @@ begin
     end if;
     if not exists (
         select 1 from public.organization_invitation_deliveries
-         where id = :'delivery'::uuid and status = 'sent'
+         where id = pg_catalog.current_setting('xq.delivery')::uuid and status = 'sent'
     ) then
         raise exception 'XQ_RESTORE_SENT_DELIVERY_LOST';
     end if;
     if not exists (
         select 1 from public.observations
-         where id = :'handoff_observation'::uuid
-           and actor_app_user_id = :'actor_b'::uuid
+         where id = pg_catalog.current_setting('xq.handoff_observation')::uuid
+           and actor_app_user_id = pg_catalog.current_setting('xq.actor_b')::uuid
     ) then
         raise exception 'XQ_RESTORE_CURRENT_TEACHER_APPEND_NOT_RECORDED';
     end if;
