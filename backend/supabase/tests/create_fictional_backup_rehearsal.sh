@@ -5,6 +5,11 @@ output_dir="${1:?usage: create_fictional_backup_rehearsal.sh OUTPUT_DIR}"
 rm -rf "$output_dir"
 mkdir -p "$output_dir/plain/database" "$output_dir/plain/objects"
 
+now_ms() {
+  date +%s%3N
+}
+backup_started_ms="$(now_ms)"
+
 status_env="$(mktemp)"
 supabase status --workdir backend -o env > "$status_env"
 set -a
@@ -156,6 +161,9 @@ end;
 $xq$;
 SQL
 
+pre_backup_table_state_json="$(bash tools/backup/snapshot_public_table_state.sh "$db_container")"
+
+db_started_ms="$(now_ms)"
 db_started_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 docker exec "$db_container" pg_dump \
   -U postgres -d postgres \
@@ -165,7 +173,9 @@ docker exec "$db_container" pg_dump \
   --no-owner \
   --no-acl > "$output_dir/plain/database/xueqing.dump"
 db_finished_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+db_finished_ms="$(now_ms)"
 
+object_started_ms="$(now_ms)"
 object_started_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 object_file="$output_dir/plain/objects/$attachment_id.bin"
 curl --fail-with-body --silent --show-error \
@@ -174,6 +184,7 @@ curl --fail-with-body --silent --show-error \
   -H "Authorization: Bearer $SERVICE_ROLE_KEY" \
   --output "$object_file"
 object_finished_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+object_finished_ms="$(now_ms)"
 
 expected_size="$(
   docker exec "$db_container" psql -U postgres -d postgres -Atc \
@@ -199,6 +210,18 @@ mapfile -t migrations < <(
 )
 
 table_state_json="$(bash tools/backup/snapshot_public_table_state.sh "$db_container")"
+PRE_BACKUP_TABLE_STATE="$pre_backup_table_state_json" \
+POST_BACKUP_TABLE_STATE="$table_state_json" \
+python3 - <<'PY'
+import json
+import os
+
+before = json.loads(os.environ["PRE_BACKUP_TABLE_STATE"])
+after = json.loads(os.environ["POST_BACKUP_TABLE_STATE"])
+if before != after:
+    raise SystemExit("fictional quiesced-window changed authoritative DB state during backup")
+PY
+
 migrations_json="$(
   printf '%s\n' "${migrations[@]}" | python3 -c '
 import json,sys
@@ -293,6 +316,36 @@ gpg --batch --yes --pinentry-mode loopback \
 rm -f "$output_dir/archive.tar"
 rm -rf "$output_dir/plain"
 rm -f "$png_file"
+
+backup_finished_ms="$(now_ms)"
+db_backup_duration_ms="$((db_finished_ms - db_started_ms))"
+object_backup_duration_ms="$((object_finished_ms - object_started_ms))"
+consistency_capture_span_ms="$((object_finished_ms - db_started_ms))"
+backup_total_duration_ms="$((backup_finished_ms - backup_started_ms))"
+
+DB_BACKUP_DURATION_MS="$db_backup_duration_ms" \
+OBJECT_BACKUP_DURATION_MS="$object_backup_duration_ms" \
+CONSISTENCY_CAPTURE_SPAN_MS="$consistency_capture_span_ms" \
+BACKUP_TOTAL_DURATION_MS="$backup_total_duration_ms" \
+python3 - "$output_dir/backup_metrics.json" <<'PY'
+import json
+import os
+import pathlib
+import sys
+
+metrics = {
+    "database_backup_duration_ms": int(os.environ["DB_BACKUP_DURATION_MS"]),
+    "object_backup_duration_ms": int(os.environ["OBJECT_BACKUP_DURATION_MS"]),
+    "consistency_capture_span_ms": int(os.environ["CONSISTENCY_CAPTURE_SPAN_MS"]),
+    "maximum_data_loss_window_seconds": 0,
+    "quiescence_proven_by_equal_table_fingerprints": True,
+    "backup_total_duration_ms": int(os.environ["BACKUP_TOTAL_DURATION_MS"]),
+}
+pathlib.Path(sys.argv[1]).write_text(
+    json.dumps(metrics, indent=2, sort_keys=True) + "\n",
+    encoding="utf-8",
+)
+PY
 
 printf '%s\n' "$observation_operation" > "$output_dir/observation_operation_id"
 printf '%s\n' "$attachment_operation" > "$output_dir/attachment_operation_id"
