@@ -93,6 +93,37 @@ class SessionStartupBootstrapRemoteTest {
         assertTrue(remote.fetch() is PersonalBootstrapResult.UnknownResult)
     }
 
+    @Test
+    fun `startup availability can recover without replacing remote`() {
+        val tokenSource = ProviderSessionTokenSource(
+            "production-sg-v1",
+            "xueqing-native-prod-sg",
+            now = { Instant.parse("2026-09-22T00:00:00Z") },
+        )
+        tokenSource.establish(
+            "fictional-access",
+            Instant.parse("2026-09-22T01:00:00Z"),
+        )
+        var availability = ProductionStartupAvailability.Unavailable
+        var calls = 0
+        val remote = SessionStartupBootstrapRemote(
+            tokenSource = tokenSource,
+            awaitStartup = { availability },
+            delegate = PersonalBootstrapRemote {
+                calls += 1
+                loaded()
+            },
+        )
+
+        assertTrue(remote.fetch() is PersonalBootstrapResult.ProtocolFailure)
+        assertEquals(0, calls)
+
+        availability = ProductionStartupAvailability.Ready
+
+        assertTrue(remote.fetch() is PersonalBootstrapResult.Loaded)
+        assertEquals(1, calls)
+    }
+
     private fun loaded(): PersonalBootstrapResult =
         PersonalBootstrapResult.Loaded(
             PersonalBootstrap(
