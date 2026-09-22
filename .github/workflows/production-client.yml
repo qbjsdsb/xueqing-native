@@ -69,6 +69,30 @@ jobs:
           ]
           PY
 
+      - name: Stage identical native production profiles
+        shell: bash
+        env:
+          SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          windows_profile="apps/windows/src/Xueqing.Windows/Deployment/deployment_profile.json"
+          android_profile="apps/android/app/src/release/assets/deployment_profile.json"
+          python3 -B tools/deployment/stage_deployment_profile.py \
+            deployment/production_profile.template.json \
+            "$SOURCE_COMMIT" \
+            "$windows_profile" \
+            "$android_profile"
+          cmp "$windows_profile" "$android_profile"
+          python3 -B tools/deployment/verify_deployment_profile.py "$windows_profile"
+          python3 -B tools/deployment/verify_deployment_profile.py "$android_profile"
+          git check-ignore -q "$windows_profile"
+          git check-ignore -q "$android_profile"
+          if git ls-files --error-unmatch "$windows_profile" >/dev/null 2>&1 || \
+             git ls-files --error-unmatch "$android_profile" >/dev/null 2>&1; then
+            echo 'Rendered deployment profiles must not be committed.' >&2
+            exit 1
+          fi
+
       - name: Reject committed session material in deployment tooling
         shell: bash
         run: |

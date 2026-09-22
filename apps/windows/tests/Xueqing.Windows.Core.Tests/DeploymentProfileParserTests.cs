@@ -93,10 +93,11 @@ public sealed class DeploymentProfileParserTests
     public void Capabilities_must_be_sorted_unique_and_supported()
     {
         var invalid = Valid.Replace(
-            "\"auth\",\n    \"database-rpc\",",
-            "\"database-rpc\",\n    \"auth\",",
+            "\"database-rpc\"",
+            "\"auth\"",
             StringComparison.Ordinal);
 
+        Assert.AreNotEqual(Valid, invalid);
         Assert.ThrowsExactly<InvalidDataException>(
             () => DeploymentProfileParser.Parse(invalid));
     }

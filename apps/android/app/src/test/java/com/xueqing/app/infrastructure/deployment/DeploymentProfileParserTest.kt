@@ -61,13 +61,13 @@ class DeploymentProfileParserTest {
 
     @Test
     fun `capabilities must be sorted unique and supported`() {
+        val invalid = valid.replace(
+            "\"database-rpc\"",
+            "\"auth\"",
+        )
+        assert(invalid != valid)
         assertThrows(IllegalArgumentException::class.java) {
-            DeploymentProfileParser.parse(
-                valid.replace(
-                    "\"auth\",\n    \"database-rpc\",",
-                    "\"database-rpc\",\n    \"auth\",",
-                ),
-            )
+            DeploymentProfileParser.parse(invalid)
         }
     }
 
