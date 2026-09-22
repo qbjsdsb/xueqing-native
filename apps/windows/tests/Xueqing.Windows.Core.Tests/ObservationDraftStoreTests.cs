@@ -20,7 +20,7 @@ public sealed class ObservationDraftStoreTests
         var first = new SqliteObservationDraftStore(path, TestMasterKey);
 
         var opened = await first.OpenAsync(scope);
-        Assert.AreEqual(0L, opened.Epoch);
+        Assert.AreEqual(1L, opened.Epoch);
         Assert.IsNull(opened.Recovered);
 
         Assert.IsTrue(await first.SaveAsync(
@@ -31,19 +31,21 @@ public sealed class ObservationDraftStoreTests
 
         var reopened = new SqliteObservationDraftStore(path, TestMasterKey);
         var recovered = await reopened.OpenAsync(scope);
-        Assert.AreEqual(opened.Epoch, recovered.Epoch);
+        Assert.AreEqual(2L, recovered.Epoch);
         Assert.AreEqual("虚构课堂观察草稿一", recovered.Recovered?.Text);
+        Assert.AreEqual(recovered.Epoch, recovered.Recovered?.Epoch);
 
-        var nextEpoch = await reopened.DiscardAsync(scope, recovered.Epoch);
-        Assert.AreEqual(1L, nextEpoch);
         Assert.IsFalse(await first.SaveAsync(
             scope,
             opened.Epoch,
-            "旧窗口不应覆盖新 epoch",
+            "旧窗口不应覆盖新窗口已经接管的草稿",
             DateTimeOffset.UtcNow));
 
+        var nextEpoch = await reopened.DiscardAsync(scope, recovered.Epoch);
+        Assert.AreEqual(3L, nextEpoch);
+
         var afterDiscard = await reopened.OpenAsync(scope);
-        Assert.AreEqual(1L, afterDiscard.Epoch);
+        Assert.AreEqual(4L, afterDiscard.Epoch);
         Assert.IsNull(afterDiscard.Recovered);
     }
 

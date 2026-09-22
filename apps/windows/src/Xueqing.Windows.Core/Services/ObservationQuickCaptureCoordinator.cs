@@ -156,6 +156,7 @@ public sealed class ObservationQuickCaptureCoordinator
             actorAppUserId,
             scope,
             expectedDraftEpoch,
+            draftMayBeRetired: true,
             request,
             result,
             cancellationToken).ConfigureAwait(false);
@@ -198,6 +199,13 @@ public sealed class ObservationQuickCaptureCoordinator
             scope,
             cancellationToken).ConfigureAwait(false);
 
+        var draftMayBeRetired =
+            draft.Recovered is null ||
+            string.Equals(
+                draft.Recovered.Text,
+                pending.RawText,
+                StringComparison.Ordinal);
+
         var result = await _command.ExecuteAsync(
             pending,
             actorAppUserId,
@@ -207,6 +215,7 @@ public sealed class ObservationQuickCaptureCoordinator
             actorAppUserId,
             scope,
             draft.Epoch,
+            draftMayBeRetired,
             pending,
             result,
             cancellationToken).ConfigureAwait(false);
@@ -216,6 +225,7 @@ public sealed class ObservationQuickCaptureCoordinator
         Guid actorAppUserId,
         ObservationDraftScope scope,
         long expectedDraftEpoch,
+        bool draftMayBeRetired,
         CreateObservationRequest request,
         CreateObservationResult result,
         CancellationToken cancellationToken)
@@ -227,12 +237,13 @@ public sealed class ObservationQuickCaptureCoordinator
 
         if (result.IsSuccess)
         {
-            var draftRetired = await TryRetireMatchingDraftAsync(
-                actorAppUserId,
-                scope,
-                expectedDraftEpoch,
-                request.RawText,
-                cancellationToken).ConfigureAwait(false);
+            var draftRetired =
+                draftMayBeRetired &&
+                await TryRetireDraftAsync(
+                    actorAppUserId,
+                    scope,
+                    expectedDraftEpoch,
+                    cancellationToken).ConfigureAwait(false);
 
             if (!draftRetired)
             {
@@ -303,38 +314,18 @@ public sealed class ObservationQuickCaptureCoordinator
         return result;
     }
 
-    private async Task<bool> TryRetireMatchingDraftAsync(
+    private async Task<bool> TryRetireDraftAsync(
         Guid actorAppUserId,
         ObservationDraftScope scope,
         long expectedDraftEpoch,
-        string committedText,
         CancellationToken cancellationToken)
     {
         try
         {
-            var current = await _drafts.OpenAsync(
-                actorAppUserId,
-                scope,
-                cancellationToken).ConfigureAwait(false);
-
-            if (current.Recovered is null)
-            {
-                return true;
-            }
-
-            if (current.Epoch != expectedDraftEpoch ||
-                !string.Equals(
-                    current.Recovered.Text,
-                    committedText,
-                    StringComparison.Ordinal))
-            {
-                return false;
-            }
-
             return await _drafts.DiscardAsync(
                 actorAppUserId,
                 scope,
-                current.Epoch,
+                expectedDraftEpoch,
                 cancellationToken).ConfigureAwait(false) is not null;
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)

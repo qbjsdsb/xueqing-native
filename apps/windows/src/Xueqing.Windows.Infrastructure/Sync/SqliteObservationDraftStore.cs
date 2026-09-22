@@ -43,7 +43,11 @@ public sealed class SqliteObservationDraftStore
         using var connection = await OpenConfiguredConnectionAsync(cancellationToken);
         using var transaction = connection.BeginTransaction(deferred: false);
         await EnsureScopeStateAsync(connection, transaction, scope, cancellationToken);
-        var epoch = await ReadEpochAsync(connection, transaction, scope, cancellationToken);
+        var previousEpoch = await ReadEpochAsync(
+            connection,
+            transaction,
+            scope,
+            cancellationToken);
 
         ObservationDraftSnapshot? recovered = null;
         using (var command = connection.CreateCommand())
@@ -60,21 +64,72 @@ public sealed class SqliteObservationDraftStore
                 LIMIT 1;
                 """;
             AddScopeParameters(command, scope);
-            command.Parameters.AddWithValue("$epoch", epoch);
+            command.Parameters.AddWithValue("$epoch", previousEpoch);
 
             using var reader = await command.ExecuteReaderAsync(cancellationToken);
             if (await reader.ReadAsync(cancellationToken))
             {
-                var storedEpoch = reader.GetInt64(0);
                 recovered = new ObservationDraftSnapshot(
-                    storedEpoch,
+                    reader.GetInt64(0),
                     reader.GetString(1),
                     DateTimeOffset.FromUnixTimeMilliseconds(reader.GetInt64(2)));
             }
         }
 
+        // Windows can legitimately have more than one app process. Opening a
+        // draft therefore claims a new epoch lease atomically. Any older
+        // window keeps its in-memory text but can no longer overwrite the
+        // newly opened session.
+        var claimedEpoch = checked(previousEpoch + 1);
+        using (var claim = connection.CreateCommand())
+        {
+            claim.Transaction = transaction;
+            claim.CommandText = """
+                UPDATE observation_draft_scope_state
+                SET epoch = $claimed_epoch
+                WHERE organization_id = $organization_id
+                  AND student_id = $student_id
+                  AND subject_profile_id = $subject_profile_id
+                  AND assignment_id = $assignment_id
+                  AND epoch = $previous_epoch;
+                """;
+            AddScopeParameters(claim, scope);
+            claim.Parameters.AddWithValue("$claimed_epoch", claimedEpoch);
+            claim.Parameters.AddWithValue("$previous_epoch", previousEpoch);
+            if (await claim.ExecuteNonQueryAsync(cancellationToken) != 1)
+            {
+                throw new InvalidOperationException(
+                    "Observation draft lease changed while opening.");
+            }
+        }
+
+        if (recovered is not null)
+        {
+            using var migrate = connection.CreateCommand();
+            migrate.Transaction = transaction;
+            migrate.CommandText = """
+                UPDATE observation_drafts
+                SET epoch = $claimed_epoch
+                WHERE organization_id = $organization_id
+                  AND student_id = $student_id
+                  AND subject_profile_id = $subject_profile_id
+                  AND assignment_id = $assignment_id
+                  AND epoch = $previous_epoch;
+                """;
+            AddScopeParameters(migrate, scope);
+            migrate.Parameters.AddWithValue("$claimed_epoch", claimedEpoch);
+            migrate.Parameters.AddWithValue("$previous_epoch", previousEpoch);
+            if (await migrate.ExecuteNonQueryAsync(cancellationToken) != 1)
+            {
+                throw new InvalidOperationException(
+                    "Recovered Observation draft could not migrate to the claimed lease.");
+            }
+
+            recovered = recovered with { Epoch = claimedEpoch };
+        }
+
         transaction.Commit();
-        return new ObservationDraftOpenResult(epoch, recovered);
+        return new ObservationDraftOpenResult(claimedEpoch, recovered);
     }
 
     public async Task<bool> SaveAsync(

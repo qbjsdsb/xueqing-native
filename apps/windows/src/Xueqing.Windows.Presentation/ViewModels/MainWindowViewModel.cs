@@ -1101,6 +1101,27 @@ public sealed class MainWindowViewModel : ObservableObject
             return result;
         }
 
+        if (result.Failure?.Kind == CreateObservationFailureKind.LocalDurabilityFailure)
+        {
+            if (string.Equals(
+                    result.Failure.Code,
+                    "XQ_LOCAL_OBSERVATION_DRAFT_STALE",
+                    StringComparison.Ordinal))
+            {
+                _observationDraftScope = null;
+                NotifyObservationCaptureAvailability();
+                ObservationDraftStatusText =
+                    "另一个学情窗口已经接管这份草稿。当前窗口内容仍保留，但已停止继续写入；请回到最新窗口继续。";
+            }
+            else
+            {
+                ObservationDraftStatusText =
+                    "本机草稿或恢复状态无法安全更新。当前窗口内容仍保留，请不要关闭应用并稍后重试。";
+            }
+
+            return result;
+        }
+
         if (result.IsSuccess &&
             (ReferenceEquals(selected, SelectedTeachingContext) ||
              selected == SelectedTeachingContext))

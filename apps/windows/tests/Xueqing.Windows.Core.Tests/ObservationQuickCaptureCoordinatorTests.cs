@@ -46,7 +46,6 @@ public sealed class ObservationQuickCaptureCoordinatorTests
                 "draft-save",
                 "recovery-save",
                 "command-execute",
-                "draft-open",
                 "draft-discard",
                 "recovery-remove",
             },
