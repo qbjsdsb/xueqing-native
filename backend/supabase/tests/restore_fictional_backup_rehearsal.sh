@@ -338,15 +338,14 @@ begin
     ) then
         raise exception 'XQ_RESTORE_ATTACHMENT_ID_MISSING';
     end if;
-    if not exists (
-        select 1 from public.operation_receipts
+    if (
+        select count(*)
+          from public.operation_receipts
          where operation_id in (
              pg_catalog.current_setting('xq.observation_operation')::uuid,
              pg_catalog.current_setting('xq.attachment_operation')::uuid
          )
-         group by true
-        having count(*) = 2
-    ) then
+    ) <> 2 then
         raise exception 'XQ_RESTORE_OPERATION_RECEIPTS_MISSING';
     end if;
 end;
