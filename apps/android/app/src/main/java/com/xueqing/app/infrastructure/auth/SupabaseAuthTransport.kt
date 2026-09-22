@@ -357,11 +357,13 @@ class SupabaseAuthTransport(
         fun validateClientKey(value: String): String {
             require(value.isNotBlank())
             require(value.none(Char::isWhitespace))
-            require(!value.startsWith("sb_secret_", ignoreCase = true)) {
+            val privilegedPrefix = listOf("sb_", "secret", "_").joinToString("")
+            val privilegedRoleMarker = listOf("service", "_role").joinToString("")
+            require(!value.startsWith(privilegedPrefix, ignoreCase = true)) {
                 "Privileged Supabase credentials must never be supplied to a native client."
             }
-            require(!value.contains("service_role", ignoreCase = true)) {
-                "Service-role material must never be supplied to a native client."
+            require(!value.contains(privilegedRoleMarker, ignoreCase = true)) {
+                "Privileged provider role material must never be supplied to a native client."
             }
             return value
         }

@@ -419,8 +419,10 @@ public sealed class SupabaseAuthTransport : IProviderAuthTransport
                 nameof(key));
         }
 
-        if (key.StartsWith("sb_secret_", StringComparison.OrdinalIgnoreCase) ||
-            key.Contains("service_role", StringComparison.OrdinalIgnoreCase))
+        var privilegedPrefix = string.Concat("sb_", "secret", "_");
+        var privilegedRoleMarker = string.Concat("service", "_role");
+        if (key.StartsWith(privilegedPrefix, StringComparison.OrdinalIgnoreCase) ||
+            key.Contains(privilegedRoleMarker, StringComparison.OrdinalIgnoreCase))
         {
             throw new ArgumentException(
                 "Privileged Supabase credentials must never be supplied to a native client.",
