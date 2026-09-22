@@ -148,6 +148,8 @@ class ProductionClientRuntime private constructor(
             mutableSessionState.value = ClientSessionState(
                 ClientSessionStage.Authenticated,
             )
+        } catch (error: CancellationException) {
+            throw error
         } catch (error: ProviderAuthTransportException) {
             mutableSessionState.value = ClientSessionState(
                 ClientSessionStage.SignedOut,
@@ -182,6 +184,8 @@ class ProductionClientRuntime private constructor(
             // process start. Do not let that old failure poison future reads.
             startupFailure = null
             applyRefreshOutcome(outcome)
+        } catch (error: CancellationException) {
+            throw error
         } catch (_: Throwable) {
             mutableSessionState.value = ClientSessionState(
                 ClientSessionStage.ReconnectRequired,
@@ -220,6 +224,8 @@ class ProductionClientRuntime private constructor(
                     signedOutMessage
                 },
             )
+        } catch (error: CancellationException) {
+            throw error
         } catch (_: Throwable) {
             mutableSessionState.value = ClientSessionState(
                 ClientSessionStage.ConfigurationUnavailable,
