@@ -164,17 +164,25 @@ docker exec -i "$DB_CONTAINER" psql -U postgres -d postgres -v ON_ERROR_STOP=1 \
   -v profile_id="$handoff_profile" \
   -v actor_a="$actor_a" \
   -v actor_b="$actor_b" >/dev/null <<'SQL'
+select pg_catalog.set_config('xq.assignment_old', :'assignment_old', false);
+select pg_catalog.set_config('xq.assignment_new', :'assignment_new', false);
+select pg_catalog.set_config('xq.org_id', :'org_id', false);
+select pg_catalog.set_config('xq.student_id', :'student_id', false);
+select pg_catalog.set_config('xq.profile_id', :'profile_id', false);
+select pg_catalog.set_config('xq.actor_a', :'actor_a', false);
+select pg_catalog.set_config('xq.actor_b', :'actor_b', false);
+
 do $xq$
 declare
     v_updated integer;
 begin
     update public.student_teacher_assignments
        set active = false
-     where id = :'assignment_old'::uuid
-       and organization_id = :'org_id'::uuid
-       and student_id = :'student_id'::uuid
-       and subject_profile_id = :'profile_id'::uuid
-       and teacher_app_user_id = :'actor_a'::uuid
+     where id = pg_catalog.current_setting('xq.assignment_old')::uuid
+       and organization_id = pg_catalog.current_setting('xq.org_id')::uuid
+       and student_id = pg_catalog.current_setting('xq.student_id')::uuid
+       and subject_profile_id = pg_catalog.current_setting('xq.profile_id')::uuid
+       and teacher_app_user_id = pg_catalog.current_setting('xq.actor_a')::uuid
        and active;
 
     get diagnostics v_updated = row_count;
@@ -190,19 +198,19 @@ begin
         teacher_app_user_id,
         active
     ) values (
-        :'assignment_new'::uuid,
-        :'org_id'::uuid,
-        :'student_id'::uuid,
-        :'profile_id'::uuid,
-        :'actor_b'::uuid,
+        pg_catalog.current_setting('xq.assignment_new')::uuid,
+        pg_catalog.current_setting('xq.org_id')::uuid,
+        pg_catalog.current_setting('xq.student_id')::uuid,
+        pg_catalog.current_setting('xq.profile_id')::uuid,
+        pg_catalog.current_setting('xq.actor_b')::uuid,
         true
     );
 
     if not exists (
         select 1
           from public.student_teacher_assignments
-         where id = :'assignment_old'::uuid
-           and teacher_app_user_id = :'actor_a'::uuid
+         where id = pg_catalog.current_setting('xq.assignment_old')::uuid
+           and teacher_app_user_id = pg_catalog.current_setting('xq.actor_a')::uuid
            and not active
     ) then
         raise exception 'XQ_BACKUP_FIXTURE_FORMER_ASSIGNMENT_NOT_INACTIVE';
@@ -211,8 +219,8 @@ begin
     if not exists (
         select 1
           from public.student_teacher_assignments
-         where id = :'assignment_new'::uuid
-           and teacher_app_user_id = :'actor_b'::uuid
+         where id = pg_catalog.current_setting('xq.assignment_new')::uuid
+           and teacher_app_user_id = pg_catalog.current_setting('xq.actor_b')::uuid
            and active
     ) then
         raise exception 'XQ_BACKUP_FIXTURE_CURRENT_ASSIGNMENT_NOT_ACTIVE';
@@ -221,9 +229,9 @@ begin
     if (
         select count(*)
           from public.student_teacher_assignments
-         where organization_id = :'org_id'::uuid
-           and student_id = :'student_id'::uuid
-           and subject_profile_id = :'profile_id'::uuid
+         where organization_id = pg_catalog.current_setting('xq.org_id')::uuid
+           and student_id = pg_catalog.current_setting('xq.student_id')::uuid
+           and subject_profile_id = pg_catalog.current_setting('xq.profile_id')::uuid
            and active
     ) <> 1 then
         raise exception 'XQ_BACKUP_FIXTURE_HANDOFF_ACTIVE_ASSIGNMENT_COUNT_INVALID';
