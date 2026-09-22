@@ -131,7 +131,7 @@ source_assignment_state="$(
 )"
 printf 'Source DB assignment state immediately before pg_dump: %s\n' "$source_assignment_state"
 
-docker exec "$db_container" psql -U postgres -d postgres -v ON_ERROR_STOP=1 >/dev/null <<'SQL'
+docker exec -i "$db_container" psql -U postgres -d postgres -v ON_ERROR_STOP=1 >/dev/null <<'SQL'
 do $xq$
 begin
     if not exists (
