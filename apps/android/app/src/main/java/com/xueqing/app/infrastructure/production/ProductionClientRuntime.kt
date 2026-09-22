@@ -140,7 +140,7 @@ class ProductionClientRuntime private constructor(
         runBlocking {
             startupReady.await()
         }
-        return if (startupFailure is null) {
+        return if (startupFailure == null) {
             ProductionStartupAvailability.Ready
         } else {
             ProductionStartupAvailability.Unavailable
