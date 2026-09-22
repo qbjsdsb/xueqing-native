@@ -129,11 +129,11 @@ jobs:
             $env:XUEQING_WINDOWS_PROTOTYPE_MODE = '1'
             try {
               Start-Process -FilePath $executable | Out-Null
+              ./tools/ux/run-windows-native-ux-smoke.ps1 -ProcessName $processName -EvidenceDirectory $evidenceDirectory
             }
             finally {
               Remove-Item Env:\XUEQING_WINDOWS_PROTOTYPE_MODE -ErrorAction SilentlyContinue
             }
-            ./tools/ux/run-windows-native-ux-smoke.ps1 -ProcessName $processName -EvidenceDirectory $evidenceDirectory
           }
           finally {
             Get-Process -Name $processName -ErrorAction SilentlyContinue |
