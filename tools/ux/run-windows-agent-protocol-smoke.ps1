@@ -91,7 +91,20 @@ function Wait-ForSignedOutAuthBoundary {
         Start-Sleep -Milliseconds 250
     } while ([DateTimeOffset]::UtcNow -lt $deadline)
 
-    throw "Protocol activation did not reach the normal signed-out Auth UI within $TimeoutSeconds seconds."
+    $snapshot = @(
+        Get-XueqingProcesses | ForEach-Object {
+            $_.Refresh()
+            [pscustomobject]@{
+                processId = $_.Id
+                hasExited = $_.HasExited
+                mainWindowHandle = $_.MainWindowHandle.ToInt64()
+                mainWindowTitle = $_.MainWindowTitle
+                responding = $_.Responding
+            }
+        }
+    ) | ConvertTo-Json -Depth 3 -Compress
+
+    throw "Protocol activation did not reach the normal signed-out Auth UI within $TimeoutSeconds seconds. Process snapshot: $snapshot"
 }
 
 $diagnosticDirectory = if ([string]::IsNullOrWhiteSpace($DiagnosticOutput)) {

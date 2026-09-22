@@ -23,11 +23,6 @@ internal static class Program
         var current = AppInstance.GetCurrent();
         var activation = current.GetActivatedEventArgs();
 
-        // Scrub orphaned instance registrations before claiming the stable
-        // single-instance key. This matters after forced/crash termination:
-        // Windows App SDK removes dead registrations while enumerating
-        // instances, avoiding redirection to a process that no longer exists.
-        _ = AppInstance.GetInstances();
         var instance = AppInstance.FindOrRegisterForKey(MainInstanceKey);
 
         if (!instance.IsCurrent)
@@ -56,14 +51,22 @@ internal static class Program
                 PendingActivations.Clear();
             }
 
-            // A custom entry point owns the initial rich activation. Protocol
-            // activation is not allowed to depend on the ordinary XAML Launch
-            // callback to construct the first window.
-            app.HandleInitialActivation(activation);
-
-            foreach (var redirected in pending)
+            // A custom entry point owns the initial rich activation, but Window
+            // creation must happen after Application.Start has returned control
+            // to the WinUI dispatcher. Queue the initial activation first, then
+            // any redirect that arrived while the XAML Application was starting.
+            if (!dispatcherQueue.TryEnqueue(() =>
             {
-                app.HandleRedirectedActivation(redirected);
+                app.HandleInitialActivation(activation);
+
+                foreach (var redirected in pending)
+                {
+                    app.HandleRedirectedActivation(redirected);
+                }
+            }))
+            {
+                throw new InvalidOperationException(
+                    "WinUI dispatcher rejected initial application activation.");
             }
         });
     }
