@@ -37,6 +37,11 @@ internal static class ProviderTeachingWorkspaceBuilder
         var createLearningCase = new PostgrestCreateLearningCaseCommand(httpClient, projectUri, apiKey, accessTokenProvider);
         var createLearningCaseRecovery = new WindowsCreateLearningCaseRecoveryStore(environmentId, applicationData);
 
+        var observationCapture = new ObservationQuickCaptureCoordinator(
+            new WindowsObservationDraftStore(environmentId, applicationData),
+            new WindowsCreateObservationRecoveryStore(environmentId, applicationData),
+            new PostgrestCreateObservationCommand(httpClient, projectUri, apiKey, accessTokenProvider));
+
         var actionProgressionRecovery = new WindowsActionProgressionRecoveryStore(environmentId, applicationData);
         var actionProgression = new ActionProgressionCommandCoordinator(
             new PostgrestReschedulePrimaryActionCommand(httpClient, projectUri, apiKey, accessTokenProvider),
@@ -67,6 +72,7 @@ internal static class ProviderTeachingWorkspaceBuilder
             organizationInvitationCommand,
             organizationInvitationAcceptance,
             organizationInvitationDelivery,
-            organizationInvitationRecovery);
+            organizationInvitationRecovery,
+            observationCapture);
     }
 }
