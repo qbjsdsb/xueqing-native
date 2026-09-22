@@ -26,6 +26,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
 
+      - name: Validate hosted fictional E2E harness syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash -n tools/production/run-hosted-production-e2e.sh
+
       - name: Probe production Invitation Delivery in Singapore
         shell: bash
         env:
@@ -75,3 +81,51 @@ jobs:
           PY
 
           echo "Hosted Invitation Delivery region probe passed: Singapore runtime guard executed before method/auth/business processing."
+
+  hosted-fictional-acceptance:
+    name: hosted-fictional-acceptance
+    if: ${{ github.event_name == 'workflow_dispatch' }}
+    needs: hosted-edge-region
+    environment: production-acceptance
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      XUEQING_ACCEPTANCE_SERVICE_ROLE_KEY: ${{ secrets.XUEQING_ACCEPTANCE_SERVICE_ROLE_KEY }}
+
+    steps:
+      - name: Checkout exact dispatched source
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Require protected acceptance credential
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$XUEQING_ACCEPTANCE_SERVICE_ROLE_KEY"
+          echo "::add-mask::$XUEQING_ACCEPTANCE_SERVICE_ROLE_KEY"
+
+      - name: Render exact-source production profile
+        shell: bash
+        run: |
+          set -euo pipefail
+          profile="$RUNNER_TEMP/deployment_profile.json"
+          python3 -B tools/deployment/render_deployment_profile.py \
+            deployment/production_profile.template.json \
+            "$profile" \
+            "$(git rev-parse HEAD)"
+          python3 -B tools/deployment/verify_deployment_profile.py "$profile"
+          python3 - "$profile" >> "$GITHUB_ENV" <<'PY'
+          import json
+          import pathlib
+          import sys
+
+          profile = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
+          print("XUEQING_ACCEPTANCE_API_URL=" + profile["project_origin"])
+          print("XUEQING_ACCEPTANCE_PUBLISHABLE_KEY=" + profile["publishable_key"])
+          print("XUEQING_ACCEPTANCE_EDGE_REGION=" + profile["required_edge_region"])
+          PY
+
+      - name: Run isolated hosted fictional acceptance
+        shell: bash
+        run: bash tools/production/run-hosted-production-e2e.sh

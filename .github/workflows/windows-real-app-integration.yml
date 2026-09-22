@@ -9,6 +9,8 @@ on:
       - 'apps/windows/src/Xueqing.Windows.Presentation/**'
       - 'apps/windows/spikes/Xueqing.Windows.PackagingProbe/Assets/**'
       - 'tools/packaging/run-windows-real-app-integration.ps1'
+      - 'tools/deployment/**'
+      - 'deployment/**'
       - 'tools/ux/**'
       - 'docs/architecture/WINDOWS_REAL_APP_LOCALSTATE_MSIX.md'
       - 'Directory.Packages.props'
@@ -29,6 +31,18 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Stage exact-source production profile
+        shell: pwsh
+        env:
+          SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ((git rev-parse HEAD).Trim() -ne $env:SOURCE_COMMIT) { throw 'Windows artifact checkout does not match exact source commit.' }
+          python -B tools/deployment/stage_deployment_profile.py deployment/production_profile.template.json $env:SOURCE_COMMIT apps/windows/src/Xueqing.Windows/Deployment/deployment_profile.json
+          python -B tools/deployment/verify_deployment_profile.py apps/windows/src/Xueqing.Windows/Deployment/deployment_profile.json
 
       - name: Setup .NET 10.0.401
         uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1
@@ -62,6 +76,18 @@ jobs:
           XUEQING_WINDOWS_INTEGRATION_DIAGNOSTIC_OUTPUT: ${{ github.workspace }}\artifacts\windows-real-app-integration\diagnostics\xueqing-app-integration.json
         run: |
           ./tools/packaging/run-windows-real-app-integration.ps1 -RepositoryRoot "$env:GITHUB_WORKSPACE"
+
+      - name: Verify exact deployment profile inside real MSIX artifacts
+        shell: pwsh
+        env:
+          SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          foreach ($version in @('v1', 'v2')) {
+            $package = Get-ChildItem (Join-Path $env:GITHUB_WORKSPACE "artifacts/windows-real-app-integration/$version") -Recurse -File -Filter *.msix | Where-Object { $_.FullName -notmatch '\\Dependencies\\' } | Select-Object -First 1
+            if ($null -eq $package) { throw "Real MSIX not found for $version artifact-profile verification." }
+            python -B tools/deployment/verify_native_artifact_profile.py $package.FullName windows-msix $env:SOURCE_COMMIT
+          }
 
       - name: Configure native UX test display
         shell: pwsh
@@ -100,8 +126,14 @@ jobs:
             Add-AppxPackage -Path $packagePath.FullName -ForceApplicationShutdown -ErrorAction Stop
             $package = Get-AppxPackage -Name $packageName -ErrorAction Stop
             $executable = Join-Path $package.InstallLocation "$processName.exe"
-            Start-Process -FilePath $executable | Out-Null
-            ./tools/ux/run-windows-native-ux-smoke.ps1 -ProcessName $processName -EvidenceDirectory $evidenceDirectory
+            $env:XUEQING_WINDOWS_PROTOTYPE_MODE = '1'
+            try {
+              Start-Process -FilePath $executable | Out-Null
+              ./tools/ux/run-windows-native-ux-smoke.ps1 -ProcessName $processName -EvidenceDirectory $evidenceDirectory
+            }
+            finally {
+              Remove-Item Env:\XUEQING_WINDOWS_PROTOTYPE_MODE -ErrorAction SilentlyContinue
+            }
           }
           finally {
             Get-Process -Name $processName -ErrorAction SilentlyContinue |

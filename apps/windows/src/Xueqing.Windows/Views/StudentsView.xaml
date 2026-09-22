@@ -55,6 +55,7 @@
                 Grid.Row="1"
                 AutomationProperties.AutomationId="StudentSearchBox"
                 AutomationProperties.Name="搜索学生"
+                IsEnabled="{Binding IsStartupUnavailable, Converter={StaticResource BooleanToVisibilityConverter}, ConverterParameter=Invert}"
                 PlaceholderText="{Binding SearchPlaceholderText}"
                 TextChanged="SearchBox_TextChanged" />
 
@@ -69,7 +70,8 @@
                 KeyDown="StudentList_KeyDown"
                 SelectedItem="{Binding SelectedStudent, Mode=TwoWay}"
                 SelectionChanged="StudentList_SelectionChanged"
-                SelectionMode="Single">
+                SelectionMode="Single"
+                Visibility="{Binding IsStartupUnavailable, Converter={StaticResource BooleanToVisibilityConverter}, ConverterParameter=Invert}">
                 <ListView.ItemTemplate>
                     <DataTemplate>
                         <Grid Padding="6,8,8,9" MinHeight="52">
@@ -109,6 +111,16 @@
                     </DataTemplate>
                 </ListView.ItemTemplate>
             </ListView>
+
+            <TextBlock
+                Grid.Row="2"
+                Margin="4,18,12,0"
+                AutomationProperties.AutomationId="StudentWorkspaceUnavailable"
+                FontSize="14"
+                Opacity="0.68"
+                Text="{Binding StartupStatusText}"
+                TextWrapping="Wrap"
+                Visibility="{Binding IsStartupUnavailable, Converter={StaticResource BooleanToVisibilityConverter}}" />
 
             <!-- Keep a stable visible surface marker for UIA even as the visual
                  heading becomes more compact in the v2 reference layout. -->
@@ -175,7 +187,7 @@
 
                     <StackPanel
                         Spacing="20"
-                        Visibility="{Binding IsAuthoritativeStudentWorkspace, Converter={StaticResource BooleanToVisibilityConverter}, ConverterParameter=Invert}">
+                        Visibility="{Binding IsPrototypeMode, Converter={StaticResource BooleanToVisibilityConverter}}">
 
                         <StackPanel Spacing="10">
                             <TextBlock FontSize="16" FontWeight="SemiBold" Text="正在关注" />

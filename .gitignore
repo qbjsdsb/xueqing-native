@@ -62,3 +62,9 @@ supabase/.temp/
 exports/
 diagnostics/
 fixtures/private/
+
+# Exact-source public deployment profiles are generated at build/release time.
+# The checked-in template is authoritative; rendered files must never be frozen
+# to an old source SHA.
+apps/windows/src/Xueqing.Windows/Deployment/deployment_profile.json
+apps/android/app/src/release/assets/deployment_profile.json

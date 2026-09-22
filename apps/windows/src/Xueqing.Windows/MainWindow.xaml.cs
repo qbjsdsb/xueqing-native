@@ -7,7 +7,9 @@ namespace Xueqing.Windows;
 
 public sealed partial class MainWindow : Window
 {
+    private readonly Func<Task>? _signOutAction;
     private bool _organizationWorkspace;
+    private bool _signingOut;
 
     public MainWindowViewModel ViewModel { get; }
 
@@ -16,14 +18,21 @@ public sealed partial class MainWindow : Window
     {
     }
 
-    public MainWindow(MainWindowViewModel viewModel)
+    public MainWindow(
+        MainWindowViewModel viewModel,
+        Func<Task>? signOutAction = null)
     {
         ViewModel = viewModel ?? throw new ArgumentNullException(nameof(viewModel));
+        _signOutAction = signOutAction;
         InitializeComponent();
         Title = "学情";
         ExtendsContentIntoTitleBar = true;
         SetTitleBar(AppTitleBar);
         RootGrid.DataContext = ViewModel;
+        SignOutNav.Visibility =
+            _signOutAction is null
+                ? Visibility.Collapsed
+                : Visibility.Visible;
         ApplyOrganizationWorkspaceAccess();
     }
 
@@ -48,12 +57,7 @@ public sealed partial class MainWindow : Window
     private void ApplyLayout(double width)
     {
         var mode = WindowLayoutPolicy.Resolve(width);
-
-        // Keep top-level navigation compact by default and let NavigationView's
-        // native pane toggle reveal labels on demand. Width still drives the
-        // actual work-surface reflow through one centralized policy.
         Shell.PaneDisplayMode = NavigationViewPaneDisplayMode.LeftCompact;
-
         StudentsView.ApplyLayout(mode);
         OrganizationManagementView.ApplyLayout(mode);
     }
@@ -124,7 +128,9 @@ public sealed partial class MainWindow : Window
         Shell.IsPaneOpen = false;
     }
 
-    private async void Shell_SelectionChanged(NavigationView sender, NavigationViewSelectionChangedEventArgs args)
+    private async void Shell_SelectionChanged(
+        NavigationView sender,
+        NavigationViewSelectionChangedEventArgs args)
     {
         var tag = args.SelectedItemContainer?.Tag?.ToString();
         if (string.IsNullOrWhiteSpace(tag))
@@ -132,7 +138,12 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        // A stale hidden item must never navigate across the active workspace.
+        if (tag == "sign-out")
+        {
+            await SignOutAsync();
+            return;
+        }
+
         if (_organizationWorkspace && tag != "organization-management")
         {
             return;
@@ -148,6 +159,25 @@ public sealed partial class MainWindow : Window
         if (tag == "learning" && ViewModel.IsAuthoritativeStudentWorkspace)
         {
             await ViewModel.LoadSelectedTeachingContextAsync();
+        }
+    }
+
+    private async Task SignOutAsync()
+    {
+        if (_signOutAction is null || _signingOut)
+        {
+            return;
+        }
+
+        _signingOut = true;
+        SignOutNav.IsEnabled = false;
+        try
+        {
+            await _signOutAction();
+        }
+        finally
+        {
+            _signingOut = false;
         }
     }
 

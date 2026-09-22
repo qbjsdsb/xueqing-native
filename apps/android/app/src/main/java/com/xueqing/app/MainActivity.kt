@@ -1,5 +1,6 @@
 package com.xueqing.app
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -20,7 +21,8 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
-        val bootstrapRemote = BuildVariantQuickCaptureBootstrap.remote()
+        val bootstrapRemote = BuildVariantRuntimeHooks.bootstrapRemote(applicationContext)
+        val sessionController = BuildVariantRuntimeHooks.sessionController(applicationContext)
         val factory = object : ViewModelProvider.Factory {
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
                 @Suppress("UNCHECKED_CAST")
@@ -29,7 +31,7 @@ class MainActivity : ComponentActivity() {
                         QuickCaptureViewModel.create(
                             context = applicationContext,
                             bootstrapRemote = bootstrapRemote,
-                            environmentId = BuildVariantQuickCaptureBootstrap.ENVIRONMENT_ID,
+                            environmentId = BuildVariantRuntimeHooks.environmentId(applicationContext),
                         ) as T
 
                     StudentDirectoryViewModel::class.java ->
@@ -37,8 +39,8 @@ class MainActivity : ComponentActivity() {
 
                     LearningReadViewModel::class.java ->
                         LearningReadViewModel(
-                            todayRemote = BuildVariantLearningReadBootstrap.todayRemote(),
-                            focusRemote = BuildVariantLearningReadBootstrap.focusRemote(),
+                            todayRemote = BuildVariantRuntimeHooks.todayRemote(applicationContext),
+                            focusRemote = BuildVariantRuntimeHooks.focusRemote(applicationContext),
                         ) as T
 
                     else -> error("Unsupported ViewModel: " + modelClass.name)
@@ -56,8 +58,15 @@ class MainActivity : ComponentActivity() {
                 studentDirectoryViewModel = studentDirectoryViewModel,
                 learningReadViewModel = learningReadViewModel,
                 startInQuickCapture = intent.getBooleanExtra(EXTRA_OPEN_QUICK_CAPTURE, false),
+                sessionController = sessionController,
+                onSessionBoundaryChanged = ::restartForSessionBoundary,
             )
         }
+    }
+
+    private fun restartForSessionBoundary() {
+        startActivity(Intent(this, MainActivity::class.java))
+        finish()
     }
 
     override fun onStop() {
