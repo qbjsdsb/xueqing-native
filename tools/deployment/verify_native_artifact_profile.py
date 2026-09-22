@@ -34,14 +34,41 @@ FORBIDDEN_ARCHIVE_SUFFIXES = (
 
 # A database URI scheme is not credential material by itself and can
 # legitimately occur in runtime/diagnostic libraries. Reject only a URI that
-# embeds a username and password before '@'. Build the scheme in parts so this
+# embeds a username and password before '@'. Build markers in parts so this
 # verifier does not trip the repository's own privileged-material grep.
-_DATABASE_SCHEME_PATTERN = b"postgres" + b"(?:ql)?" + b"://"
-DATABASE_CREDENTIAL_URI_RE = re.compile(
-    _DATABASE_SCHEME_PATTERN
-    + rb"[^/s:@]{1,128}:[^@s/]{1,256}@[^s]{1,512}",
-    re.IGNORECASE,
+_DATABASE_SCHEME_MARKERS = (
+    b"postgres" + b"://",
+    b"postgres" + b"ql://",
 )
+
+
+def contains_database_credentials(value: bytes) -> bool:
+    lowered = value.lower()
+    for scheme in _DATABASE_SCHEME_MARKERS:
+        cursor = 0
+        while True:
+            index = lowered.find(scheme, cursor)
+            if index < 0:
+                break
+
+            remainder = lowered[index + len(scheme):index + len(scheme) + 1024]
+            authority_end = len(remainder)
+            for delimiter in (b"/", b"?", b"#", b" ", bytes([9]), bytes([10]), bytes([13]), bytes([0])):
+                position = remainder.find(delimiter)
+                if position >= 0:
+                    authority_end = min(authority_end, position)
+
+            authority = remainder[:authority_end]
+            if b"@" in authority:
+                user_info = authority.split(b"@", 1)[0]
+                if b":" in user_info:
+                    username, password = user_info.split(b":", 1)
+                    if username and password:
+                        return True
+
+            cursor = index + len(scheme)
+
+    return False
 
 
 def expected_member(kind: str) -> str:
@@ -94,9 +121,9 @@ def verify_artifact(
 
 
 def scan_for_privileged_material(archive: zipfile.ZipFile) -> None:
-    # Keep enough overlap to catch both fixed markers and a bounded
-    # credential-bearing database URI split across adjacent chunks.
-    tail_limit = max(max(map(len, FORBIDDEN_TEXT_MARKERS)) - 1, 1024)
+    # Keep enough overlap to catch fixed markers and a bounded database URI
+    # split across adjacent chunks.
+    tail_limit = max(max(map(len, FORBIDDEN_TEXT_MARKERS)) - 1, 2048)
 
     for info in archive.infolist():
         if info.is_dir():
@@ -119,7 +146,7 @@ def scan_for_privileged_material(archive: zipfile.ZipFile) -> None:
                             f"artifact entry: {info.filename}"
                         )
 
-                if DATABASE_CREDENTIAL_URI_RE.search(candidate) is not None:
+                if contains_database_credentials(candidate):
                     raise ValueError(
                         "credential-bearing database URI found in "
                         f"artifact entry: {info.filename}"
