@@ -50,6 +50,11 @@ internal static class Program
                 PendingActivations.Clear();
             }
 
+            // A custom entry point owns the initial rich activation. Protocol
+            // activation is not allowed to depend on the ordinary XAML Launch
+            // callback to construct the first window.
+            app.HandleInitialActivation(activation);
+
             foreach (var redirected in pending)
             {
                 app.HandleRedirectedActivation(redirected);
