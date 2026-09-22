@@ -10,6 +10,9 @@ import com.xueqing.app.application.learning.PersonalTodayActionsRemote
 import com.xueqing.app.application.learning.PersonalTodayActionsResult
 import com.xueqing.app.application.learning.StudentLearningFocusRemote
 import com.xueqing.app.application.learning.StudentLearningFocusResult
+import com.xueqing.app.application.session.ClientSessionController
+import com.xueqing.app.application.session.ClientSessionStage
+import com.xueqing.app.application.session.ClientSessionState
 import com.xueqing.app.durability.AttachmentOutboxDrainer
 import com.xueqing.app.durability.AttachmentStagingRecoveryScheduler
 import com.xueqing.app.durability.AttachmentStagingStore
@@ -22,6 +25,10 @@ import com.xueqing.app.infrastructure.auth.AndroidKeystoreRefreshTokenVault
 import com.xueqing.app.infrastructure.auth.HttpAuthTransport
 import com.xueqing.app.infrastructure.auth.ProductionStartupAvailability
 import com.xueqing.app.infrastructure.auth.ProviderAuthCoordinator
+import com.xueqing.app.infrastructure.auth.ProviderAuthTransportException
+import com.xueqing.app.infrastructure.auth.ProviderAuthTransportFailureKind
+import com.xueqing.app.infrastructure.auth.ProviderRefreshOutcome
+import com.xueqing.app.infrastructure.auth.ProviderSignOutOutcome
 import com.xueqing.app.infrastructure.auth.SessionStartupBootstrapRemote
 import com.xueqing.app.infrastructure.auth.SupabaseAuthTransport
 import com.xueqing.app.infrastructure.deployment.DeploymentProfile
@@ -42,6 +49,9 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.runBlocking
 
 class ProductionClientRuntime private constructor(
@@ -55,13 +65,23 @@ class ProductionClientRuntime private constructor(
     private val observationRemote: SupabaseCreateObservationAdapter,
     private val attachmentStorageRemote: SupabaseObservationAttachmentStorageAdapter,
     private val attachmentCommandRemote: SupabaseCommitObservationAttachmentAdapter,
-) {
+) : ClientSessionController {
     private val processScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val restoreStarted = AtomicBoolean(false)
     private val startupReady = CompletableDeferred<Unit>()
 
     @Volatile
     private var startupFailure: Throwable? = null
+
+    private val mutableSessionState = MutableStateFlow(
+        ClientSessionState(
+            ClientSessionStage.Restoring,
+            "正在恢复安全登录状态…",
+        ),
+    )
+
+    override val state: StateFlow<ClientSessionState> =
+        mutableSessionState.asStateFlow()
 
     val bootstrapRemote: PersonalBootstrapRemote =
         SessionStartupBootstrapRemote(
@@ -93,14 +113,125 @@ class ProductionClientRuntime private constructor(
 
         processScope.launch {
             try {
-                authCoordinator.restore()
+                applyRefreshOutcome(authCoordinator.restore())
             } catch (error: CancellationException) {
                 startupFailure = error
+                mutableSessionState.value = ClientSessionState(
+                    ClientSessionStage.ConfigurationUnavailable,
+                    "安全登录恢复被中断，教学数据未加载。",
+                )
             } catch (error: Throwable) {
                 startupFailure = error
+                mutableSessionState.value = ClientSessionState(
+                    ClientSessionStage.ConfigurationUnavailable,
+                    "安全登录状态不可用，教学数据未加载。",
+                )
             } finally {
                 startupReady.complete(Unit)
             }
+        }
+    }
+
+    override suspend fun signIn(email: String, password: String) {
+        mutableSessionState.value = ClientSessionState(
+            ClientSessionStage.Busy,
+            "正在登录…",
+        )
+        try {
+            authCoordinator.signInWithPassword(email, password)
+            mutableSessionState.value = ClientSessionState(
+                ClientSessionStage.Authenticated,
+            )
+        } catch (error: ProviderAuthTransportException) {
+            mutableSessionState.value = ClientSessionState(
+                ClientSessionStage.SignedOut,
+                when (error.kind) {
+                    ProviderAuthTransportFailureKind.Rejected ->
+                        "邮箱或密码不正确，或账号当前不可用。"
+                    ProviderAuthTransportFailureKind.RateLimited ->
+                        "尝试次数过多，请稍后再试。"
+                    ProviderAuthTransportFailureKind.Transient,
+                    ProviderAuthTransportFailureKind.ResultUnknown,
+                    -> "网络暂时不可用，登录没有完成，请稍后重试。"
+                    ProviderAuthTransportFailureKind.InvalidResponse ->
+                        "登录服务返回无法验证的结果，已拒绝建立会话。"
+                },
+            )
+        } catch (_: Throwable) {
+            mutableSessionState.value = ClientSessionState(
+                ClientSessionStage.ConfigurationUnavailable,
+                "无法建立安全登录会话，教学数据未加载。",
+            )
+        }
+    }
+
+    override suspend fun retryRestore() {
+        mutableSessionState.value = ClientSessionState(
+            ClientSessionStage.Restoring,
+            "正在重新连接…",
+        )
+        try {
+            applyRefreshOutcome(authCoordinator.restore())
+        } catch (_: Throwable) {
+            mutableSessionState.value = ClientSessionState(
+                ClientSessionStage.ReconnectRequired,
+                "仍然无法确认登录状态，请检查网络后重试。",
+            )
+        }
+    }
+
+    override suspend fun clearLocalSession() {
+        signOutInternal(
+            signedOutMessage = "已退出此设备账号，请重新登录。",
+        )
+    }
+
+    override suspend fun signOut() {
+        signOutInternal(
+            signedOutMessage = "已退出登录。",
+        )
+    }
+
+    private suspend fun signOutInternal(signedOutMessage: String) {
+        mutableSessionState.value = ClientSessionState(
+            ClientSessionStage.Busy,
+            "正在退出登录…",
+        )
+        try {
+            val outcome = authCoordinator.signOut()
+            mutableSessionState.value = ClientSessionState(
+                ClientSessionStage.SignedOut,
+                if (outcome == ProviderSignOutOutcome.LocalOnlyRemoteUnconfirmed) {
+                    "已退出本机登录；服务器撤销暂未确认。"
+                } else {
+                    signedOutMessage
+                },
+            )
+        } catch (_: Throwable) {
+            mutableSessionState.value = ClientSessionState(
+                ClientSessionStage.ConfigurationUnavailable,
+                "本机安全会话无法完整清除，已停止继续使用旧会话。",
+            )
+        }
+    }
+
+    private fun applyRefreshOutcome(outcome: ProviderRefreshOutcome) {
+        mutableSessionState.value = when (outcome) {
+            ProviderRefreshOutcome.Usable -> ClientSessionState(
+                ClientSessionStage.Authenticated,
+            )
+            ProviderRefreshOutcome.SignedOut -> ClientSessionState(
+                ClientSessionStage.SignedOut,
+                "请使用你的学情账号登录。",
+            )
+            ProviderRefreshOutcome.Invalid -> ClientSessionState(
+                ClientSessionStage.SignedOut,
+                "登录状态已失效，请重新登录。",
+            )
+            ProviderRefreshOutcome.RefreshRequired -> ClientSessionState(
+                ClientSessionStage.ReconnectRequired,
+                "暂时无法确认当前登录状态。可以重试连接，或退出此设备账号后重新登录。",
+            )
         }
     }
 

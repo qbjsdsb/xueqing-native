@@ -1,5 +1,6 @@
 package com.xueqing.app
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -21,6 +22,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
 
         val bootstrapRemote = BuildVariantRuntimeHooks.bootstrapRemote(applicationContext)
+        val sessionController = BuildVariantRuntimeHooks.sessionController(applicationContext)
         val factory = object : ViewModelProvider.Factory {
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
                 @Suppress("UNCHECKED_CAST")
@@ -56,8 +58,15 @@ class MainActivity : ComponentActivity() {
                 studentDirectoryViewModel = studentDirectoryViewModel,
                 learningReadViewModel = learningReadViewModel,
                 startInQuickCapture = intent.getBooleanExtra(EXTRA_OPEN_QUICK_CAPTURE, false),
+                sessionController = sessionController,
+                onSessionBoundaryChanged = ::restartForSessionBoundary,
             )
         }
+    }
+
+    private fun restartForSessionBoundary() {
+        startActivity(Intent(this, MainActivity::class.java))
+        finish()
     }
 
     override fun onStop() {

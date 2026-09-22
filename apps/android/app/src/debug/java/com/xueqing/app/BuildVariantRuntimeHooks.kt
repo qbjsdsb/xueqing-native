@@ -4,6 +4,7 @@ import android.content.Context
 import com.xueqing.app.application.bootstrap.PersonalBootstrapRemote
 import com.xueqing.app.application.learning.PersonalTodayActionsRemote
 import com.xueqing.app.application.learning.StudentLearningFocusRemote
+import com.xueqing.app.application.session.ClientSessionController
 
 object BuildVariantRuntimeHooks {
     fun onApplicationCreate(context: Context) = Unit
@@ -19,4 +20,6 @@ object BuildVariantRuntimeHooks {
 
     fun focusRemote(context: Context): StudentLearningFocusRemote =
         BuildVariantLearningReadBootstrap.focusRemote()
+
+    fun sessionController(context: Context): ClientSessionController? = null
 }

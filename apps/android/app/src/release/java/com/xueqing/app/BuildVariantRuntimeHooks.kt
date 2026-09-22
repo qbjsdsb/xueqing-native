@@ -4,12 +4,16 @@ import android.content.Context
 import com.xueqing.app.application.bootstrap.PersonalBootstrapRemote
 import com.xueqing.app.application.learning.PersonalTodayActionsRemote
 import com.xueqing.app.application.learning.StudentLearningFocusRemote
+import com.xueqing.app.application.session.ClientSessionController
+import com.xueqing.app.application.session.UnavailableClientSessionController
 import com.xueqing.app.durability.AttachmentSyncRuntime
 import com.xueqing.app.durability.ObservationSyncRuntime
 import com.xueqing.app.infrastructure.auth.ProviderAuthCoordinator
 import com.xueqing.app.infrastructure.production.ProductionClientRuntime
 
 object BuildVariantRuntimeHooks {
+    private val unavailableSessionController =
+        UnavailableClientSessionController()
     @Volatile
     private var initialized = false
 
@@ -51,6 +55,9 @@ object BuildVariantRuntimeHooks {
 
     fun authCoordinator(context: Context): ProviderAuthCoordinator? =
         runtime(context)?.authCoordinator
+
+    fun sessionController(context: Context): ClientSessionController? =
+        runtime(context) ?: unavailableSessionController
 
     private fun runtime(context: Context): ProductionClientRuntime? {
         if (!initialized) {
