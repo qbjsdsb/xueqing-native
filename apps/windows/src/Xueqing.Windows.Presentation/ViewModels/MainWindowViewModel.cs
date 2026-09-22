@@ -2133,6 +2133,96 @@ public sealed class MainWindowViewModel : ObservableObject
         return result;
     }
 
+    public bool TrySelectAuthoritativeStudent(Guid studentId)
+    {
+        if (studentId == Guid.Empty)
+        {
+            return false;
+        }
+
+        var matchingKeys = _authoritativeStudents
+            .Where(pair => pair.Value.StudentId == studentId)
+            .Select(pair => pair.Key)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+
+        if (matchingKeys.Length != 1)
+        {
+            return false;
+        }
+
+        var key = matchingKeys[0];
+        var summary = _allStudents.FirstOrDefault(student => student.Id == key);
+        if (summary is null)
+        {
+            return false;
+        }
+
+        // A navigation request is allowed to clear an in-app search filter, but
+        // it can only select an item already present in the authenticated
+        // authoritative workspace.
+        if (!Students.Any(student => student.Id == key))
+        {
+            ReplaceStudents(_allStudents);
+        }
+
+        SelectedStudent = Students.FirstOrDefault(student => student.Id == key);
+        return SelectedStudent is not null;
+    }
+
+    public bool TrySelectAuthoritativeLearningCase(Guid caseId)
+    {
+        if (caseId == Guid.Empty)
+        {
+            return false;
+        }
+
+        // V1 initially resolves a Case only from the already-authoritative
+        // Personal Today projection. It never accepts organization/assignment
+        // context from the external URI. A broader read-only resolver can be
+        // added later if exact acceptance proves this bounded resolver too
+        // narrow.
+        var matches = _authoritativeTodayActionTargets.Values
+            .Where(target => target.CaseId == caseId)
+            .GroupBy(target => new
+            {
+                target.OrganizationId,
+                target.StudentId,
+                target.SubjectProfileId,
+                target.OwnerAssignmentId,
+                target.CaseId,
+            })
+            .Select(group => group.First())
+            .ToArray();
+
+        if (matches.Length != 1)
+        {
+            return false;
+        }
+
+        var target = matches[0];
+        if (!TrySelectAuthoritativeStudent(target.StudentId))
+        {
+            return false;
+        }
+
+        var contexts = SelectedTeachingContexts
+            .Where(option =>
+                option.Context.OrganizationId == target.OrganizationId &&
+                option.Context.StudentId == target.StudentId &&
+                option.Context.SubjectProfileId == target.SubjectProfileId &&
+                option.Context.AssignmentId == target.OwnerAssignmentId)
+            .ToArray();
+
+        if (contexts.Length != 1)
+        {
+            return false;
+        }
+
+        SelectedTeachingContext = contexts[0];
+        return true;
+    }
+
     public void FilterStudents(string? query)
     {
         var selectedId = SelectedStudent?.Id;
