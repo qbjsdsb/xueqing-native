@@ -5,6 +5,7 @@ import java.io.OutputStream
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -71,7 +72,7 @@ class DiagnosticsArchiveWriter(
             put("attachment_staging", snapshot.queues.attachmentStaging)
         })
         put("recent_error_codes", buildJsonArray {
-            snapshot.recentErrorCodes.forEach(::add)
+            snapshot.recentErrorCodes.forEach { add(JsonPrimitive(it)) }
         })
         put("archive_files", buildJsonArray {
             add(buildJsonObject {
