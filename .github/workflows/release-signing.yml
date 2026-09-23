@@ -102,6 +102,7 @@ jobs:
             "$unsigned"
           "$apksigner" verify --verbose --print-certs "$signed" | tee "$out/ANDROID-SIGNING.txt"
           sha256sum "$signed" | sed "s#  .*/#  #" > "$out/SHA256SUMS.txt"
+          printf '%s\n' "${{ inputs.source_sha }}" > "$out/SOURCE_COMMIT.txt"
           rm -f "$ks"
       - name: Upload signed Android candidate
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
@@ -123,6 +124,7 @@ jobs:
       SIGNPATH_PROJECT_SLUG: ${{ vars.SIGNPATH_PROJECT_SLUG }}
       SIGNPATH_SIGNING_POLICY_SLUG: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}
       SIGNPATH_ARTIFACT_CONFIGURATION_SLUG: ${{ vars.SIGNPATH_ARTIFACT_CONFIGURATION_SLUG }}
+      SIGNPATH_SETUP_ARTIFACT_CONFIGURATION_SLUG: ${{ vars.SIGNPATH_SETUP_ARTIFACT_CONFIGURATION_SLUG }}
       XUEQING_WINDOWS_PFX_B64: ${{ secrets.XUEQING_WINDOWS_PFX_B64 }}
       XUEQING_WINDOWS_PFX_PASSWORD: ${{ secrets.XUEQING_WINDOWS_PFX_PASSWORD }}
       XUEQING_WINDOWS_TIMESTAMP_URL: ${{ vars.XUEQING_WINDOWS_TIMESTAMP_URL }}
@@ -159,7 +161,7 @@ jobs:
         if: env.XUEQING_WINDOWS_SIGNING_MODE == 'signpath'
         shell: pwsh
         run: |
-          foreach ($name in @('SIGNPATH_API_TOKEN','SIGNPATH_ORGANIZATION_ID','SIGNPATH_PROJECT_SLUG','SIGNPATH_SIGNING_POLICY_SLUG','SIGNPATH_ARTIFACT_CONFIGURATION_SLUG')) {
+          foreach ($name in @('SIGNPATH_API_TOKEN','SIGNPATH_ORGANIZATION_ID','SIGNPATH_PROJECT_SLUG','SIGNPATH_SIGNING_POLICY_SLUG','SIGNPATH_ARTIFACT_CONFIGURATION_SLUG','SIGNPATH_SETUP_ARTIFACT_CONFIGURATION_SLUG')) {
             if ([string]::IsNullOrWhiteSpace((Get-Item "Env:$name").Value)) { throw "Missing $name" }
           }
       - name: Upload unsigned MSIX for SignPath
@@ -204,6 +206,107 @@ jobs:
           & $signtool.FullName sign /fd SHA256 /tr $env:XUEQING_WINDOWS_TIMESTAMP_URL /td SHA256 /f $pfx /p $env:XUEQING_WINDOWS_PFX_PASSWORD $signed
           if ($LASTEXITCODE -ne 0) { throw 'SignTool failed.' }
           Remove-Item $pfx -Force
+      - name: Build single-file XueqingSetup from exact signed MSIX
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $out = Join-Path $env:GITHUB_WORKSPACE 'artifacts\release-signing\windows'
+          $msix = Get-ChildItem $out -Recurse -Filter *.msix | Select-Object -First 1
+          if ($null -eq $msix) { throw 'Signed MSIX not found before Setup build.' }
+          $signature = Get-AuthenticodeSignature $msix.FullName
+          if ($signature.Status -ne 'Valid') { throw "Signed MSIX Authenticode status is $($signature.Status)." }
+          if ($signature.SignerCertificate.Subject -ne $env:XUEQING_WINDOWS_PUBLISHER) { throw 'Signed MSIX Publisher mismatch before Setup build.' }
+          ./tools/release/build-windows-setup.ps1 -RepositoryRoot "$env:GITHUB_WORKSPACE" -MsixPath $msix.FullName -Publisher "$env:XUEQING_WINDOWS_PUBLISHER" -OutputDirectory "$env:GITHUB_WORKSPACE\artifacts\release-signing\setup-unsigned"
+
+      - name: Upload unsigned Setup for SignPath
+        id: upload-signpath-setup
+        if: env.XUEQING_WINDOWS_SIGNING_MODE == 'signpath'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: xueqing-setup-unsigned-for-signpath
+          path: artifacts/release-signing/setup-unsigned/*.exe
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Submit SignPath Setup signing request
+        if: env.XUEQING_WINDOWS_SIGNING_MODE == 'signpath'
+        uses: signpath/github-action-submit-signing-request@f6d04783b4569d051e0c80105fe66e82819d0092
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}
+          artifact-configuration-slug: ${{ vars.SIGNPATH_SETUP_ARTIFACT_CONFIGURATION_SLUG }}
+          github-artifact-id: ${{ steps.upload-signpath-setup.outputs.artifact-id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          wait-for-completion: true
+          output-artifact-directory: artifacts/release-signing/windows
+
+      - name: Sign Setup with protected PFX
+        if: env.XUEQING_WINDOWS_SIGNING_MODE == 'pfx'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $unsigned = Get-ChildItem (Join-Path $env:GITHUB_WORKSPACE 'artifacts\release-signing\setup-unsigned') -Filter *.exe | Select-Object -First 1
+          if ($null -eq $unsigned) { throw 'Unsigned Setup executable not found.' }
+          $out = Join-Path $env:GITHUB_WORKSPACE 'artifacts\release-signing\windows'
+          New-Item $out -ItemType Directory -Force | Out-Null
+          $signed = Join-Path $out $unsigned.Name
+          Copy-Item $unsigned.FullName $signed -Force
+          $pfx = Join-Path $env:RUNNER_TEMP 'xueqing-setup-release.pfx'
+          [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:XUEQING_WINDOWS_PFX_B64))
+          try {
+            $signtool = Get-ChildItem (Join-Path ${env:ProgramFiles(x86)} 'Windows Kits\10\bin') -Recurse -Filter signtool.exe | Where-Object { $_.FullName -match '\\x64\\signtool\.exe          $ErrorActionPreference = 'Stop'
+          $out = Join-Path $env:GITHUB_WORKSPACE 'artifacts\release-signing\windows'
+          $msix = Get-ChildItem $out -Recurse -Filter *.msix | Select-Object -First 1
+          $setup = Get-ChildItem $out -Recurse -Filter XueqingSetup-*.exe | Select-Object -First 1
+          if ($null -eq $msix) { throw 'Signed MSIX not found.' }
+          if ($null -eq $setup) { throw 'Signed XueqingSetup not found.' }
+
+          $msixSignature = Get-AuthenticodeSignature $msix.FullName
+          $setupSignature = Get-AuthenticodeSignature $setup.FullName
+          foreach ($entry in @(@('MSIX',$msixSignature), @('Setup',$setupSignature))) {
+            if ($entry[1].Status -ne 'Valid') { throw "$($entry[0]) Authenticode status is $($entry[1].Status)." }
+            if ($entry[1].SignerCertificate.Subject -ne $env:XUEQING_WINDOWS_PUBLISHER) { throw "$($entry[0]) signer Subject does not match package Publisher." }
+          }
+          if ($setupSignature.SignerCertificate.Thumbprint -ne $msixSignature.SignerCertificate.Thumbprint) {
+            throw 'Setup and MSIX must use the same production signing certificate.'
+          }
+
+          "Subject=$($msixSignature.SignerCertificate.Subject)" | Set-Content (Join-Path $out 'WINDOWS-SIGNING.txt')
+          "Thumbprint=$($msixSignature.SignerCertificate.Thumbprint)" | Add-Content (Join-Path $out 'WINDOWS-SIGNING.txt')
+          "SetupThumbprint=$($setupSignature.SignerCertificate.Thumbprint)" | Add-Content (Join-Path $out 'WINDOWS-SIGNING.txt')
+          @($msix, $setup) | ForEach-Object {
+            $hash = Get-FileHash $_.FullName -Algorithm SHA256
+            "$($hash.Hash.ToLowerInvariant())  $($_.Name)"
+          } | Set-Content (Join-Path $out 'SHA256SUMS.txt') -Encoding ascii
+          "${{ inputs.source_sha }}" | Set-Content (Join-Path $out 'SOURCE_COMMIT.txt') -Encoding ascii
+
+          Get-AppxPackage -Name Xueqing.Native -ErrorAction SilentlyContinue | ForEach-Object {
+            Remove-AppxPackage -Package $_.PackageFullName -ErrorAction Stop
+          }
+          $process = Start-Process -FilePath $setup.FullName -ArgumentList @('--quiet','--no-launch') -Wait -PassThru
+          if ($process.ExitCode -ne 0) { throw "Signed Setup install smoke failed with exit code $($process.ExitCode)." }
+          $installed = Get-AppxPackage -Name Xueqing.Native -ErrorAction Stop
+          if ($installed.Publisher -ne $env:XUEQING_WINDOWS_PUBLISHER) { throw 'Installed production package Publisher mismatch.' }
+          Get-AppxPackage -Name Xueqing.Native -ErrorAction SilentlyContinue | ForEach-Object {
+            Remove-AppxPackage -Package $_.PackageFullName -ErrorAction SilentlyContinue
+          }
+      - name: Upload signed Windows candidate
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: xueqing-windows-signed-candidate
+          path: artifacts/release-signing/windows
+          if-no-files-found: error
+          retention-days: 30
+ } | Sort-Object FullName -Descending | Select-Object -First 1
+            if ($null -eq $signtool) { throw 'SignTool not found.' }
+            & $signtool.FullName sign /fd SHA256 /tr $env:XUEQING_WINDOWS_TIMESTAMP_URL /td SHA256 /f $pfx /p $env:XUEQING_WINDOWS_PFX_PASSWORD $signed
+            if ($LASTEXITCODE -ne 0) { throw 'Setup SignTool failed.' }
+          }
+          finally {
+            Remove-Item $pfx -Force -ErrorAction SilentlyContinue
+          }
       - name: Verify signed Windows package and provenance
         shell: pwsh
         run: |
