@@ -100,7 +100,8 @@ def verify(value):
 
     queues = exact(root["queues"], QUEUES, "queues")
     for key in QUEUES:
-        positive(queues[key], key, allow_zero=True)
+        if queues[key] is not None:
+            positive(queues[key], key, allow_zero=True)
 
     errors = root["recent_error_codes"]
     if not isinstance(errors, list) or len(errors) > 20:
