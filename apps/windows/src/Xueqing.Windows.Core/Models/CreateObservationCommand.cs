@@ -29,6 +29,8 @@ public enum CreateObservationFailureKind
     LocalDurabilityFailure,
     ResultUnknown,
     Transient,
+    CompatibilityBlocked,
+    CompatibilityUnavailable,
     InvalidResponse,
 }
 
