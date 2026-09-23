@@ -1,0 +1,48 @@
+name: release-signing-request
+
+on:
+  push:
+    branches:
+      - 'release/sign/**'
+
+permissions:
+  actions: write
+  contents: read
+
+concurrency:
+  group: release-signing-request
+  cancel-in-progress: false
+
+jobs:
+  request:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout requested exact source
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          fetch-depth: 0
+
+      - name: Require exact current main and canonical request branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main --depth=1
+          main_sha="$(git rev-parse origin/main)"
+          test "$GITHUB_SHA" = "$main_sha"
+
+          version="$(sed -n 's/^releaseVersion=//p' release/version.properties)"
+          test -n "$version"
+          expected="release/sign/$version"
+          test "$GITHUB_REF_NAME" = "$expected"
+
+          echo "Release signing request accepted for $version at $GITHUB_SHA."
+
+      - name: Dispatch protected release signing
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh workflow run release-signing.yml             --ref main             -f source_sha="$GITHUB_SHA"
+          echo "Protected release-signing dispatched for exact main SHA $GITHUB_SHA."
