@@ -94,25 +94,33 @@ def main() -> int:
     deadline = time.monotonic() + 35 * 60
     while True:
         runs = fetch_runs()
-        latest: dict[str, dict] = {}
+        by_name: dict[str, list[dict]] = {}
         for run in runs:
-            name = run.get("name")
-            if name not in latest:
-                latest[name] = run
+            by_name.setdefault(run.get("name", ""), []).append(run)
 
         pending = []
         failed = []
         for name in sorted(required):
-            run = latest.get(name)
-            if run is None:
+            candidates = by_name.get(name, [])
+            if not candidates:
                 pending.append(f"{name}:missing")
                 continue
-            status = run.get("status")
-            conclusion = run.get("conclusion")
-            if status != "completed":
+
+            active = [run for run in candidates if run.get("status") != "completed"]
+            successful = [
+                run for run in candidates
+                if run.get("status") == "completed" and run.get("conclusion") == "success"
+            ]
+
+            if active:
+                status = active[0].get("status")
                 pending.append(f"{name}:{status}")
-            elif conclusion != "success":
-                failed.append(f"{name}:{conclusion}")
+                continue
+            if successful:
+                continue
+
+            run = candidates[0]
+            failed.append(f"{name}:{run.get('conclusion')}")
 
         if failed:
             print("release-gate failed:", ", ".join(failed), file=sys.stderr)
