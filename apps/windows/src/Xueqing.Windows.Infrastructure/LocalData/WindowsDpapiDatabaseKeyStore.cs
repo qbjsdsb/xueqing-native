@@ -16,6 +16,8 @@ internal sealed class LocalDatabaseKeyUnavailableException : InvalidOperationExc
 internal sealed class WindowsDpapiDatabaseKeyStore
 {
     private const int MasterKeyLengthBytes = 32;
+    private const int ExistingKeyReadAttempts = 8;
+    private const int ExistingKeyReadRetryDelayMilliseconds = 20;
     private const string EntropyPrefix = "xueqing-native/windows/local-database-key/v1/";
 
     private readonly string _databasePath;
@@ -88,7 +90,7 @@ internal sealed class WindowsDpapiDatabaseKeyStore
 
     private async Task<byte[]> LoadExistingAsync(CancellationToken cancellationToken)
     {
-        var wrappedKey = await File.ReadAllBytesAsync(_wrappedKeyPath, cancellationToken);
+        var wrappedKey = await ReadExistingWrappedKeyAsync(cancellationToken);
         try
         {
             var masterKey = ProtectedData.Unprotect(wrappedKey, _entropy, DataProtectionScope.CurrentUser);
@@ -104,6 +106,37 @@ internal sealed class WindowsDpapiDatabaseKeyStore
         {
             CryptographicOperations.ZeroMemory(wrappedKey);
         }
+    }
+
+    private async Task<byte[]> ReadExistingWrappedKeyAsync(CancellationToken cancellationToken)
+    {
+        IOException? lastSharingFailure = null;
+
+        for (var attempt = 1; attempt <= ExistingKeyReadAttempts; attempt++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            try
+            {
+                return await File.ReadAllBytesAsync(_wrappedKeyPath, cancellationToken);
+            }
+            catch (IOException exception)
+                when (File.Exists(_wrappedKeyPath) && attempt < ExistingKeyReadAttempts)
+            {
+                lastSharingFailure = exception;
+                await Task.Delay(ExistingKeyReadRetryDelayMilliseconds, cancellationToken);
+            }
+        }
+
+        if (lastSharingFailure is not null)
+        {
+            throw new IOException(
+                "The authoritative DPAPI-wrapped database key remained temporarily unavailable after bounded retry.",
+                lastSharingFailure);
+        }
+
+        // The loop either returns or throws from File.ReadAllBytesAsync. This is defensive only.
+        throw new IOException("The authoritative DPAPI-wrapped database key could not be read.");
     }
 
     private static async Task WriteTemporaryKeyAsync(
