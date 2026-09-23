@@ -11,6 +11,10 @@ import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.time.Instant
 import java.util.zip.ZipInputStream
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertThrows
@@ -28,8 +32,10 @@ class DiagnosticsArchiveWriterTest {
         val entry = zip.nextEntry
         assertEquals("diagnostics.json", entry.name)
         val body = zip.readBytes().toString(Charsets.UTF_8)
-        assertTrue(body.contains("\"contract\": \"diagnostics_manifest_v1\""))
-        assertTrue(body.contains("\"session_state\": \"authenticated\""))
+        val root = Json.parseToJsonElement(body) as JsonObject
+        assertEquals("diagnostics_manifest_v1", (root["contract"] as JsonPrimitive).content)
+        val runtime = root["runtime"] as JsonObject
+        assertEquals("authenticated", (runtime["session_state"] as JsonPrimitive).content)
         assertEquals(null, zip.nextEntry)
     }
 
@@ -38,9 +44,11 @@ class DiagnosticsArchiveWriterTest {
         val body = DiagnosticsArchiveWriter().serialize(
             snapshot(queueCounts = DiagnosticQueueCounts(null, null, null)),
         )
-        assertTrue(body.contains("\"pending_intents\": null"))
-        assertTrue(body.contains("\"outbox_items\": null"))
-        assertTrue(body.contains("\"attachment_staging\": null"))
+        val root = Json.parseToJsonElement(body) as JsonObject
+        val queues = root["queues"] as JsonObject
+        assertEquals(JsonNull, queues["pending_intents"])
+        assertEquals(JsonNull, queues["outbox_items"])
+        assertEquals(JsonNull, queues["attachment_staging"])
     }
 
     @Test
