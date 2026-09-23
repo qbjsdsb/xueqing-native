@@ -3,6 +3,7 @@ name: windows-spike
 on:
   pull_request:
     paths:
+      - 'apps/windows/src/Xueqing.Setup/**'
       - 'release/**'
       - 'tools/release/**'
       - 'apps/windows/**'
