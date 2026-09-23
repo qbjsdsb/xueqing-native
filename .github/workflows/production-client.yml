@@ -3,6 +3,8 @@ name: production-client
 on:
   pull_request:
     paths:
+      - 'release/**'
+      - 'tools/release/**'
       - 'contracts/operations/PRODUCTION_CLIENT_DEPLOYMENT_SESSION_V1.md'
       - 'contracts/schemas/DEPLOYMENT_PROFILE_V1.schema.json'
       - 'tools/deployment/**'
