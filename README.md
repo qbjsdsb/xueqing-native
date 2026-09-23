@@ -180,6 +180,14 @@ tools/
 - 不因为开源项目功能多就照搬产品范围；
 - 首先复用思想和模式，直接复制代码前必须确认许可证兼容性。
 
+## Code signing policy
+
+Windows 公共发行采用仓库可验证的受保护签名流程。首选路线为符合条件时使用 SignPath Foundation。
+
+**Free code signing provided by SignPath.io, certificate by SignPath Foundation.**
+
+签名范围、团队角色、隐私与网络行为、审批和密钥恢复规则见 `docs/production/CODE_SIGNING_POLICY.md`。
+
 ## License
 
 Apache License 2.0。详见 `LICENSE`。
