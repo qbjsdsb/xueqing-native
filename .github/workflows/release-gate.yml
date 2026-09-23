@@ -1,0 +1,41 @@
+name: release-gate
+
+on:
+  pull_request:
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: release-gate-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  release-gate:
+    name: release-gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Checkout exact PR head
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+
+      - name: Validate release identity contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -B tools/release/verify_release_identity.py
+          python3 -B -m unittest tools/release/test_verify_release_identity.py
+
+      - name: Aggregate exact-head release evidence
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          XUEQING_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          XUEQING_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          python3 -B tools/release/aggregate_release_gate.py
