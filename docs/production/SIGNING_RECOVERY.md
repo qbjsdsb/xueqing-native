@@ -38,7 +38,8 @@ Common variable:
 SignPath configuration:
 
 - secret `SIGNPATH_API_TOKEN`;
-- variables `SIGNPATH_ORGANIZATION_ID`, `SIGNPATH_PROJECT_SLUG`, `SIGNPATH_SIGNING_POLICY_SLUG`, `SIGNPATH_ARTIFACT_CONFIGURATION_SLUG`.
+- variables `SIGNPATH_ORGANIZATION_ID`, `SIGNPATH_PROJECT_SLUG`, `SIGNPATH_SIGNING_POLICY_SLUG`, `SIGNPATH_ARTIFACT_CONFIGURATION_SLUG`;
+- variable `SIGNPATH_SETUP_ARTIFACT_CONFIGURATION_SLUG` for the user-facing Setup EXE.
 
 PFX configuration:
 
@@ -66,3 +67,10 @@ V1 final acceptance must not proceed until a second copy is independently recove
 `release-signing.yml` accepts only a 40-character source SHA and requires it to be present on `main` history. It rebuilds and signs from that exact source. The resulting candidate artifacts retain SHA-256 and signer evidence as workflow artifacts.
 
 Final #67 RC promotion must consume those already-signed candidate bytes; it must not rebuild from a different commit.
+
+
+## Setup and durable candidate record
+
+The signed Windows MSIX is embedded byte-for-byte into `XueqingSetup-<version>-x64.exe`. Setup and MSIX must be signed by the same production certificate. CI verifies both signatures and runs a current-user install smoke before accepting the Windows candidate.
+
+After Android and Windows signing succeed, the workflow downloads those exact signed artifacts and creates a **draft GitHub prerelease** for the checked-in release label. The draft contains the signed APK, signed MSIX, signed Setup and checksum/signing evidence. #67 promotes this durable candidate record only after final acceptance; it does not rebuild the binaries.
