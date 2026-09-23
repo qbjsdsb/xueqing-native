@@ -9,6 +9,9 @@ ROOT = pathlib.Path(__file__).resolve().parents[2]
 VERSION = ROOT / "release" / "version.properties"
 WINDOWS_TEMPLATE = ROOT / "release" / "windows" / "Package.production.appxmanifest.template"
 ANDROID_GRADLE = ROOT / "apps" / "android" / "app" / "build.gradle.kts"
+WINDOWS_SETUP_PROJECT = ROOT / "apps" / "windows" / "src" / "Xueqing.Setup" / "Xueqing.Setup.csproj"
+WINDOWS_SETUP_PROGRAM = ROOT / "apps" / "windows" / "src" / "Xueqing.Setup" / "Program.cs"
+WINDOWS_SETUP_BUILDER = ROOT / "tools" / "release" / "build-windows-setup.ps1"
 
 SEMVER_RC = re.compile(r"^\d+\.\d+\.\d+-rc\.\d+$")
 WINDOWS_VERSION = re.compile(r"^\d+\.\d+\.\d+\.\d+$")
@@ -77,6 +80,31 @@ def verify() -> None:
 
     if values["windowsPackageVersion"] in template:
         raise ValueError("Windows template must render package version from the release source")
+
+    for path in (WINDOWS_SETUP_PROJECT, WINDOWS_SETUP_PROGRAM, WINDOWS_SETUP_BUILDER):
+        if not path.is_file():
+            raise ValueError(f"required Windows Setup release file is missing: {path.relative_to(ROOT)}")
+
+    setup_project = WINDOWS_SETUP_PROJECT.read_text(encoding="utf-8")
+    setup_program = WINDOWS_SETUP_PROGRAM.read_text(encoding="utf-8")
+    setup_builder = WINDOWS_SETUP_BUILDER.read_text(encoding="utf-8")
+    if "<AssemblyName>XueqingSetup</AssemblyName>" not in setup_project:
+        raise ValueError("Windows Setup assembly identity drifted")
+    if "Xueqing.Native.msix" not in setup_project or "EmbeddedResource" not in setup_project:
+        raise ValueError("Windows Setup must embed the exact MSIX payload")
+    for needle in (
+        "WinVerifyTrust",
+        "PackageManager",
+        "XueqingPayloadSha256",
+        "XueqingPublisher",
+        'const string LaunchUri = "xueqing://today"',
+    ):
+        if needle not in setup_program:
+            raise ValueError(f"Windows Setup contract missing: {needle}")
+    if "build-windows-setup.ps1" in setup_builder:
+        raise ValueError("Windows Setup builder must not recursively invoke itself")
+    if "Get-FileHash" not in setup_builder or "XueqingEmbeddedMsix" not in setup_builder:
+        raise ValueError("Windows Setup builder must bind the embedded MSIX hash and bytes")
 
     gradle = ANDROID_GRADLE.read_text(encoding="utf-8")
     if 'applicationId = releaseVersionProperties.getProperty("androidApplicationId")' not in gradle:
