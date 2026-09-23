@@ -1,5 +1,7 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Windows.Storage;
+using Windows.Storage.Pickers;
 using Xueqing.Windows.Core.Agent;
 using Xueqing.Windows.Core.Layout;
 using Xueqing.Windows.ViewModels;
@@ -9,9 +11,11 @@ namespace Xueqing.Windows;
 public sealed partial class MainWindow : Window
 {
     private readonly Func<Task>? _signOutAction;
+    private readonly Func<byte[]>? _createDiagnosticsArchive;
     private AgentNavigationRequest? _initialAgentNavigation;
     private bool _organizationWorkspace;
     private bool _signingOut;
+    private bool _exportingDiagnostics;
 
     public MainWindowViewModel ViewModel { get; }
 
@@ -23,11 +27,13 @@ public sealed partial class MainWindow : Window
     public MainWindow(
         MainWindowViewModel viewModel,
         Func<Task>? signOutAction = null,
-        AgentNavigationRequest? initialAgentNavigation = null)
+        AgentNavigationRequest? initialAgentNavigation = null,
+        Func<byte[]>? createDiagnosticsArchive = null)
     {
         ViewModel = viewModel ?? throw new ArgumentNullException(nameof(viewModel));
         _signOutAction = signOutAction;
         _initialAgentNavigation = initialAgentNavigation;
+        _createDiagnosticsArchive = createDiagnosticsArchive;
         InitializeComponent();
         Title = "学情";
         ExtendsContentIntoTitleBar = true;
@@ -35,6 +41,10 @@ public sealed partial class MainWindow : Window
         RootGrid.DataContext = ViewModel;
         SignOutNav.Visibility =
             _signOutAction is null
+                ? Visibility.Collapsed
+                : Visibility.Visible;
+        DiagnosticsNav.Visibility =
+            _createDiagnosticsArchive is null
                 ? Visibility.Collapsed
                 : Visibility.Visible;
         ApplyOrganizationWorkspaceAccess();
@@ -208,6 +218,41 @@ public sealed partial class MainWindow : Window
         if (tag == "learning" && ViewModel.IsAuthoritativeStudentWorkspace)
         {
             await ViewModel.LoadSelectedTeachingContextAsync();
+        }
+    }
+
+    private async void DiagnosticsNav_Tapped(object sender, Microsoft.UI.Xaml.Input.TappedRoutedEventArgs e)
+    {
+        if (_createDiagnosticsArchive is null || _exportingDiagnostics)
+        {
+            return;
+        }
+
+        _exportingDiagnostics = true;
+        DiagnosticsNav.IsEnabled = false;
+        try
+        {
+            var picker = new FileSavePicker
+            {
+                SuggestedFileName = $"Xueqing-Diagnostics-{DateTimeOffset.Now:yyyyMMdd-HHmmss}",
+            };
+            picker.FileTypeChoices.Add("ZIP archive", new List<string> { ".zip" });
+            WinRT.Interop.InitializeWithWindow.Initialize(
+                picker,
+                WinRT.Interop.WindowNative.GetWindowHandle(this));
+
+            StorageFile? file = await picker.PickSaveFileAsync();
+            if (file is null)
+            {
+                return;
+            }
+
+            await FileIO.WriteBytesAsync(file, _createDiagnosticsArchive());
+        }
+        finally
+        {
+            _exportingDiagnostics = false;
+            DiagnosticsNav.IsEnabled = true;
         }
     }
 
