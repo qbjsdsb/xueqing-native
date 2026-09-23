@@ -72,6 +72,9 @@ jobs:
             docs/adr/0002-android-compose.md
             docs/adr/0013-v1-projection-snapshot-sync.md
             contracts/fixtures/README.md
+            contracts/fixtures/valid_client_compatibility_v1.json
+            contracts/operations/CLIENT_COMPATIBILITY_V1.md
+            contracts/schemas/CLIENT_COMPATIBILITY_V1.schema.json
             contracts/operations/PRODUCTION_PROVIDER_REGION_DATA_RESIDENCY_V1.md
             docs/production/PROVIDER_TOPOLOGY.json
             docs/production/PROVIDER_DECISION_MATRIX.md
@@ -81,6 +84,13 @@ jobs:
           for file in "${required[@]}"; do
             test -f "$file" || { echo "Missing $file"; exit 1; }
           done
+
+      - name: Validate client compatibility v1 contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/compatibility/verify_client_compatibility.py contracts/fixtures/valid_client_compatibility_v1.json
+          python3 -m unittest tools/compatibility/test_verify_client_compatibility.py
 
       - name: Check architecture boundaries
         shell: bash
