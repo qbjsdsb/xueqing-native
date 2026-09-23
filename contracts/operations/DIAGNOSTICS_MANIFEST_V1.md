@@ -41,7 +41,7 @@ The manifest identifies its own schema contract and contains no arbitrary log/me
 - client contract and local schema versions;
 - coarse Session/Auth category;
 - current compatibility state/reason/policy revision;
-- bounded counts of pending intents/outbox/attachment staging;
+- bounded counts of pending intents/outbox/attachment staging when known;
 - coarse last-sync category;
 - bounded recent machine-readable Xueqing error codes;
 - generated timestamp.
@@ -62,6 +62,8 @@ The archive must never contain:
 - raw local database;
 - encryption key material;
 - unrestricted application logs.
+
+Queue counts may be `null` when the current client cannot establish the count safely. `null` means **unknown**; implementations must never fabricate `0`.
 
 ## Error codes
 
