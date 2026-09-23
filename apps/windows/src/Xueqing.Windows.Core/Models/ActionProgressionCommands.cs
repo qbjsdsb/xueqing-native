@@ -47,6 +47,8 @@ public enum ActionProgressionFailureKind
     LocalDurabilityFailure,
     ResultUnknown,
     Transient,
+    CompatibilityBlocked,
+    CompatibilityUnavailable,
     InvalidResponse,
 }
 
