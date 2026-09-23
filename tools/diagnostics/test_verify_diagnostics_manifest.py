@@ -35,6 +35,15 @@ class DiagnosticsManifestVerifierTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             verify(value)
 
+    def test_unknown_queue_counts_are_explicit_null(self):
+        value = copy.deepcopy(self.value)
+        value["queues"] = {
+            "pending_intents": None,
+            "outbox_items": None,
+            "attachment_staging": None,
+        }
+        verify(value)
+
     def test_unknown_compatibility_is_allowed_only_as_bounded_diagnostic_state(self):
         value = copy.deepcopy(self.value)
         value["compatibility"] = {
