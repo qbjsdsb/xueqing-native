@@ -2,6 +2,9 @@ package com.xueqing.app.durability
 
 import com.xueqing.app.application.bootstrap.PersonalBootstrapRemote
 import com.xueqing.app.application.bootstrap.PersonalBootstrapResult
+import com.xueqing.app.application.compatibility.ClientCompatibilityState
+import com.xueqing.app.application.compatibility.ConsequentialWriteAuthorization
+import com.xueqing.app.application.compatibility.ConsequentialWriteGate
 import com.xueqing.app.application.observation.ObservationCommandRemote
 import com.xueqing.app.application.observation.ObservationCommandResult
 import kotlin.math.min
@@ -9,6 +12,7 @@ import kotlin.math.min
 class ObservationOutboxDrainer(
     private val dao: DurableIntentDao,
     private val bootstrapRemote: PersonalBootstrapRemote,
+    private val compatibilityGate: ConsequentialWriteGate,
     private val observationRemote: ObservationCommandRemote,
     private val environmentId: String,
     private val clock: () -> Long = System::currentTimeMillis,
@@ -26,10 +30,47 @@ class ObservationOutboxDrainer(
         BootstrapTemporarilyUnavailable,
         BootstrapAccessUnavailable,
         BootstrapProtocolFailure,
+        CompatibilityTemporarilyUnavailable,
+        CompatibilityUpdateRequired,
+        CompatibilitySecurityBlocked,
+        CompatibilityProtocolFailure,
     }
 
     suspend fun drainReady(maxItems: Int = DEFAULT_MAX_ITEMS): Result {
         require(maxItems > 0)
+
+        when (val authorization = compatibilityGate.check()) {
+            ConsequentialWriteAuthorization.Allowed -> Unit
+            ConsequentialWriteAuthorization.AuthenticationRequired -> {
+                return Result(
+                    processedCount = 0,
+                    nextWakeAtEpochMillis = Math.addExact(clock(), AUTH_RETRY_MILLIS),
+                    blockedReason = BlockedReason.AuthenticationRequired,
+                )
+            }
+            is ConsequentialWriteAuthorization.TemporarilyUnavailable -> {
+                return Result(
+                    processedCount = 0,
+                    nextWakeAtEpochMillis = Math.addExact(clock(), TRANSIENT_BOOTSTRAP_RETRY_MILLIS),
+                    blockedReason = BlockedReason.CompatibilityTemporarilyUnavailable,
+                )
+            }
+            is ConsequentialWriteAuthorization.Blocked -> {
+                val reason = when (authorization.state) {
+                    ClientCompatibilityState.UpdateRequired ->
+                        BlockedReason.CompatibilityUpdateRequired
+                    ClientCompatibilityState.SecurityBlocked ->
+                        BlockedReason.CompatibilitySecurityBlocked
+                    ClientCompatibilityState.Supported,
+                    ClientCompatibilityState.UpdateRecommended,
+                    -> error("write-compatible state cannot be blocked")
+                }
+                return Result(0, null, reason)
+            }
+            is ConsequentialWriteAuthorization.ProtocolFailure -> {
+                return Result(0, null, BlockedReason.CompatibilityProtocolFailure)
+            }
+        }
 
         val bootstrap = bootstrapRemote.fetch()
         val appUserId = when (bootstrap) {
