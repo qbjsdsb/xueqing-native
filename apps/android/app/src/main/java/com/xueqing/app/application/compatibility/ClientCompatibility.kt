@@ -67,3 +67,55 @@ sealed interface ClientCompatibilityResult {
 fun interface ClientCompatibilityRemote {
     fun check(request: ClientCompatibilityRequest): ClientCompatibilityResult
 }
+
+
+sealed interface ConsequentialWriteAuthorization {
+    data object Allowed : ConsequentialWriteAuthorization
+
+    data object AuthenticationRequired : ConsequentialWriteAuthorization
+
+    data class TemporarilyUnavailable(
+        val reason: ClientCompatibilityUnknownReason,
+    ) : ConsequentialWriteAuthorization
+
+    data class Blocked(
+        val state: ClientCompatibilityState,
+        val reasonCode: String,
+    ) : ConsequentialWriteAuthorization
+
+    data class ProtocolFailure(
+        val code: String,
+    ) : ConsequentialWriteAuthorization
+}
+
+fun interface ConsequentialWriteGate {
+    fun check(): ConsequentialWriteAuthorization
+}
+
+class ServerClientCompatibilityWriteGate(
+    private val remote: ClientCompatibilityRemote,
+    private val request: ClientCompatibilityRequest,
+) : ConsequentialWriteGate {
+    override fun check(): ConsequentialWriteAuthorization =
+        when (val result = remote.check(request)) {
+            is ClientCompatibilityResult.Loaded -> {
+                if (result.decision.state.allowsConsequentialWrite) {
+                    ConsequentialWriteAuthorization.Allowed
+                } else {
+                    ConsequentialWriteAuthorization.Blocked(
+                        result.decision.state,
+                        result.decision.reasonCode,
+                    )
+                }
+            }
+
+            ClientCompatibilityResult.AuthenticationRequired ->
+                ConsequentialWriteAuthorization.AuthenticationRequired
+
+            is ClientCompatibilityResult.Unknown ->
+                ConsequentialWriteAuthorization.TemporarilyUnavailable(result.reason)
+
+            is ClientCompatibilityResult.ProtocolFailure ->
+                ConsequentialWriteAuthorization.ProtocolFailure(result.code)
+        }
+}
