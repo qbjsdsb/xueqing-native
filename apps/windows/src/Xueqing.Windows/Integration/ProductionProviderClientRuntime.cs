@@ -9,6 +9,7 @@ namespace Xueqing.Windows.Integration;
 internal sealed class ProductionProviderClientRuntime
 {
     private const string ProfileFileName = "deployment_profile.json";
+    private const int ClientContractVersion = 1;
     private readonly HttpClient _httpClient;
     private readonly ApplicationData _applicationData;
 
@@ -72,11 +73,25 @@ internal sealed class ProductionProviderClientRuntime
                 "Production teaching workspace requires a usable provider session.");
         }
 
+        var version = Windows.ApplicationModel.Package.Current.Id.Version;
+        var appVersion = $"{version.Major}.{version.Minor}.{version.Build}.{version.Revision}";
+        var compatibilityGate = new ServerClientCompatibilityWriteGate(
+            new PostgrestClientCompatibilityReader(
+                _httpClient,
+                Profile.ProjectOrigin,
+                Profile.PublishableKey,
+                TokenSource.GetCurrentAccessTokenAsync),
+            new ClientCompatibilityRequest(
+                "windows",
+                appVersion,
+                ClientContractVersion));
+
         return ProviderTeachingWorkspaceBuilder.Create(
             _httpClient,
             Profile.ProjectOrigin,
             Profile.PublishableKey,
             TokenSource.GetCurrentAccessTokenAsync,
+            compatibilityGate,
             Profile.EnvironmentId,
             _applicationData,
             Profile.RequiredEdgeRegion);
