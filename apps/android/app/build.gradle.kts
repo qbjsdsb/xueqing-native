@@ -1,4 +1,9 @@
+import java.util.Properties
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+
+val releaseVersionProperties = Properties().apply {
+    rootProject.file("../../release/version.properties").inputStream().use(::load)
+}
 
 plugins {
     id("com.android.application")
@@ -12,11 +17,11 @@ android {
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.xueqing.app"
+        applicationId = releaseVersionProperties.getProperty("androidApplicationId")
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.1.0-spike"
+        versionCode = releaseVersionProperties.getProperty("androidVersionCode").toInt()
+        versionName = releaseVersionProperties.getProperty("androidVersionName")
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
