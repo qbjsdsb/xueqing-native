@@ -23,6 +23,8 @@ public enum AcceptOrganizationInvitationFailureKind
     Validation,
     OperationConflict,
     ResultUnknown,
+    CompatibilityBlocked,
+    CompatibilityUnavailable,
     InvalidResponse,
 }
 

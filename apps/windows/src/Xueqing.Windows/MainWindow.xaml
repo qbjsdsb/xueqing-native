@@ -114,6 +114,18 @@
 
             <NavigationView.FooterMenuItems>
                 <NavigationViewItem
+                    x:Name="DiagnosticsNav"
+                    AutomationProperties.AutomationId="DiagnosticsExport"
+                    AutomationProperties.Name="导出诊断信息"
+                    Content="导出诊断信息"
+                    SelectsOnInvoked="False"
+                    Tapped="DiagnosticsNav_Tapped"
+                    Visibility="Collapsed">
+                    <NavigationViewItem.Icon>
+                        <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE74E;" />
+                    </NavigationViewItem.Icon>
+                </NavigationViewItem>
+                <NavigationViewItem
                     x:Name="SignOutNav"
                     AutomationProperties.AutomationId="SignOutNavigation"
                     AutomationProperties.Name="退出登录"

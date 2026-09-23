@@ -1,9 +1,14 @@
 package com.xueqing.app.infrastructure.production
 
 import android.content.Context
+import android.content.pm.PackageManager
+import android.os.Build
 import com.xueqing.app.application.bootstrap.PersonalBootstrapProtocolFailure
 import com.xueqing.app.application.bootstrap.PersonalBootstrapRemote
 import com.xueqing.app.application.bootstrap.PersonalBootstrapResult
+import com.xueqing.app.application.compatibility.ClientCompatibilityRequest
+import com.xueqing.app.application.compatibility.ConsequentialWriteGate
+import com.xueqing.app.application.compatibility.ServerClientCompatibilityWriteGate
 import com.xueqing.app.application.learning.LearningReadFailure
 import com.xueqing.app.application.learning.LearningReadFailureKind
 import com.xueqing.app.application.learning.PersonalTodayActionsRemote
@@ -36,6 +41,7 @@ import com.xueqing.app.infrastructure.deployment.DeploymentProfileParser
 import com.xueqing.app.infrastructure.remote.HttpRpcTransport
 import com.xueqing.app.infrastructure.remote.HttpStorageTransport
 import com.xueqing.app.infrastructure.remote.ProviderSessionTokenSource
+import com.xueqing.app.infrastructure.remote.SupabaseClientCompatibilityAdapter
 import com.xueqing.app.infrastructure.remote.SupabaseCommitObservationAttachmentAdapter
 import com.xueqing.app.infrastructure.remote.SupabaseCreateObservationAdapter
 import com.xueqing.app.infrastructure.remote.SupabaseObservationAttachmentStorageAdapter
@@ -63,6 +69,7 @@ class ProductionClientRuntime private constructor(
     private val rawBootstrapRemote: PersonalBootstrapRemote,
     private val rawTodayRemote: PersonalTodayActionsRemote,
     private val rawFocusRemote: StudentLearningFocusRemote,
+    private val compatibilityGate: ConsequentialWriteGate,
     private val observationRemote: SupabaseCreateObservationAdapter,
     private val attachmentStorageRemote: SupabaseObservationAttachmentStorageAdapter,
     val attachmentReadRemote: SupabaseObservationAttachmentReadAdapter,
@@ -260,6 +267,7 @@ class ProductionClientRuntime private constructor(
             ObservationOutboxDrainer(
                 dao = database.durableIntentDao(),
                 bootstrapRemote = bootstrapRemote,
+                compatibilityGate = compatibilityGate,
                 observationRemote = observationRemote,
                 environmentId = profile.environmentId,
             )
@@ -275,6 +283,7 @@ class ProductionClientRuntime private constructor(
                 dao = database.attachmentStagingDao(),
                 stagingStore = stagingStore,
                 bootstrapRemote = bootstrapRemote,
+                compatibilityGate = compatibilityGate,
                 storageRemote = attachmentStorageRemote,
                 commandRemote = attachmentCommandRemote,
                 environmentId = profile.environmentId,
@@ -305,6 +314,7 @@ class ProductionClientRuntime private constructor(
 
     companion object {
         private const val PROFILE_ASSET = "deployment_profile.json"
+        private const val CLIENT_CONTRACT_VERSION = 1
         private val REQUIRED_CAPABILITIES = setOf(
             "auth",
             "database-rpc",
@@ -351,6 +361,17 @@ class ProductionClientRuntime private constructor(
                 baseUrl = profile.projectOrigin,
                 publishableKey = profile.publishableKey,
             )
+            val compatibilityGate = ServerClientCompatibilityWriteGate(
+                remote = SupabaseClientCompatibilityAdapter(
+                    sessionTokenSource = tokenSource,
+                    transport = rpcTransport,
+                ),
+                request = ClientCompatibilityRequest(
+                    platform = "android",
+                    appVersion = installedAppVersion(appContext),
+                    contractVersion = CLIENT_CONTRACT_VERSION,
+                ),
+            )
 
             return ProductionClientRuntime(
                 appContext = appContext,
@@ -369,6 +390,7 @@ class ProductionClientRuntime private constructor(
                     sessionTokenSource = tokenSource,
                     transport = rpcTransport,
                 ),
+                compatibilityGate = compatibilityGate,
                 observationRemote = SupabaseCreateObservationAdapter(
                     sessionTokenSource = tokenSource,
                     transport = rpcTransport,
@@ -386,6 +408,21 @@ class ProductionClientRuntime private constructor(
                     transport = rpcTransport,
                 ),
             )
+        }
+
+        private fun installedAppVersion(context: Context): String {
+            val packageInfo = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                context.packageManager.getPackageInfo(
+                    context.packageName,
+                    PackageManager.PackageInfoFlags.of(0),
+                )
+            } else {
+                @Suppress("DEPRECATION")
+                context.packageManager.getPackageInfo(context.packageName, 0)
+            }
+            return requireNotNull(packageInfo.versionName) {
+                "Installed package versionName is unavailable."
+            }
         }
 
         fun unavailableBootstrapRemote(): PersonalBootstrapRemote =

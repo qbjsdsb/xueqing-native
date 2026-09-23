@@ -7,6 +7,8 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.work.testing.TestListenableWorkerBuilder
 import com.xueqing.app.application.bootstrap.PersonalBootstrapResult
+import com.xueqing.app.application.compatibility.ConsequentialWriteAuthorization
+import com.xueqing.app.application.compatibility.ConsequentialWriteGate
 import com.xueqing.app.application.attachment.AttachmentCommitResult
 import com.xueqing.app.application.attachment.AttachmentUploadResult
 import com.xueqing.app.application.attachment.CommitObservationAttachmentRequest
@@ -169,6 +171,9 @@ class ObservationReferenceProviderE2ETest {
             ObservationOutboxDrainer(
                 dao = DraftDatabase.get(appContext).durableIntentDao(),
                 bootstrapRemote = bootstrapRemote,
+                compatibilityGate = ConsequentialWriteGate {
+                    ConsequentialWriteAuthorization.Allowed
+                },
                 observationRemote = observationRemote,
                 environmentId = ENVIRONMENT_ID,
                 attachmentCommitOperationIdFactory = {
@@ -225,6 +230,9 @@ class ObservationReferenceProviderE2ETest {
                     protectedFiles = ProtectedAttachmentFileStore(appContext),
                 ),
                 bootstrapRemote = bootstrapRemote,
+                compatibilityGate = ConsequentialWriteGate {
+                    ConsequentialWriteAuthorization.Allowed
+                },
                 storageRemote = storageRemote,
                 commandRemote = attachmentCommandRemote,
                 environmentId = ENVIRONMENT_ID,

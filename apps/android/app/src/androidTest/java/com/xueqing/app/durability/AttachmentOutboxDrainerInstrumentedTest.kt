@@ -18,6 +18,9 @@ import com.xueqing.app.application.bootstrap.PersonalBootstrapActor
 import com.xueqing.app.application.bootstrap.PersonalBootstrapOrganization
 import com.xueqing.app.application.bootstrap.PersonalBootstrapRemote
 import com.xueqing.app.application.bootstrap.PersonalBootstrapResult
+import com.xueqing.app.application.compatibility.ClientCompatibilityState
+import com.xueqing.app.application.compatibility.ConsequentialWriteAuthorization
+import com.xueqing.app.application.compatibility.ConsequentialWriteGate
 import java.io.ByteArrayInputStream
 import java.time.Instant
 import java.util.UUID
@@ -58,6 +61,39 @@ class AttachmentOutboxDrainerInstrumentedTest {
     fun tearDown() {
         database.close()
         DraftDatabase.purgeLocalEncryptedData(context)
+    }
+
+    @Test
+    fun securityBlockKeepsStagedAttachmentAndSkipsStorageAndCommit() = runBlocking {
+        insertUploadPendingAttachment()
+        val storage = FakeStorageRemote(AttachmentUploadResult.Uploaded)
+        val command = FakeCommandRemote(
+            AttachmentCommitResult.UnknownResult(
+                UUID.fromString(COMMIT_OPERATION_ID),
+                AttachmentCommitUnknownReason.NetworkFailure,
+            ),
+        )
+        val gate = ConsequentialWriteGate {
+            ConsequentialWriteAuthorization.Blocked(
+                ClientCompatibilityState.SecurityBlocked,
+                "XQ_CLIENT_SECURITY_BLOCKED",
+            )
+        }
+
+        val result = drainer(storage, command, compatibilityGate = gate).drainReady()
+
+        assertEquals(0, result.processedCount)
+        assertEquals(
+            AttachmentOutboxDrainer.BlockedReason.CompatibilitySecurityBlocked,
+            result.blockedReason,
+        )
+        assertTrue(storage.requests.isEmpty())
+        assertTrue(command.requests.isEmpty())
+        assertEquals(
+            AttachmentStagingState.UploadPending,
+            database.attachmentStagingDao().read(ATTACHMENT_ID)?.state,
+        )
+        assertTrue(protectedFiles.encryptedFile("$ATTACHMENT_ID.xqas").exists())
     }
 
     @Test
@@ -145,10 +181,14 @@ class AttachmentOutboxDrainerInstrumentedTest {
     private fun drainer(
         storage: AttachmentStorageRemote,
         command: AttachmentCommandRemote,
+        compatibilityGate: ConsequentialWriteGate = ConsequentialWriteGate {
+            ConsequentialWriteAuthorization.Allowed
+        },
     ) = AttachmentOutboxDrainer(
         dao = database.attachmentStagingDao(),
         stagingStore = stagingStore,
         bootstrapRemote = bootstrap(),
+        compatibilityGate = compatibilityGate,
         storageRemote = storage,
         commandRemote = command,
         environmentId = ENVIRONMENT_ID,

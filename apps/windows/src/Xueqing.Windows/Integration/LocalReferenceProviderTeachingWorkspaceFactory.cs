@@ -47,6 +47,7 @@ internal static class LocalReferenceProviderTeachingWorkspaceFactory
             projectUri,
             apiKey,
             AccessTokenProvider,
+            DevelopmentAllowAllConsequentialWriteCompatibilityGate.Instance,
             projectUri.GetLeftPart(UriPartial.Authority),
             ApplicationData.Current);
     }

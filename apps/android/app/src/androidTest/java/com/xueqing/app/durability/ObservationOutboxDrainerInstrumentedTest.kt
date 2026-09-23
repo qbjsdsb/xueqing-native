@@ -9,6 +9,9 @@ import com.xueqing.app.application.bootstrap.PersonalBootstrapActor
 import com.xueqing.app.application.bootstrap.PersonalBootstrapOrganization
 import com.xueqing.app.application.bootstrap.PersonalBootstrapRemote
 import com.xueqing.app.application.bootstrap.PersonalBootstrapResult
+import com.xueqing.app.application.compatibility.ClientCompatibilityState
+import com.xueqing.app.application.compatibility.ConsequentialWriteAuthorization
+import com.xueqing.app.application.compatibility.ConsequentialWriteGate
 import com.xueqing.app.application.observation.CreateObservationReceipt
 import com.xueqing.app.application.observation.CreateObservationRejection
 import com.xueqing.app.application.observation.CreateObservationRequest
@@ -53,6 +56,42 @@ class ObservationOutboxDrainerInstrumentedTest {
     @After
     fun tearDown() {
         database.close()
+    }
+
+    @Test
+    fun updateRequiredKeepsIntentPendingAndSkipsRemoteWrite() = runBlocking {
+        val request = request(UUID.randomUUID(), "升级阻断时这段输入必须继续留在本机")
+        enqueue(appUserA, request)
+        var remoteCalls = 0
+        val remote = ObservationCommandRemote {
+            remoteCalls += 1
+            ObservationCommandResult.Accepted(it.operationId, receipt(it))
+        }
+        val gate = ConsequentialWriteGate {
+            ConsequentialWriteAuthorization.Blocked(
+                ClientCompatibilityState.UpdateRequired,
+                "XQ_CLIENT_VERSION_UNSUPPORTED",
+            )
+        }
+
+        val result = drainer(appUserA, remote, compatibilityGate = gate).drainReady()
+
+        assertEquals(0, result.processedCount)
+        assertEquals(
+            ObservationOutboxDrainer.BlockedReason.CompatibilityUpdateRequired,
+            result.blockedReason,
+        )
+        assertEquals(0, remoteCalls)
+        assertEquals(
+            ObservationOutboxStatus.Pending,
+            dao.readByOperationId(request.operationId.toString())?.queueStatus,
+        )
+        assertEquals(
+            request.rawText,
+            ObservationOutboxCodec.decodeRequest(
+                requireNotNull(dao.readByOperationId(request.operationId.toString())).payloadJson,
+            ).rawText,
+        )
     }
 
     @Test
@@ -281,9 +320,13 @@ class ObservationOutboxDrainerInstrumentedTest {
         actorAppUserId: UUID,
         remote: ObservationCommandRemote,
         attachmentCommitOperationIdFactory: () -> UUID = UUID::randomUUID,
+        compatibilityGate: ConsequentialWriteGate = ConsequentialWriteGate {
+            ConsequentialWriteAuthorization.Allowed
+        },
     ): ObservationOutboxDrainer = ObservationOutboxDrainer(
         dao = dao,
         bootstrapRemote = bootstrapRemote(actorAppUserId),
+        compatibilityGate = compatibilityGate,
         observationRemote = remote,
         environmentId = ENVIRONMENT_ID,
         clock = { now },

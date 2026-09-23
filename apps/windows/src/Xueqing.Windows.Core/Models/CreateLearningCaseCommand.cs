@@ -36,6 +36,8 @@ public enum CreateLearningCaseFailureKind
     LocalDurabilityFailure,
     ResultUnknown,
     Transient,
+    CompatibilityBlocked,
+    CompatibilityUnavailable,
     InvalidResponse,
 }
 

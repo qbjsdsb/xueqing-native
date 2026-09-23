@@ -8,6 +8,9 @@ import com.xueqing.app.application.attachment.CommitObservationAttachmentRequest
 import com.xueqing.app.application.attachment.ObservationAttachmentUploadRequest
 import com.xueqing.app.application.bootstrap.PersonalBootstrapRemote
 import com.xueqing.app.application.bootstrap.PersonalBootstrapResult
+import com.xueqing.app.application.compatibility.ClientCompatibilityState
+import com.xueqing.app.application.compatibility.ConsequentialWriteAuthorization
+import com.xueqing.app.application.compatibility.ConsequentialWriteGate
 import java.io.ByteArrayOutputStream
 import java.util.UUID
 
@@ -15,6 +18,7 @@ class AttachmentOutboxDrainer(
     private val dao: AttachmentStagingDao,
     private val stagingStore: AttachmentStagingStore,
     private val bootstrapRemote: PersonalBootstrapRemote,
+    private val compatibilityGate: ConsequentialWriteGate,
     private val storageRemote: AttachmentStorageRemote,
     private val commandRemote: AttachmentCommandRemote,
     private val environmentId: String,
@@ -33,11 +37,44 @@ class AttachmentOutboxDrainer(
         BootstrapTemporarilyUnavailable,
         BootstrapAccessUnavailable,
         BootstrapProtocolFailure,
+        CompatibilityTemporarilyUnavailable,
+        CompatibilityUpdateRequired,
+        CompatibilitySecurityBlocked,
+        CompatibilityProtocolFailure,
     }
 
     suspend fun drainReady(maxItems: Int = DEFAULT_MAX_ITEMS): Result {
         require(maxItems > 0)
         require(retryDelayMillis > 0)
+
+        when (val authorization = compatibilityGate.check()) {
+            ConsequentialWriteAuthorization.Allowed -> Unit
+            ConsequentialWriteAuthorization.AuthenticationRequired -> {
+                return Result(0, Math.addExact(clock(), retryDelayMillis), BlockedReason.AuthenticationRequired)
+            }
+            is ConsequentialWriteAuthorization.TemporarilyUnavailable -> {
+                return Result(
+                    0,
+                    Math.addExact(clock(), retryDelayMillis),
+                    BlockedReason.CompatibilityTemporarilyUnavailable,
+                )
+            }
+            is ConsequentialWriteAuthorization.Blocked -> {
+                val reason = when (authorization.state) {
+                    ClientCompatibilityState.UpdateRequired ->
+                        BlockedReason.CompatibilityUpdateRequired
+                    ClientCompatibilityState.SecurityBlocked ->
+                        BlockedReason.CompatibilitySecurityBlocked
+                    ClientCompatibilityState.Supported,
+                    ClientCompatibilityState.UpdateRecommended,
+                    -> error("write-compatible state cannot be blocked")
+                }
+                return Result(0, null, reason)
+            }
+            is ConsequentialWriteAuthorization.ProtocolFailure -> {
+                return Result(0, null, BlockedReason.CompatibilityProtocolFailure)
+            }
+        }
 
         val bootstrap = bootstrapRemote.fetch()
         val appUserId = when (bootstrap) {

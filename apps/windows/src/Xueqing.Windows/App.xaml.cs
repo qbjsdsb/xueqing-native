@@ -273,7 +273,8 @@ public partial class App : Application
                 new MainWindowViewModel(
                     _productionRuntime.CreateTeachingWorkspace()),
                 SignOutCurrentWorkspaceAsync,
-                ConsumePendingAgentNavigation()));
+                ConsumePendingAgentNavigation(),
+                _productionRuntime.CreateDiagnosticsArchive));
     }
 
     private void ShowSignIn(

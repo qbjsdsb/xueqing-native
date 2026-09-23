@@ -1,0 +1,19 @@
+{
+  "contract": "client_compatibility_v1",
+  "generated_at_server": "2026-09-23T03:30:00Z",
+  "policy_revision": "v1-initial",
+  "client": {
+    "platform": "android",
+    "app_version": "1.0.0",
+    "contract_version": 1
+  },
+  "decision": {
+    "state": "supported",
+    "reason_code": "XQ_CLIENT_SUPPORTED",
+    "minimum_supported_app_version": "1.0.0",
+    "recommended_app_version": "1.0.0",
+    "minimum_supported_contract_version": 1,
+    "server_contract_version": 1,
+    "update_uri": null
+  }
+}

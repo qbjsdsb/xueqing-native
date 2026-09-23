@@ -1,0 +1,45 @@
+{
+  "contract": "diagnostics_manifest_v1",
+  "generated_at": "2026-09-23T04:00:00Z",
+  "platform": {
+    "kind": "android",
+    "os_version": "17",
+    "architecture": "arm64-v8a",
+    "package_identity": "com.xueqing.app"
+  },
+  "app": {
+    "version": "1.0.0",
+    "source_commit": "62cad1dfce913775776e4cbd60add6ecab1aefc2",
+    "client_contract_version": 1,
+    "local_schema_version": 3
+  },
+  "deployment": {
+    "profile_id": "prod-singapore-v1",
+    "environment_id": "production",
+    "trust_domain_id": "xueqing-prod-sg",
+    "provider_id": "supabase"
+  },
+  "runtime": {
+    "session_state": "authenticated",
+    "last_sync_category": "recent"
+  },
+  "compatibility": {
+    "state": "supported",
+    "reason_code": "XQ_CLIENT_SUPPORTED",
+    "policy_revision": "v1-initial"
+  },
+  "queues": {
+    "pending_intents": 1,
+    "outbox_items": 1,
+    "attachment_staging": 0
+  },
+  "recent_error_codes": [
+    "XQ_NETWORK_TIMEOUT"
+  ],
+  "archive_files": [
+    {
+      "name": "diagnostics.json",
+      "contract": "diagnostics_manifest_v1"
+    }
+  ]
+}
