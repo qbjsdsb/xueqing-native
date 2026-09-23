@@ -84,7 +84,7 @@ next_execution:
     - v1-release-candidate-acceptance
 
 current_evidence:
-  main_head: d8b3761bc5729f4ee572767b15a1079dc2fcb35c
+  state_based_on_main: d8b3761bc5729f4ee572767b15a1079dc2fcb35c
   signing_distribution_infrastructure:
     merged_pr: 86
     merge_commit: fa22975d03ff518fe66a120c6ede69b4cd36138a
