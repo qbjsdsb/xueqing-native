@@ -68,6 +68,20 @@ The signed certificate Subject must match the rendered MSIX Publisher exactly.
 
 The thin `XueqingSetup.exe` is also Authenticode-signed for final public distribution. It installs the same signed MSIX and does not replace Package Identity.
 
+## Windows Setup invariant
+
+V1 Setup is a single self-contained EXE containing the exact already-signed production MSIX as an embedded resource.
+
+Before installation it:
+
+- verifies the embedded MSIX SHA-256 that was bound when Setup was built;
+- verifies Windows Authenticode trust with `WinVerifyTrust`;
+- installs through the current-user Windows package deployment API;
+- confirms the resulting `Xueqing.Native` Package Name and Publisher;
+- launches the existing `xueqing://today` protocol after success.
+
+Setup contains no provider credential, no business/domain storage, no second updater authority and no administrator-elevation requirement. The Setup executable and embedded MSIX use the same trusted production signing certificate.
+
 ## Secret boundary
 
 Forbidden in Git, PR logs and ordinary artifacts:
@@ -105,6 +119,8 @@ Every release artifact records:
 - workflow/run identity.
 
 GitHub Release is the durable distribution record. Actions artifacts are temporary evidence only.
+
+The protected signing workflow records the signed APK, signed MSIX and signed Setup as a **draft prerelease** tied to the exact source SHA. Final #67 acceptance promotes those exact bytes; it must not rebuild equivalent-looking binaries from another commit.
 
 ## Manual acceptance account
 
