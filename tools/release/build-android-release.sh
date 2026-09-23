@@ -13,8 +13,8 @@ release_version="$(get_prop releaseVersion)"
 expected_code="$(get_prop androidVersionCode)"
 expected_name="$(get_prop androidVersionName)"
 
-cd "$repo/apps/android"
-./gradlew --no-daemon :app:assembleRelease
+cd "$repo"
+gradle -p apps/android :app:assembleRelease --no-daemon --stacktrace
 
 apk="$repo/apps/android/app/build/outputs/apk/release/app-release-unsigned.apk"
 if [[ ! -f "$apk" ]]; then
