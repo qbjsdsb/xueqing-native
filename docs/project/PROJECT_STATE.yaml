@@ -1,7 +1,7 @@
 schema_version: 1
 project: xueqing-native
 phase: phase-1
-milestone: windows-agent-readiness
+milestone: client-compatibility-supportability
 status: active
 architecture_baseline: v1-accepted
 
@@ -21,6 +21,7 @@ frozen:
   ai_continuity: github-is-engineering-source-of-truth
   offline_access_lease_v1: 72h-max-same-boot-monotonic-with-rollback-detection
   organization_business_date: server-side-validated-timezone
+  windows_release_ux_v1: setup-exe-installs-signed-msix
 
 completed_gates:
   - windows-native-ux-prototype
@@ -61,27 +62,27 @@ completed_gates:
   - production-provider-region-data-residency-gate
   - backup-storage-restore-gate
   - production-client-deployment-profile-session-auth
+  - windows-agent-readiness
+  - android-final-native-ux-acceptance
 
 open_gates:
-  - android-final-native-ux-acceptance
-  - windows-agent-readiness
-  - cloudbase-provider-conformance-spike
+  - client-compatibility-privacy-safe-diagnostics
   - signing-and-recovery-gate
   - v1-release-candidate-acceptance
 
 next_execution:
   parallel_limit: 1
   lines:
-    - windows-agent-readiness
-  manual_acceptance:
-    - android-final-native-ux-acceptance
+    - client-compatibility-privacy-safe-diagnostics
+  manual_acceptance: []
   operator_blocked: []
   after_current_green:
-    - cloudbase-provider-conformance-spike
     - signing-and-recovery-gate
     - v1-release-candidate-acceptance
 
 later:
+  - cloudbase-provider-conformance-spike
+  - native-ux-refinement
   - generic-change-list-or-cursor-sync
   - large-history-full-text-search
   - realtime-freshness
