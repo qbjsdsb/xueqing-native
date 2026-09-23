@@ -73,7 +73,7 @@ internal sealed class ProductionProviderClientRuntime
                 "Production teaching workspace requires a usable provider session.");
         }
 
-        var version = Windows.ApplicationModel.Package.Current.Id.Version;
+        var version = global::Windows.ApplicationModel.Package.Current.Id.Version;
         var appVersion = $"{version.Major}.{version.Minor}.{version.Build}.{version.Revision}";
         var compatibilityGate = new ServerClientCompatibilityWriteGate(
             new PostgrestClientCompatibilityReader(
