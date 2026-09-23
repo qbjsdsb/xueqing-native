@@ -328,3 +328,85 @@ jobs:
           path: artifacts/release-signing/windows
           if-no-files-found: error
           retention-days: 30
+
+  release-candidate-record:
+    needs: [android-signed, windows-signed]
+    runs-on: ubuntu-latest
+    environment: production-release
+    timeout-minutes: 10
+    permissions:
+      actions: read
+      contents: write
+    steps:
+      - name: Checkout exact source metadata
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: ${{ inputs.source_sha }}
+
+      - name: Download signed Android candidate
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131
+        with:
+          name: xueqing-android-signed-candidate
+          path: artifacts/candidate/android
+
+      - name: Download signed Windows candidate
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131
+        with:
+          name: xueqing-windows-signed-candidate
+          path: artifacts/candidate/windows
+
+      - name: Verify exact-source candidate provenance
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected='${{ inputs.source_sha }}'
+          test "$(cat artifacts/candidate/android/SOURCE_COMMIT.txt)" = "$expected"
+          test "$(cat artifacts/candidate/windows/SOURCE_COMMIT.txt)" = "$expected"
+          version="$(sed -n 's/^releaseVersion=//p' release/version.properties)"
+          test -f "artifacts/candidate/android/Xueqing-$version.apk"
+          test -f "artifacts/candidate/windows/Xueqing-$version-x64.msix"
+          test -f "artifacts/candidate/windows/XueqingSetup-$version-x64.exe"
+          cat artifacts/candidate/android/SHA256SUMS.txt
+          cat artifacts/candidate/windows/SHA256SUMS.txt
+
+      - name: Create durable draft GitHub Release from signed bytes
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          version="$(sed -n 's/^releaseVersion=//p' release/version.properties)"
+          tag="v$version"
+          existing="$(gh api "repos/$GITHUB_REPOSITORY/releases" --paginate --jq '.[] | select(.tag_name == "'"$tag"'") | .id' | head -n 1)"
+          if [ -n "$existing" ]; then
+            echo "A durable candidate record already exists for $tag; refusing to replace signed bytes." >&2
+            exit 1
+          fi
+          notes="$RUNNER_TEMP/release-notes.md"
+          {
+            echo "# Xueqing $version"
+            echo
+            echo "Source commit: ${{ inputs.source_sha }}"
+            echo
+            echo "Signed V1 release candidate. Final #67 acceptance must promote these exact bytes without rebuilding from a different commit."
+            echo
+            echo "Windows minimum: Windows 10 2004 / build 19041 (x64)."
+            echo "Android minimum: Android 8.0 / API 26."
+            echo
+            echo "User-facing Windows artifact: XueqingSetup-$version-x64.exe."
+            echo "The signed MSIX is retained as provenance and recovery material."
+          } > "$notes"
+
+          gh release create "$tag" \
+            --draft \
+            --prerelease \
+            --target "${{ inputs.source_sha }}" \
+            --title "Xueqing $version" \
+            --notes-file "$notes" \
+            "artifacts/candidate/android/Xueqing-$version.apk" \
+            "artifacts/candidate/android/ANDROID-SIGNING.txt#ANDROID-SIGNING.txt" \
+            "artifacts/candidate/android/SHA256SUMS.txt#SHA256SUMS-android.txt" \
+            "artifacts/candidate/windows/Xueqing-$version-x64.msix" \
+            "artifacts/candidate/windows/XueqingSetup-$version-x64.exe" \
+            "artifacts/candidate/windows/WINDOWS-SIGNING.txt#WINDOWS-SIGNING.txt" \
+            "artifacts/candidate/windows/SHA256SUMS.txt#SHA256SUMS-windows.txt"
