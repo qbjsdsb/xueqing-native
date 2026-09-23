@@ -1,0 +1,58 @@
+name: manual-acceptance-account
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: Ensure/reset or remove the persistent fictional acceptance account
+        required: true
+        default: ensure
+        type: choice
+        options:
+          - ensure
+          - cleanup
+
+permissions:
+  contents: read
+
+jobs:
+  manage:
+    runs-on: ubuntu-latest
+    environment: production-acceptance
+    timeout-minutes: 10
+    env:
+      XUEQING_ACCEPTANCE_SERVICE_ROLE_KEY: ${{ secrets.XUEQING_ACCEPTANCE_SERVICE_ROLE_KEY }}
+      XUEQING_MANUAL_ACCEPTANCE_EMAIL: ${{ secrets.XUEQING_MANUAL_ACCEPTANCE_EMAIL }}
+      XUEQING_MANUAL_ACCEPTANCE_PASSWORD: ${{ secrets.XUEQING_MANUAL_ACCEPTANCE_PASSWORD }}
+
+    steps:
+      - name: Checkout exact main source
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+
+      - name: Require protected manual-acceptance credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$XUEQING_ACCEPTANCE_SERVICE_ROLE_KEY"
+          test -n "$XUEQING_MANUAL_ACCEPTANCE_EMAIL"
+          test -n "$XUEQING_MANUAL_ACCEPTANCE_PASSWORD"
+          echo "::add-mask::$XUEQING_ACCEPTANCE_SERVICE_ROLE_KEY"
+          echo "::add-mask::$XUEQING_MANUAL_ACCEPTANCE_EMAIL"
+          echo "::add-mask::$XUEQING_MANUAL_ACCEPTANCE_PASSWORD"
+
+      - name: Render production profile
+        shell: bash
+        run: |
+          set -euo pipefail
+          profile="$RUNNER_TEMP/deployment_profile.json"
+          python3 -B tools/deployment/render_deployment_profile.py             deployment/production_profile.template.json             "$profile"             "$(git rev-parse HEAD)"
+          python3 - "$profile" >> "$GITHUB_ENV" <<'PY'
+          import json,pathlib,sys
+          value=json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
+          print("XUEQING_ACCEPTANCE_API_URL=" + value["project_origin"])
+          print("XUEQING_ACCEPTANCE_PUBLISHABLE_KEY=" + value["publishable_key"])
+          PY
+
+      - name: Manage persistent fictional acceptance account
+        shell: bash
+        run: bash tools/production/manage-manual-acceptance-account.sh "${{ inputs.action }}"

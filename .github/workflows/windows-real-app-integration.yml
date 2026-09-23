@@ -3,6 +3,9 @@ name: windows-real-app-integration
 on:
   pull_request:
     paths:
+      - 'apps/windows/src/Xueqing.Setup/**'
+      - 'release/**'
+      - 'tools/release/**'
       - 'apps/windows/src/Xueqing.Windows/**'
       - 'apps/windows/src/Xueqing.Windows.Infrastructure/**'
       - 'apps/windows/src/Xueqing.Windows.Core/**'

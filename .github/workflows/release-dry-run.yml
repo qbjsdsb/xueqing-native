@@ -1,0 +1,94 @@
+name: release-dry-run
+
+on:
+  pull_request:
+    paths:
+      - 'release/**'
+      - 'tools/release/**'
+      - 'apps/android/app/build.gradle.kts'
+      - 'apps/windows/src/Xueqing.Windows/**'
+      - 'apps/windows/src/Xueqing.Setup/**'
+      - 'deployment/**'
+      - 'tools/deployment/**'
+      - '.github/workflows/release-dry-run.yml'
+
+permissions:
+  contents: read
+
+env:
+  ANDROID_HOME: /usr/local/lib/android/sdk
+  ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+
+jobs:
+  android-release-artifact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout exact PR head
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Setup JDK 17
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Verify runner Android SDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdkmanager="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          test -x "$sdkmanager"
+          "$sdkmanager" 'platform-tools' 'platforms;android-36' 'build-tools;35.0.0'
+      - name: Setup Gradle 8.13
+        uses: gradle/actions/setup-gradle@0723195856401067f7a2779048b490ace7a47d7c
+        with:
+          gradle-version: '8.13'
+      - name: Stage exact production profile
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -B tools/deployment/stage_deployment_profile.py deployment/production_profile.template.json "${{ github.event.pull_request.head.sha }}" apps/android/app/src/release/assets/deployment_profile.json
+      - name: Build production-shaped unsigned APK
+        shell: bash
+        run: bash tools/release/build-android-release.sh "$GITHUB_WORKSPACE" "$GITHUB_WORKSPACE/artifacts/release-dry-run/android"
+      - name: Upload Android dry-run artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: xueqing-android-release-dry-run
+          path: artifacts/release-dry-run/android
+          if-no-files-found: error
+          retention-days: 7
+
+  windows-release-artifact:
+    runs-on: windows-2025
+    timeout-minutes: 35
+    steps:
+      - name: Checkout exact PR head
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Setup .NET 10.0.401
+        uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1
+        with:
+          dotnet-version: '10.0.401'
+      - name: Build production-shaped unsigned MSIX
+        shell: pwsh
+        run: |
+          ./tools/release/build-windows-release.ps1 -RepositoryRoot "$env:GITHUB_WORKSPACE" -Publisher 'CN=Xueqing Native Release Candidate Test' -OutputDirectory "$env:GITHUB_WORKSPACE\artifacts\release-dry-run\windows"
+      - name: Prove XueqingSetup installs the signed production package identity
+        shell: pwsh
+        run: |
+          $unsigned = Get-ChildItem "$env:GITHUB_WORKSPACE\artifacts\release-dry-run\windows" -Filter *.msix | Select-Object -First 1
+          if ($null -eq $unsigned) { throw 'Unsigned release dry-run MSIX not found.' }
+          ./tools/release/test-windows-setup.ps1 -RepositoryRoot "$env:GITHUB_WORKSPACE" -UnsignedMsixPath $unsigned.FullName -Publisher 'CN=Xueqing Native Release Candidate Test' -OutputDirectory "$env:GITHUB_WORKSPACE\artifacts\release-dry-run\setup"
+
+      - name: Upload Windows dry-run artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: xueqing-windows-release-dry-run
+          path: |
+            artifacts/release-dry-run/windows
+            artifacts/release-dry-run/setup
+          if-no-files-found: error
+          retention-days: 7

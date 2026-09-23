@@ -1,7 +1,7 @@
 schema_version: 1
 project: xueqing-native
 phase: phase-1
-milestone: client-compatibility-supportability
+milestone: signing-recovery-distribution
 status: active
 architecture_baseline: v1-accepted
 
@@ -66,18 +66,16 @@ completed_gates:
   - android-final-native-ux-acceptance
 
 open_gates:
-  - client-compatibility-privacy-safe-diagnostics
   - signing-and-recovery-gate
   - v1-release-candidate-acceptance
 
 next_execution:
   parallel_limit: 1
   lines:
-    - client-compatibility-privacy-safe-diagnostics
+    - signing-and-recovery-gate
   manual_acceptance: []
   operator_blocked: []
   after_current_green:
-    - signing-and-recovery-gate
     - v1-release-candidate-acceptance
 
 later:

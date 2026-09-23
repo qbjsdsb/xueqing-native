@@ -56,6 +56,8 @@ select ok(
     'authenticated cannot read compatibility policy rows directly'
 );
 
+delete from public.client_compatibility_policies;
+
 insert into public.client_compatibility_policies (
     platform,
     policy_revision,

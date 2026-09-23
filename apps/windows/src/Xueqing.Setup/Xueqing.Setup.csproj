@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <AssemblyName>XueqingSetup</AssemblyName>
+    <RootNamespace>Xueqing.Setup</RootNamespace>
+    <TargetFramework>net10.0-windows10.0.26100.0</TargetFramework>
+    <TargetPlatformMinVersion>10.0.19041.0</TargetPlatformMinVersion>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>true</PublishSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(XueqingEmbeddedMsix)' != ''">
+    <EmbeddedResource Include="$(XueqingEmbeddedMsix)" LogicalName="Xueqing.Native.msix" />
+    <AssemblyMetadata Include="XueqingPayloadSha256" Value="$(XueqingPayloadSha256)" />
+    <AssemblyMetadata Include="XueqingPublisher" Value="$(XueqingPublisher)" />
+    <AssemblyMetadata Include="XueqingPackageName" Value="Xueqing.Native" />
+  </ItemGroup>
+</Project>

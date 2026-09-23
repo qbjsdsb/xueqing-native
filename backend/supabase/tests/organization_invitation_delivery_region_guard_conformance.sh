@@ -67,15 +67,34 @@ fi
 body_file="$(mktemp)"
 trap 'rm -f "$body_file"; cleanup' EXIT
 
-status="$(
-  curl --silent --show-error \
-    --output "$body_file" \
-    --write-out '%{http_code}' \
-    -X POST "$function_url" \
-    -H "apikey: $ANON_KEY" \
-    -H 'Content-Type: application/json' \
-    --data '{}' || true
-)"
+status=""
+for attempt in $(seq 1 10); do
+  status="$(
+    curl --silent --show-error \
+      --output "$body_file" \
+      --write-out '%{http_code}' \
+      -X POST "$function_url" \
+      -H "apikey: $ANON_KEY" \
+      -H 'Content-Type: application/json' \
+      --data '{}' || true
+  )"
+
+  if [[ "$status" == "503" ]]; then
+    break
+  fi
+
+  # The local Kong/Edge runtime may briefly return 502 after OPTIONS is ready
+  # while the function worker finishes becoming request-ready. Do not weaken
+  # the contract: retry only this transient local upstream status and still
+  # require the function's own 503 region-guard response below.
+  if [[ "$status" != "502" || "$attempt" == "10" ]]; then
+    break
+  fi
+  if ! kill -0 "$function_pid" >/dev/null 2>&1; then
+    break
+  fi
+  sleep 1
+done
 
 if [[ "$status" != "503" ]]; then
   cat "$function_log" >&2

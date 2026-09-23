@@ -3,6 +3,9 @@ name: backend-api
 on:
   pull_request:
     paths:
+      - 'release/**'
+      - 'tools/release/**'
+      - 'contracts/operations/RELEASE_IDENTITY_SIGNING_V1.md'
       - 'backend/supabase/**'
       - 'contracts/commands/**'
       - 'contracts/projections/**'

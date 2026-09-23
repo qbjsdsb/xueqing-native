@@ -3,6 +3,8 @@ name: android-spike
 on:
   pull_request:
     paths:
+      - 'release/**'
+      - 'tools/release/**'
       - 'apps/android/**'
       - 'tools/deployment/**'
       - 'deployment/**'
