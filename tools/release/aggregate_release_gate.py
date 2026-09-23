@@ -43,6 +43,8 @@ def required_workflows(files: list[str]) -> set[str]:
         "contracts/operations/PRODUCTION_CLIENT_DEPLOYMENT_SESSION_V1.md",
     ))
 
+    if release_scope:
+        required.add("release-dry-run")
     if android_scope:
         required.update({"android-spike", "android-observation-slice"})
     if windows_scope:
