@@ -50,6 +50,7 @@ internal fun XueqingApp(
     startInQuickCapture: Boolean = false,
     sessionController: ClientSessionController? = null,
     onSessionBoundaryChanged: () -> Unit = {},
+    onExportDiagnostics: (() -> Unit)? = null,
 ) {
     XueqingTheme {
         Surface(
@@ -73,6 +74,7 @@ internal fun XueqingApp(
                         startInQuickCapture = startInQuickCapture,
                         sessionController = sessionController,
                         onSessionBoundaryChanged = onSessionBoundaryChanged,
+                        onExportDiagnostics = onExportDiagnostics,
                     )
                 }
             } else {
@@ -83,6 +85,7 @@ internal fun XueqingApp(
                     startInQuickCapture = startInQuickCapture,
                     sessionController = null,
                     onSessionBoundaryChanged = onSessionBoundaryChanged,
+                    onExportDiagnostics = onExportDiagnostics,
                 )
             }
         }
@@ -97,6 +100,7 @@ private fun AuthenticatedWorkspace(
     startInQuickCapture: Boolean,
     sessionController: ClientSessionController?,
     onSessionBoundaryChanged: () -> Unit,
+    onExportDiagnostics: (() -> Unit)?,
 ) {
     val quickCaptureState by quickCaptureViewModel.uiState.collectAsState()
     val directoryState by studentDirectoryViewModel.uiState.collectAsState()
@@ -152,6 +156,7 @@ private fun AuthenticatedWorkspace(
             topBar = {
                 if (sessionController != null) {
                     ProductionAccountBar(
+                        onExportDiagnostics = onExportDiagnostics,
                         onSignOut = {
                             scope.launch {
                                 sessionController.signOut()
@@ -217,6 +222,7 @@ private fun AuthenticatedWorkspace(
 
 @Composable
 private fun ProductionAccountBar(
+    onExportDiagnostics: (() -> Unit)?,
     onSignOut: () -> Unit,
 ) {
     Surface(tonalElevation = 1.dp) {
@@ -227,6 +233,14 @@ private fun ProductionAccountBar(
             horizontalArrangement = Arrangement.End,
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            if (onExportDiagnostics != null) {
+                TextButton(
+                    onClick = onExportDiagnostics,
+                    modifier = Modifier.testTag("diagnostics-export"),
+                ) {
+                    Text("导出诊断")
+                }
+            }
             TextButton(
                 onClick = onSignOut,
                 modifier = Modifier.testTag("auth-sign-out"),
