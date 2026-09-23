@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://xueqing.local/contracts/client-compatibility-v1.schema.json",
+  "title": "Xueqing Client Compatibility v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract",
+    "generated_at_server",
+    "policy_revision",
+    "client",
+    "decision"
+  ],
+  "properties": {
+    "contract": { "const": "client_compatibility_v1" },
+    "generated_at_server": { "type": "string", "format": "date-time" },
+    "policy_revision": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]{1,63}$"
+    },
+    "client": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["platform", "app_version", "contract_version"],
+      "properties": {
+        "platform": { "enum": ["android", "windows"] },
+        "app_version": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "contract_version": { "type": "integer", "minimum": 1, "maximum": 2147483647 }
+      }
+    },
+    "decision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "state",
+        "reason_code",
+        "minimum_supported_app_version",
+        "recommended_app_version",
+        "minimum_supported_contract_version",
+        "server_contract_version",
+        "update_uri"
+      ],
+      "properties": {
+        "state": {
+          "enum": [
+            "supported",
+            "update_recommended",
+            "update_required",
+            "security_blocked"
+          ]
+        },
+        "reason_code": {
+          "type": "string",
+          "pattern": "^XQ_[A-Z0-9_]{3,64}$"
+        },
+        "minimum_supported_app_version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "recommended_app_version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "minimum_supported_contract_version": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "server_contract_version": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "update_uri": {
+          "type": ["string", "null"],
+          "format": "uri",
+          "maxLength": 2048
+        }
+      }
+    }
+  }
+}
