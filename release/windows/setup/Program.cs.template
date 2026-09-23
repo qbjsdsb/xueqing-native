@@ -1,0 +1,222 @@
+using System.Diagnostics;
+using System.Runtime.InteropServices;
+using System.Security.Cryptography;
+
+namespace Xueqing.Setup;
+
+internal static class Program
+{
+    private const string ReleaseVersion = __XUEQING_RELEASE_VERSION__;
+    private const string PackageVersion = __XUEQING_WINDOWS_PACKAGE_VERSION__;
+    private const string PackageName = "Xueqing.Native";
+    private const string Publisher = __XUEQING_WINDOWS_PUBLISHER__;
+    private const string MsixFileName = __XUEQING_MSIX_FILE_NAME__;
+    private const string MsixSha256 = __XUEQING_MSIX_SHA256__;
+    private const string DownloadUrl = __XUEQING_MSIX_DOWNLOAD_URL__;
+
+    [STAThread]
+    private static int Main(string[] args)
+    {
+        var quiet = args.Contains("--quiet", StringComparer.OrdinalIgnoreCase);
+        var noLaunch = args.Contains("--no-launch", StringComparer.OrdinalIgnoreCase);
+        var packagePath = ValueAfter(args, "--package");
+
+        try
+        {
+            if (!quiet)
+            {
+                MessageBoxW(
+                    IntPtr.Zero,
+                    $"将安装或升级“学情” {ReleaseVersion}。\n\n安装程序会验证发布包的 SHA-256、Windows 签名和 Publisher，然后使用当前 Windows 用户安装同一个 MSIX。",
+                    "学情安装程序",
+                    0x00000040);
+            }
+
+            return RunAsync(packagePath, noLaunch, quiet).GetAwaiter().GetResult();
+        }
+        catch (Exception exception)
+        {
+            if (!quiet)
+            {
+                MessageBoxW(
+                    IntPtr.Zero,
+                    $"安装失败。\n\n{exception.Message}",
+                    "学情安装程序",
+                    0x00000010);
+            }
+            return 1;
+        }
+    }
+
+    private static async Task<int> RunAsync(string? suppliedPackage, bool noLaunch, bool quiet)
+    {
+        string? downloadedPackage = null;
+        try
+        {
+            var package = suppliedPackage;
+            if (string.IsNullOrWhiteSpace(package))
+            {
+                downloadedPackage = Path.Combine(
+                    Path.GetTempPath(),
+                    $"xueqing-setup-{Guid.NewGuid():N}.msix");
+                using var http = new HttpClient
+                {
+                    Timeout = TimeSpan.FromMinutes(10),
+                };
+                using var response = await http.GetAsync(
+                    DownloadUrl,
+                    HttpCompletionOption.ResponseHeadersRead);
+                response.EnsureSuccessStatusCode();
+                await using var source = await response.Content.ReadAsStreamAsync();
+                await using var destination = new FileStream(
+                    downloadedPackage,
+                    FileMode.CreateNew,
+                    FileAccess.Write,
+                    FileShare.None,
+                    bufferSize: 1024 * 128,
+                    useAsync: true);
+                await source.CopyToAsync(destination);
+                await destination.FlushAsync();
+                package = downloadedPackage;
+            }
+
+            package = Path.GetFullPath(package);
+            if (!File.Exists(package))
+            {
+                throw new FileNotFoundException("找不到待安装的学情 MSIX。", package);
+            }
+
+            VerifySha256(package);
+            VerifyAuthenticode(package);
+            InstallPackage(package);
+
+            if (!noLaunch)
+            {
+                Process.Start(new ProcessStartInfo
+                {
+                    FileName = "xueqing://today",
+                    UseShellExecute = true,
+                });
+            }
+
+            if (!quiet)
+            {
+                MessageBoxW(
+                    IntPtr.Zero,
+                    $"“学情” {ReleaseVersion} 已安装完成。",
+                    "学情安装程序",
+                    0x00000040);
+            }
+            return 0;
+        }
+        finally
+        {
+            if (downloadedPackage is not null)
+            {
+                try { File.Delete(downloadedPackage); } catch { }
+            }
+        }
+    }
+
+    private static void VerifySha256(string packagePath)
+    {
+        using var stream = File.OpenRead(packagePath);
+        var actual = Convert.ToHexString(SHA256.HashData(stream)).ToLowerInvariant();
+        if (!CryptographicOperations.FixedTimeEquals(
+                Convert.FromHexString(actual),
+                Convert.FromHexString(MsixSha256)))
+        {
+            throw new InvalidDataException("MSIX SHA-256 与该安装程序绑定的发布包不一致。");
+        }
+    }
+
+    private static void VerifyAuthenticode(string packagePath)
+    {
+        var script = """
+            $ErrorActionPreference = 'Stop'
+            $signature = Get-AuthenticodeSignature -LiteralPath $env:XQ_SETUP_MSIX
+            if ($signature.Status -ne 'Valid') { exit 31 }
+            if ($null -eq $signature.SignerCertificate) { exit 32 }
+            if ($signature.SignerCertificate.Subject -ne $env:XQ_SETUP_PUBLISHER) { exit 33 }
+            """;
+        var exitCode = RunPowerShell(
+            script,
+            new Dictionary<string, string>
+            {
+                ["XQ_SETUP_MSIX"] = packagePath,
+                ["XQ_SETUP_PUBLISHER"] = Publisher,
+            });
+        if (exitCode != 0)
+        {
+            throw new InvalidDataException($"MSIX Windows 签名或 Publisher 验证失败（{exitCode}）。");
+        }
+    }
+
+    private static void InstallPackage(string packagePath)
+    {
+        var script = """
+            $ErrorActionPreference = 'Stop'
+            Add-AppxPackage -Path $env:XQ_SETUP_MSIX -ForceApplicationShutdown -ErrorAction Stop
+            $package = Get-AppxPackage -Name $env:XQ_SETUP_PACKAGE_NAME | Sort-Object Version -Descending | Select-Object -First 1
+            if ($null -eq $package) { exit 41 }
+            if ($package.Version.ToString() -ne $env:XQ_SETUP_PACKAGE_VERSION) { exit 42 }
+            """;
+        var exitCode = RunPowerShell(
+            script,
+            new Dictionary<string, string>
+            {
+                ["XQ_SETUP_MSIX"] = packagePath,
+                ["XQ_SETUP_PACKAGE_NAME"] = PackageName,
+                ["XQ_SETUP_PACKAGE_VERSION"] = PackageVersion,
+            });
+        if (exitCode != 0)
+        {
+            throw new InvalidOperationException($"Windows 安装或版本验证失败（{exitCode}）。");
+        }
+    }
+
+    private static int RunPowerShell(string command, IReadOnlyDictionary<string, string> environment)
+    {
+        var start = new ProcessStartInfo
+        {
+            FileName = "powershell.exe",
+            UseShellExecute = false,
+            CreateNoWindow = true,
+        };
+        start.ArgumentList.Add("-NoLogo");
+        start.ArgumentList.Add("-NoProfile");
+        start.ArgumentList.Add("-NonInteractive");
+        start.ArgumentList.Add("-ExecutionPolicy");
+        start.ArgumentList.Add("RemoteSigned");
+        start.ArgumentList.Add("-Command");
+        start.ArgumentList.Add(command);
+        foreach (var pair in environment)
+        {
+            start.Environment[pair.Key] = pair.Value;
+        }
+
+        using var process = Process.Start(start)
+            ?? throw new InvalidOperationException("无法启动 Windows PowerShell。");
+        process.WaitForExit();
+        return process.ExitCode;
+    }
+
+    private static string? ValueAfter(string[] args, string name)
+    {
+        for (var index = 0; index + 1 < args.Length; index++)
+        {
+            if (string.Equals(args[index], name, StringComparison.OrdinalIgnoreCase))
+            {
+                return args[index + 1];
+            }
+        }
+        return null;
+    }
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    private static extern int MessageBoxW(
+        IntPtr hWnd,
+        string text,
+        string caption,
+        uint type);
+}
