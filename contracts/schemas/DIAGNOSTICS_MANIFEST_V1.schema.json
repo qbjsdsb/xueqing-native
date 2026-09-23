@@ -1,0 +1,130 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://xueqing.local/contracts/diagnostics-manifest-v1.schema.json",
+  "title": "Xueqing Privacy-safe Diagnostics Manifest v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract",
+    "generated_at",
+    "platform",
+    "app",
+    "deployment",
+    "runtime",
+    "compatibility",
+    "queues",
+    "recent_error_codes",
+    "archive_files"
+  ],
+  "properties": {
+    "contract": { "const": "diagnostics_manifest_v1" },
+    "generated_at": { "type": "string", "format": "date-time" },
+    "platform": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "os_version", "architecture", "package_identity"],
+      "properties": {
+        "kind": { "enum": ["android", "windows"] },
+        "os_version": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "architecture": { "type": "string", "minLength": 1, "maxLength": 32 },
+        "package_identity": { "type": "string", "minLength": 1, "maxLength": 160 }
+      }
+    },
+    "app": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version", "source_commit", "client_contract_version", "local_schema_version"],
+      "properties": {
+        "version": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "source_commit": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+        "client_contract_version": { "type": "integer", "minimum": 1 },
+        "local_schema_version": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "deployment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["profile_id", "environment_id", "trust_domain_id", "provider_id"],
+      "properties": {
+        "profile_id": { "type": "string", "minLength": 2, "maxLength": 64 },
+        "environment_id": { "type": "string", "minLength": 2, "maxLength": 64 },
+        "trust_domain_id": { "type": "string", "minLength": 2, "maxLength": 96 },
+        "provider_id": { "type": "string", "minLength": 2, "maxLength": 32 }
+      }
+    },
+    "runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["session_state", "last_sync_category"],
+      "properties": {
+        "session_state": {
+          "enum": [
+            "signed_out",
+            "authenticated",
+            "refresh_required",
+            "revoked_or_invalid",
+            "configuration_unavailable"
+          ]
+        },
+        "last_sync_category": { "enum": ["never", "recent", "stale", "unknown"] }
+      }
+    },
+    "compatibility": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["state", "reason_code", "policy_revision"],
+      "properties": {
+        "state": {
+          "enum": [
+            "supported",
+            "update_recommended",
+            "update_required",
+            "security_blocked",
+            "unknown"
+          ]
+        },
+        "reason_code": {
+          "anyOf": [
+            { "type": "null" },
+            { "type": "string", "pattern": "^XQ_[A-Z0-9_]{3,64}$" }
+          ]
+        },
+        "policy_revision": {
+          "anyOf": [
+            { "type": "null" },
+            { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{1,63}$" }
+          ]
+        }
+      }
+    },
+    "queues": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pending_intents", "outbox_items", "attachment_staging"],
+      "properties": {
+        "pending_intents": { "type": "integer", "minimum": 0 },
+        "outbox_items": { "type": "integer", "minimum": 0 },
+        "attachment_staging": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "recent_error_codes": {
+      "type": "array",
+      "maxItems": 20,
+      "items": { "type": "string", "pattern": "^XQ_[A-Z0-9_]{3,64}$" }
+    },
+    "archive_files": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 4,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "contract"],
+        "properties": {
+          "name": { "const": "diagnostics.json" },
+          "contract": { "const": "diagnostics_manifest_v1" }
+        }
+      }
+    }
+  }
+}
