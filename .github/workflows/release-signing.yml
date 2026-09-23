@@ -34,11 +34,13 @@ jobs:
         run: |
           set -euo pipefail
           [[ "${{ inputs.source_sha }}" =~ ^[0-9a-f]{40}$ ]]
+
       - name: Checkout exact source
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
         with:
           ref: ${{ inputs.source_sha }}
           fetch-depth: 0
+
       - name: Require source on main history
         shell: bash
         run: |
@@ -46,6 +48,7 @@ jobs:
           test "$(git rev-parse HEAD)" = "${{ inputs.source_sha }}"
           git fetch origin main --depth=200
           git merge-base --is-ancestor "${{ inputs.source_sha }}" origin/main
+
       - name: Require protected Android signing material
         shell: bash
         run: |
@@ -54,11 +57,13 @@ jobs:
           test -n "$XUEQING_ANDROID_KEYSTORE_PASSWORD"
           test -n "$XUEQING_ANDROID_KEY_ALIAS"
           test -n "$XUEQING_ANDROID_KEY_PASSWORD"
+
       - name: Setup JDK 17
         uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961
         with:
           distribution: temurin
           java-version: '17'
+
       - name: Verify runner Android SDK
         shell: bash
         run: |
@@ -66,25 +71,28 @@ jobs:
           sdkmanager="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
           test -x "$sdkmanager"
           "$sdkmanager" "platform-tools" "platforms;android-36" "build-tools;35.0.0"
+
       - name: Setup Gradle 8.13
         uses: gradle/actions/setup-gradle@0723195856401067f7a2779048b490ace7a47d7c
         with:
           gradle-version: '8.13'
+
       - name: Validate release identity and stage profile
         shell: bash
         run: |
           set -euo pipefail
           python3 -B tools/release/verify_release_identity.py
           python3 -B tools/deployment/stage_deployment_profile.py deployment/production_profile.template.json "${{ inputs.source_sha }}" apps/android/app/src/release/assets/deployment_profile.json
+
       - name: Build unsigned Android release
         shell: bash
         run: bash tools/release/build-android-release.sh "$GITHUB_WORKSPACE" "$GITHUB_WORKSPACE/artifacts/release-signing/android-unsigned"
-      - name: Sign and verify Android APK
+
+      - name: Sign, verify and record Android candidate
         shell: bash
         run: |
           set -euo pipefail
-          props=release/version.properties
-          version="$(sed -n "s/^releaseVersion=//p" "$props")"
+          version="$(sed -n 's/^releaseVersion=//p' release/version.properties)"
           ks="$RUNNER_TEMP/xueqing-release.jks"
           printf "%s" "$XUEQING_ANDROID_KEYSTORE_B64" | base64 --decode > "$ks"
           chmod 600 "$ks"
@@ -93,6 +101,7 @@ jobs:
           mkdir -p "$out"
           signed="$out/Xueqing-$version.apk"
           apksigner="$ANDROID_HOME/build-tools/35.0.0/apksigner"
+
           "$apksigner" sign \
             --ks "$ks" \
             --ks-key-alias "$XUEQING_ANDROID_KEY_ALIAS" \
@@ -100,10 +109,16 @@ jobs:
             --key-pass env:XUEQING_ANDROID_KEY_PASSWORD \
             --out "$signed" \
             "$unsigned"
+
           "$apksigner" verify --verbose --print-certs "$signed" | tee "$out/ANDROID-SIGNING.txt"
+          certificate_sha="$(awk -F': ' '/certificate SHA-256 digest/{print tolower($2); exit}' "$out/ANDROID-SIGNING.txt")"
+          [[ "$certificate_sha" =~ ^[0-9a-f]{64}$ ]]
           sha256sum "$signed" | sed "s#  .*/#  #" > "$out/SHA256SUMS.txt"
           printf '%s\n' "${{ inputs.source_sha }}" > "$out/SOURCE_COMMIT.txt"
+          python3 -B tools/release/candidate_evidence.py android --source-sha "${{ inputs.source_sha }}" --artifact "$signed" --certificate-sha256 "$certificate_sha" --output "$out/RELEASE-EVIDENCE.json"
+          python3 -B tools/release/candidate_evidence.py verify --input "$out/RELEASE-EVIDENCE.json"
           rm -f "$ks"
+
       - name: Upload signed Android candidate
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
@@ -112,10 +127,82 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
+  android-signed-install:
+    needs: android-signed
+    runs-on: ubuntu-latest
+    environment: production-release
+    timeout-minutes: 25
+    env:
+      ANDROID_HOME: /usr/local/lib/android/sdk
+      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+    steps:
+      - name: Checkout exact source
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: ${{ inputs.source_sha }}
+
+      - name: Setup JDK 17
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Gradle 8.13
+        uses: gradle/actions/setup-gradle@0723195856401067f7a2779048b490ace7a47d7c
+        with:
+          gradle-version: '8.13'
+
+      - name: Download signed Android candidate
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131
+        with:
+          name: xueqing-android-signed-candidate
+          path: artifacts/android-signed
+
+      - name: Install API 36 emulator image
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdkmanager="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          "$sdkmanager" "platform-tools" "emulator" "platforms;android-36" "system-images;android-36;google_apis;x86_64"
+
+      - name: Boot emulator
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo no | avdmanager create avd -n xueqing-release -k "system-images;android-36;google_apis;x86_64" --force
+          nohup "$ANDROID_HOME/emulator/emulator" -avd xueqing-release -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect > "$RUNNER_TEMP/android-release-emulator.log" 2>&1 &
+          adb wait-for-device
+          adb shell 'while [[ -z $(getprop sys.boot_completed) ]]; do sleep 1; done'
+          adb shell input keyevent 82 || true
+
+      - name: Prove clean install and wrong-sign replacement rejection
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(sed -n 's/^releaseVersion=//p' release/version.properties)"
+          version_code="$(sed -n 's/^androidVersionCode=//p' release/version.properties)"
+          apk="artifacts/android-signed/Xueqing-$version.apk"
+
+          adb uninstall com.xueqing.app >/dev/null 2>&1 || true
+          adb install "$apk"
+          dumpsys="$(adb shell dumpsys package com.xueqing.app)"
+          grep -q "versionCode=$version_code" <<<"$dumpsys"
+          grep -q "versionName=$version" <<<"$dumpsys"
+
+          gradle -p apps/android :app:assembleDebug --no-daemon --stacktrace
+          debug_apk="$(find apps/android/app/build/outputs/apk/debug -maxdepth 1 -type f -name '*.apk' | head -n 1)"
+          test -n "$debug_apk"
+          if adb install -r "$debug_apk" > "$RUNNER_TEMP/wrong-sign-install.log" 2>&1; then
+            echo "Different signing identity unexpectedly replaced the release app." >&2
+            exit 1
+          fi
+          grep -Eiq 'UPDATE_INCOMPATIBLE|signatures do not match|INSTALL_FAILED' "$RUNNER_TEMP/wrong-sign-install.log"
+          adb uninstall com.xueqing.app
+
   windows-signed:
     runs-on: windows-2025
     environment: production-release
-    timeout-minutes: 40
+    timeout-minutes: 50
     env:
       XUEQING_WINDOWS_SIGNING_MODE: ${{ vars.XUEQING_WINDOWS_SIGNING_MODE }}
       XUEQING_WINDOWS_PUBLISHER: ${{ vars.XUEQING_WINDOWS_PUBLISHER }}
@@ -124,7 +211,6 @@ jobs:
       SIGNPATH_PROJECT_SLUG: ${{ vars.SIGNPATH_PROJECT_SLUG }}
       SIGNPATH_SIGNING_POLICY_SLUG: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}
       SIGNPATH_ARTIFACT_CONFIGURATION_SLUG: ${{ vars.SIGNPATH_ARTIFACT_CONFIGURATION_SLUG }}
-      SIGNPATH_SETUP_ARTIFACT_CONFIGURATION_SLUG: ${{ vars.SIGNPATH_SETUP_ARTIFACT_CONFIGURATION_SLUG }}
       SIGNPATH_SETUP_ARTIFACT_CONFIGURATION_SLUG: ${{ vars.SIGNPATH_SETUP_ARTIFACT_CONFIGURATION_SLUG }}
       XUEQING_WINDOWS_PFX_B64: ${{ secrets.XUEQING_WINDOWS_PFX_B64 }}
       XUEQING_WINDOWS_PFX_PASSWORD: ${{ secrets.XUEQING_WINDOWS_PFX_PASSWORD }}
@@ -137,11 +223,13 @@ jobs:
           if ('${{ inputs.source_sha }}' -notmatch '^[0-9a-f]{40}$') { throw 'source_sha must be an exact lowercase commit SHA.' }
           if ($env:XUEQING_WINDOWS_SIGNING_MODE -notin @('signpath','pfx')) { throw 'XUEQING_WINDOWS_SIGNING_MODE must be signpath or pfx.' }
           if ([string]::IsNullOrWhiteSpace($env:XUEQING_WINDOWS_PUBLISHER)) { throw 'XUEQING_WINDOWS_PUBLISHER is required.' }
+
       - name: Checkout exact source
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
         with:
           ref: ${{ inputs.source_sha }}
           fetch-depth: 0
+
       - name: Require source on main history
         shell: pwsh
         run: |
@@ -150,23 +238,34 @@ jobs:
           git fetch origin main --depth=200
           git merge-base --is-ancestor '${{ inputs.source_sha }}' origin/main
           if ($LASTEXITCODE -ne 0) { throw 'Signing source is not on main history.' }
+
       - name: Setup .NET 10.0.401
         uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1
         with:
           dotnet-version: '10.0.401'
+
+      - name: Require signing provider configuration
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ($env:XUEQING_WINDOWS_SIGNING_MODE -eq 'signpath') {
+            foreach ($name in @('SIGNPATH_API_TOKEN','SIGNPATH_ORGANIZATION_ID','SIGNPATH_PROJECT_SLUG','SIGNPATH_SIGNING_POLICY_SLUG','SIGNPATH_ARTIFACT_CONFIGURATION_SLUG','SIGNPATH_SETUP_ARTIFACT_CONFIGURATION_SLUG')) {
+              if ([string]::IsNullOrWhiteSpace((Get-Item "Env:$name").Value)) { throw "Missing $name" }
+            }
+          }
+          else {
+            foreach ($name in @('XUEQING_WINDOWS_PFX_B64','XUEQING_WINDOWS_PFX_PASSWORD','XUEQING_WINDOWS_TIMESTAMP_URL')) {
+              if ([string]::IsNullOrWhiteSpace((Get-Item "Env:$name").Value)) { throw "Missing $name" }
+            }
+          }
+
       - name: Build unsigned production-identity MSIX
         shell: pwsh
         run: |
           ./tools/release/build-windows-release.ps1 -RepositoryRoot "$env:GITHUB_WORKSPACE" -Publisher "$env:XUEQING_WINDOWS_PUBLISHER" -OutputDirectory "$env:GITHUB_WORKSPACE\artifacts\release-signing\windows-unsigned"
-      - name: Require SignPath configuration
-        if: env.XUEQING_WINDOWS_SIGNING_MODE == 'signpath'
-        shell: pwsh
-        run: |
-          foreach ($name in @('SIGNPATH_API_TOKEN','SIGNPATH_ORGANIZATION_ID','SIGNPATH_PROJECT_SLUG','SIGNPATH_SIGNING_POLICY_SLUG','SIGNPATH_ARTIFACT_CONFIGURATION_SLUG','SIGNPATH_SETUP_ARTIFACT_CONFIGURATION_SLUG')) {
-            if ([string]::IsNullOrWhiteSpace((Get-Item "Env:$name").Value)) { throw "Missing $name" }
-          }
+
       - name: Upload unsigned MSIX for SignPath
-        id: upload-signpath
+        id: upload-signpath-msix
         if: env.XUEQING_WINDOWS_SIGNING_MODE == 'signpath'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
@@ -174,7 +273,8 @@ jobs:
           path: artifacts/release-signing/windows-unsigned/*.msix
           if-no-files-found: error
           retention-days: 7
-      - name: Submit SignPath signing request
+
+      - name: Submit MSIX SignPath signing request
         if: env.XUEQING_WINDOWS_SIGNING_MODE == 'signpath'
         uses: signpath/github-action-submit-signing-request@f6d04783b4569d051e0c80105fe66e82819d0092
         with:
@@ -183,133 +283,56 @@ jobs:
           project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
           signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}
           artifact-configuration-slug: ${{ vars.SIGNPATH_ARTIFACT_CONFIGURATION_SLUG }}
-          github-artifact-id: ${{ steps.upload-signpath.outputs.artifact-id }}
+          github-artifact-id: ${{ steps.upload-signpath-msix.outputs.artifact-id }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
           wait-for-completion: true
           output-artifact-directory: artifacts/release-signing/windows
+
+      - name: Prepare protected PFX
+        if: env.XUEQING_WINDOWS_SIGNING_MODE == 'pfx'
+        shell: pwsh
+        run: |
+          [IO.File]::WriteAllBytes(
+            (Join-Path $env:RUNNER_TEMP 'xueqing-release.pfx'),
+            [Convert]::FromBase64String($env:XUEQING_WINDOWS_PFX_B64)
+          )
+
       - name: Sign MSIX with protected PFX
         if: env.XUEQING_WINDOWS_SIGNING_MODE == 'pfx'
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          if ([string]::IsNullOrWhiteSpace($env:XUEQING_WINDOWS_PFX_B64) -or [string]::IsNullOrWhiteSpace($env:XUEQING_WINDOWS_PFX_PASSWORD)) { throw 'Protected Windows PFX material is missing.' }
-          if ([string]::IsNullOrWhiteSpace($env:XUEQING_WINDOWS_TIMESTAMP_URL)) { throw 'Timestamp URL is required for PFX signing.' }
           $out = Join-Path $env:GITHUB_WORKSPACE 'artifacts\release-signing\windows'
           New-Item $out -ItemType Directory -Force | Out-Null
           $unsigned = Get-ChildItem (Join-Path $env:GITHUB_WORKSPACE 'artifacts\release-signing\windows-unsigned') -Filter *.msix | Select-Object -First 1
           if ($null -eq $unsigned) { throw 'Unsigned MSIX not found.' }
           $signed = Join-Path $out ($unsigned.Name -replace '-unsigned','')
-          Copy-Item $unsigned.FullName $signed
+          Copy-Item $unsigned.FullName $signed -Force
           $pfx = Join-Path $env:RUNNER_TEMP 'xueqing-release.pfx'
-          [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:XUEQING_WINDOWS_PFX_B64))
           $signtool = Get-ChildItem (Join-Path ${env:ProgramFiles(x86)} 'Windows Kits\10\bin') -Recurse -Filter signtool.exe | Where-Object { $_.FullName -match '\\x64\\signtool\.exe$' } | Sort-Object FullName -Descending | Select-Object -First 1
           if ($null -eq $signtool) { throw 'SignTool not found.' }
           & $signtool.FullName sign /fd SHA256 /tr $env:XUEQING_WINDOWS_TIMESTAMP_URL /td SHA256 /f $pfx /p $env:XUEQING_WINDOWS_PFX_PASSWORD $signed
-          if ($LASTEXITCODE -ne 0) { throw 'SignTool failed.' }
-          Remove-Item $pfx -Force
-      - name: Normalize signed MSIX artifact name
+          if ($LASTEXITCODE -ne 0) { throw 'MSIX SignTool failed.' }
+
+      - name: Normalize and verify signed MSIX
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
           $out = Join-Path $env:GITHUB_WORKSPACE 'artifacts\release-signing\windows'
           $packages = @(Get-ChildItem $out -Recurse -Filter *.msix)
-          if ($packages.Count -ne 1) { throw "Expected exactly one signed MSIX before normalization; found $($packages.Count)." }
+          if ($packages.Count -ne 1) { throw "Expected exactly one signed MSIX; found $($packages.Count)." }
           $version = (Get-Content release/version.properties | Where-Object { $_ -like 'releaseVersion=*' }).Split('=',2)[1]
           $canonical = Join-Path $out "Xueqing-$version-x64.msix"
-          if ($packages[0].FullName -ne $canonical) {
-            Move-Item $packages[0].FullName $canonical -Force
-          }
-      - name: Build single-file XueqingSetup from exact signed MSIX
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $out = Join-Path $env:GITHUB_WORKSPACE 'artifacts\release-signing\windows'
-          $msix = Get-ChildItem $out -Recurse -Filter *.msix | Select-Object -First 1
-          if ($null -eq $msix) { throw 'Signed MSIX not found before Setup build.' }
-          $signature = Get-AuthenticodeSignature $msix.FullName
+          if ($packages[0].FullName -ne $canonical) { Move-Item $packages[0].FullName $canonical -Force }
+          $signature = Get-AuthenticodeSignature $canonical
           if ($signature.Status -ne 'Valid') { throw "Signed MSIX Authenticode status is $($signature.Status)." }
-          if ($signature.SignerCertificate.Subject -ne $env:XUEQING_WINDOWS_PUBLISHER) { throw 'Signed MSIX Publisher mismatch before Setup build.' }
-          ./tools/release/build-windows-setup.ps1 -RepositoryRoot "$env:GITHUB_WORKSPACE" -MsixPath $msix.FullName -Publisher "$env:XUEQING_WINDOWS_PUBLISHER" -OutputDirectory "$env:GITHUB_WORKSPACE\artifacts\release-signing\setup-unsigned"
+          if ($signature.SignerCertificate.Subject -ne $env:XUEQING_WINDOWS_PUBLISHER) { throw 'Signed MSIX certificate Subject does not match package Publisher.' }
 
-      - name: Upload unsigned Setup for SignPath
-        id: upload-signpath-setup
-        if: env.XUEQING_WINDOWS_SIGNING_MODE == 'signpath'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
-        with:
-          name: xueqing-setup-unsigned-for-signpath
-          path: artifacts/release-signing/setup-unsigned/*.exe
-          if-no-files-found: error
-          retention-days: 7
-
-      - name: Submit SignPath Setup signing request
-        if: env.XUEQING_WINDOWS_SIGNING_MODE == 'signpath'
-        uses: signpath/github-action-submit-signing-request@f6d04783b4569d051e0c80105fe66e82819d0092
-        with:
-          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
-          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
-          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
-          signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}
-          artifact-configuration-slug: ${{ vars.SIGNPATH_SETUP_ARTIFACT_CONFIGURATION_SLUG }}
-          github-artifact-id: ${{ steps.upload-signpath-setup.outputs.artifact-id }}
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          wait-for-completion: true
-          output-artifact-directory: artifacts/release-signing/windows
-
-      - name: Sign Setup with protected PFX
-        if: env.XUEQING_WINDOWS_SIGNING_MODE == 'pfx'
+      - name: Build Setup from exact signed MSIX
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $unsigned = Get-ChildItem (Join-Path $env:GITHUB_WORKSPACE 'artifacts\release-signing\setup-unsigned') -Filter *.exe | Select-Object -First 1
-          if ($null -eq $unsigned) { throw 'Unsigned Setup executable not found.' }
-          $out = Join-Path $env:GITHUB_WORKSPACE 'artifacts\release-signing\windows'
-          New-Item $out -ItemType Directory -Force | Out-Null
-          $signed = Join-Path $out $unsigned.Name
-          Copy-Item $unsigned.FullName $signed -Force
-          $pfx = Join-Path $env:RUNNER_TEMP 'xueqing-setup-release.pfx'
-          [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:XUEQING_WINDOWS_PFX_B64))
-          try {
-            $signtool = Get-ChildItem (Join-Path ${env:ProgramFiles(x86)} 'Windows Kits\10\bin') -Recurse -Filter signtool.exe | Where-Object { $_.FullName -match '\\x64\\signtool\.exe          $ErrorActionPreference = 'Stop'
-          $out = Join-Path $env:GITHUB_WORKSPACE 'artifacts\release-signing\windows'
-          $msix = Get-ChildItem $out -Recurse -Filter *.msix | Select-Object -First 1
-          $setup = Get-ChildItem $out -Recurse -Filter XueqingSetup-*.exe | Select-Object -First 1
-          if ($null -eq $msix) { throw 'Signed MSIX not found.' }
-          if ($null -eq $setup) { throw 'Signed XueqingSetup not found.' }
-
-          $msixSignature = Get-AuthenticodeSignature $msix.FullName
-          $setupSignature = Get-AuthenticodeSignature $setup.FullName
-          foreach ($entry in @(@('MSIX',$msixSignature), @('Setup',$setupSignature))) {
-            if ($entry[1].Status -ne 'Valid') { throw "$($entry[0]) Authenticode status is $($entry[1].Status)." }
-            if ($entry[1].SignerCertificate.Subject -ne $env:XUEQING_WINDOWS_PUBLISHER) { throw "$($entry[0]) signer Subject does not match package Publisher." }
-          }
-          if ($setupSignature.SignerCertificate.Thumbprint -ne $msixSignature.SignerCertificate.Thumbprint) {
-            throw 'Setup and MSIX must use the same production signing certificate.'
-          }
-
-          "Subject=$($msixSignature.SignerCertificate.Subject)" | Set-Content (Join-Path $out 'WINDOWS-SIGNING.txt')
-          "Thumbprint=$($msixSignature.SignerCertificate.Thumbprint)" | Add-Content (Join-Path $out 'WINDOWS-SIGNING.txt')
-          "SetupThumbprint=$($setupSignature.SignerCertificate.Thumbprint)" | Add-Content (Join-Path $out 'WINDOWS-SIGNING.txt')
-          @($msix, $setup) | ForEach-Object {
-            $hash = Get-FileHash $_.FullName -Algorithm SHA256
-            "$($hash.Hash.ToLowerInvariant())  $($_.Name)"
-          } | Set-Content (Join-Path $out 'SHA256SUMS.txt') -Encoding ascii
-          "${{ inputs.source_sha }}" | Set-Content (Join-Path $out 'SOURCE_COMMIT.txt') -Encoding ascii
-
-          Get-AppxPackage -Name Xueqing.Native -ErrorAction SilentlyContinue | ForEach-Object {
-            Remove-AppxPackage -Package $_.PackageFullName -ErrorAction Stop
-          }
-          $process = Start-Process -FilePath $setup.FullName -ArgumentList @('--quiet','--no-launch') -Wait -PassThru
-          if ($process.ExitCode -ne 0) { throw "Signed Setup install smoke failed with exit code $($process.ExitCode)." }
-          $installed = Get-AppxPackage -Name Xueqing.Native -ErrorAction Stop
-          if ($installed.Publisher -ne $env:XUEQING_WINDOWS_PUBLISHER) { throw 'Installed production package Publisher mismatch.' }
-          Get-AppxPackage -Name Xueqing.Native -ErrorAction SilentlyContinue | ForEach-Object {
-            Remove-AppxPackage -Package $_.PackageFullName -ErrorAction SilentlyContinue
-          }
-      - name: Build Setup from the exact signed MSIX
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $msix = Get-ChildItem "$env:GITHUB_WORKSPACE\artifacts\release-signing\windows" -Recurse -Filter *.msix | Select-Object -First 1
+          $msix = Get-ChildItem "$env:GITHUB_WORKSPACE\artifacts\release-signing\windows" -Filter *.msix | Select-Object -First 1
           if ($null -eq $msix) { throw 'Signed MSIX not found for Setup build.' }
           ./tools/release/build-windows-setup.ps1 -RepositoryRoot "$env:GITHUB_WORKSPACE" -MsixPath $msix.FullName -Publisher "$env:XUEQING_WINDOWS_PUBLISHER" -OutputDirectory "$env:GITHUB_WORKSPACE\artifacts\release-signing\setup-unsigned"
 
@@ -335,179 +358,70 @@ jobs:
           github-artifact-id: ${{ steps.upload-signpath-setup.outputs.artifact-id }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
           wait-for-completion: true
-          output-artifact-directory: artifacts/release-signing/setup
+          output-artifact-directory: artifacts/release-signing/setup-signed
 
       - name: Sign Setup with protected PFX
         if: env.XUEQING_WINDOWS_SIGNING_MODE == 'pfx'
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          if ([string]::IsNullOrWhiteSpace($env:XUEQING_WINDOWS_PFX_B64) -or [string]::IsNullOrWhiteSpace($env:XUEQING_WINDOWS_PFX_PASSWORD)) { throw 'Protected Windows PFX material is missing.' }
           $source = Get-ChildItem "$env:GITHUB_WORKSPACE\artifacts\release-signing\setup-unsigned" -Filter *.exe | Select-Object -First 1
           if ($null -eq $source) { throw 'Unsigned Setup executable not found.' }
-          $out = Join-Path $env:GITHUB_WORKSPACE 'artifacts\release-signing\setup'
+          $out = Join-Path $env:GITHUB_WORKSPACE 'artifacts\release-signing\setup-signed'
           New-Item $out -ItemType Directory -Force | Out-Null
           $signed = Join-Path $out $source.Name
           Copy-Item $source.FullName $signed -Force
-          $pfx = Join-Path $env:RUNNER_TEMP 'xueqing-setup-release.pfx'
-          [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:XUEQING_WINDOWS_PFX_B64))
-          try {
-            $signtool = Get-ChildItem (Join-Path ${env:ProgramFiles(x86)} 'Windows Kits\10\bin') -Recurse -Filter signtool.exe | Where-Object { $_.FullName -match '\\x64\\signtool\.exe } | Sort-Object FullName -Descending | Select-Object -First 1
-            if ($null -eq $signtool) { throw 'SignTool not found.' }
-            & $signtool.FullName sign /fd SHA256 /tr $env:XUEQING_WINDOWS_TIMESTAMP_URL /td SHA256 /f $pfx /p $env:XUEQING_WINDOWS_PFX_PASSWORD $signed
-            if ($LASTEXITCODE -ne 0) { throw 'Setup SignTool failed.' }
-          }
-          finally {
-            Remove-Item $pfx -Force -ErrorAction SilentlyContinue
-          }
-      - name: Verify signed Windows package and provenance
+          $pfx = Join-Path $env:RUNNER_TEMP 'xueqing-release.pfx'
+          $signtool = Get-ChildItem (Join-Path ${env:ProgramFiles(x86)} 'Windows Kits\10\bin') -Recurse -Filter signtool.exe | Where-Object { $_.FullName -match '\\x64\\signtool\.exe$' } | Sort-Object FullName -Descending | Select-Object -First 1
+          if ($null -eq $signtool) { throw 'SignTool not found.' }
+          & $signtool.FullName sign /fd SHA256 /tr $env:XUEQING_WINDOWS_TIMESTAMP_URL /td SHA256 /f $pfx /p $env:XUEQING_WINDOWS_PFX_PASSWORD $signed
+          if ($LASTEXITCODE -ne 0) { throw 'Setup SignTool failed.' }
+
+      - name: Verify Setup, install package and record Windows candidate
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
           $out = Join-Path $env:GITHUB_WORKSPACE 'artifacts\release-signing\windows'
-          $msix = Get-ChildItem $out -Recurse -Filter *.msix | Select-Object -First 1
+          $msix = Get-ChildItem $out -Filter *.msix | Select-Object -First 1
+          $setupSource = Get-ChildItem "$env:GITHUB_WORKSPACE\artifacts\release-signing\setup-signed" -Recurse -Filter *.exe | Select-Object -First 1
           if ($null -eq $msix) { throw 'Signed MSIX not found.' }
-          $signature = Get-AuthenticodeSignature $msix.FullName
-          if ($signature.Status -ne 'Valid') { throw "Signed MSIX Authenticode status is $($signature.Status)." }
-          if ($signature.SignerCertificate.Subject -ne $env:XUEQING_WINDOWS_PUBLISHER) { throw 'Signed certificate Subject does not match package Publisher.' }
-          "Subject=$($signature.SignerCertificate.Subject)" | Set-Content (Join-Path $out 'WINDOWS-SIGNING.txt')
-          "Thumbprint=$($signature.SignerCertificate.Thumbprint)" | Add-Content (Join-Path $out 'WINDOWS-SIGNING.txt')
-          $hash = Get-FileHash $msix.FullName -Algorithm SHA256
-          "$($hash.Hash.ToLowerInvariant())  $($msix.Name)" | Set-Content (Join-Path $out 'SHA256SUMS.txt') -Encoding ascii
-      - name: Upload signed Windows candidate
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
-        with:
-          name: xueqing-windows-signed-candidate
-          path: artifacts/release-signing/windows
-          if-no-files-found: error
-          retention-days: 30
+          if ($null -eq $setupSource) { throw 'Signed Setup not found.' }
 
-  release-candidate-record:
-    needs: [android-signed, windows-signed]
-    runs-on: ubuntu-latest
-    environment: production-release
-    timeout-minutes: 10
-    permissions:
-      actions: read
-      contents: write
-    steps:
-      - name: Checkout exact source metadata
-        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
-        with:
-          ref: ${{ inputs.source_sha }}
-
-      - name: Download signed Android candidate
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131
-        with:
-          name: xueqing-android-signed-candidate
-          path: artifacts/candidate/android
-
-      - name: Download signed Windows candidate
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131
-        with:
-          name: xueqing-windows-signed-candidate
-          path: artifacts/candidate/windows
-
-      - name: Verify exact-source candidate provenance
-        shell: bash
-        run: |
-          set -euo pipefail
-          expected='${{ inputs.source_sha }}'
-          test "$(cat artifacts/candidate/android/SOURCE_COMMIT.txt)" = "$expected"
-          test "$(cat artifacts/candidate/windows/SOURCE_COMMIT.txt)" = "$expected"
-          version="$(sed -n 's/^releaseVersion=//p' release/version.properties)"
-          test -f "artifacts/candidate/android/Xueqing-$version.apk"
-          test -f "artifacts/candidate/windows/Xueqing-$version-x64.msix"
-          test -f "artifacts/candidate/windows/XueqingSetup-$version-x64.exe"
-          cat artifacts/candidate/android/SHA256SUMS.txt
-          cat artifacts/candidate/windows/SHA256SUMS.txt
-
-      - name: Create durable draft GitHub Release from signed bytes
-        shell: bash
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -euo pipefail
-          version="$(sed -n 's/^releaseVersion=//p' release/version.properties)"
-          tag="v$version"
-          existing="$(gh api "repos/$GITHUB_REPOSITORY/releases" --paginate --jq '.[] | select(.tag_name == "'"$tag"'") | .id' | head -n 1)"
-          if [ -n "$existing" ]; then
-            echo "A durable candidate record already exists for $tag; refusing to replace signed bytes." >&2
-            exit 1
-          fi
-          notes="$RUNNER_TEMP/release-notes.md"
-          {
-            echo "# Xueqing $version"
-            echo
-            echo "Source commit: ${{ inputs.source_sha }}"
-            echo
-            echo "Signed V1 release candidate. Final #67 acceptance must promote these exact bytes without rebuilding from a different commit."
-            echo
-            echo "Windows minimum: Windows 10 2004 / build 19041 (x64)."
-            echo "Android minimum: Android 8.0 / API 26."
-            echo
-            echo "User-facing Windows artifact: XueqingSetup-$version-x64.exe."
-            echo "The signed MSIX is retained as provenance and recovery material."
-          } > "$notes"
-
-          gh release create "$tag" \
-            --draft \
-            --prerelease \
-            --target "${{ inputs.source_sha }}" \
-            --title "Xueqing $version" \
-            --notes-file "$notes" \
-            "artifacts/candidate/android/Xueqing-$version.apk" \
-            "artifacts/candidate/android/ANDROID-SIGNING.txt#ANDROID-SIGNING.txt" \
-            "artifacts/candidate/android/SHA256SUMS.txt#SHA256SUMS-android.txt" \
-            "artifacts/candidate/windows/Xueqing-$version-x64.msix" \
-            "artifacts/candidate/windows/XueqingSetup-$version-x64.exe" \
-            "artifacts/candidate/windows/WINDOWS-SIGNING.txt#WINDOWS-SIGNING.txt" \
-            "artifacts/candidate/windows/SHA256SUMS.txt#SHA256SUMS-windows.txt"
- } | Sort-Object FullName -Descending | Select-Object -First 1
-            if ($null -eq $signtool) { throw 'SignTool not found.' }
-            & $signtool.FullName sign /fd SHA256 /tr $env:XUEQING_WINDOWS_TIMESTAMP_URL /td SHA256 /f $pfx /p $env:XUEQING_WINDOWS_PFX_PASSWORD $signed
-            if ($LASTEXITCODE -ne 0) { throw 'Setup SignTool failed.' }
+          $setup = Join-Path $out $setupSource.Name
+          Copy-Item $setupSource.FullName $setup -Force
+          $setupFile = Get-Item $setup
+          $msixSignature = Get-AuthenticodeSignature $msix.FullName
+          $setupSignature = Get-AuthenticodeSignature $setupFile.FullName
+          foreach ($entry in @(@('MSIX',$msixSignature), @('Setup',$setupSignature))) {
+            if ($entry[1].Status -ne 'Valid') { throw "$($entry[0]) Authenticode status is $($entry[1].Status)." }
+            if ($entry[1].SignerCertificate.Subject -ne $env:XUEQING_WINDOWS_PUBLISHER) { throw "$($entry[0]) signer Subject does not match Publisher." }
           }
-          finally {
-            Remove-Item $pfx -Force -ErrorAction SilentlyContinue
+          if ($setupSignature.SignerCertificate.Thumbprint -ne $msixSignature.SignerCertificate.Thumbprint) {
+            throw 'Setup and MSIX must use the same production signing certificate.'
           }
 
-      - name: Verify signed Setup and prove final install path
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $setupDir = Join-Path $env:GITHUB_WORKSPACE 'artifacts\release-signing\setup'
-          $setup = Get-ChildItem $setupDir -Recurse -Filter *.exe | Select-Object -First 1
-          if ($null -eq $setup) { throw 'Signed Setup executable not found.' }
-          $signature = Get-AuthenticodeSignature $setup.FullName
-          if ($signature.Status -ne 'Valid') { throw "Signed Setup Authenticode status is $($signature.Status)." }
-          if ($signature.SignerCertificate.Subject -ne $env:XUEQING_WINDOWS_PUBLISHER) { throw 'Setup signer Subject does not match MSIX Publisher.' }
-          "Subject=$($signature.SignerCertificate.Subject)" | Set-Content (Join-Path $setupDir 'SETUP-SIGNING.txt')
-          "Thumbprint=$($signature.SignerCertificate.Thumbprint)" | Add-Content (Join-Path $setupDir 'SETUP-SIGNING.txt')
-          "CertificateSHA256=$($signature.SignerCertificate.GetCertHashString([System.Security.Cryptography.HashAlgorithmName]::SHA256).ToLowerInvariant())" | Add-Content (Join-Path $setupDir 'SETUP-SIGNING.txt')
-          $hash = Get-FileHash $setup.FullName -Algorithm SHA256
-          "$($hash.Hash.ToLowerInvariant())  $($setup.Name)" | Set-Content (Join-Path $setupDir 'SHA256SUMS.txt') -Encoding ascii
+          "Subject=$($msixSignature.SignerCertificate.Subject)" | Set-Content (Join-Path $out 'WINDOWS-SIGNING.txt')
+          "Thumbprint=$($msixSignature.SignerCertificate.Thumbprint)" | Add-Content (Join-Path $out 'WINDOWS-SIGNING.txt')
+          "SetupThumbprint=$($setupSignature.SignerCertificate.Thumbprint)" | Add-Content (Join-Path $out 'WINDOWS-SIGNING.txt')
+          @($msix, $setupFile) | ForEach-Object {
+            $hash = Get-FileHash $_.FullName -Algorithm SHA256
+            "$($hash.Hash.ToLowerInvariant())  $($_.Name)"
+          } | Set-Content (Join-Path $out 'SHA256SUMS.txt') -Encoding ascii
+          "${{ inputs.source_sha }}" | Set-Content (Join-Path $out 'SOURCE_COMMIT.txt') -Encoding ascii
 
           Get-AppxPackage -Name Xueqing.Native -ErrorAction SilentlyContinue | ForEach-Object {
             Remove-AppxPackage -Package $_.PackageFullName -ErrorAction Stop
           }
-
           try {
-            $process = Start-Process -FilePath $setup.FullName -ArgumentList @('--quiet','--no-launch') -Wait -PassThru
-            if ($process.ExitCode -ne 0) { throw "Signed XueqingSetup failed with exit code $($process.ExitCode)." }
+            $process = Start-Process -FilePath $setupFile.FullName -ArgumentList @('--quiet','--no-launch') -Wait -PassThru
+            if ($process.ExitCode -ne 0) { throw "Signed Setup install smoke failed with exit code $($process.ExitCode)." }
             $installed = Get-AppxPackage -Name Xueqing.Native -ErrorAction Stop
-            if ($installed.Publisher -ne $env:XUEQING_WINDOWS_PUBLISHER) { throw 'Installed signed package Publisher mismatch.' }
-
-            $release = @{}
-            foreach ($line in Get-Content release/version.properties) {
-              $trimmed = $line.Trim()
-              if (-not $trimmed -or $trimmed.StartsWith('#')) { continue }
-              $parts = $trimmed.Split('=', 2)
-              $release[$parts[0]] = $parts[1]
-            }
-            if ($installed.Version.ToString() -ne $release['windowsPackageVersion']) {
-              throw "Installed signed package version $($installed.Version) does not match $($release['windowsPackageVersion'])."
-            }
+            if ($installed.Publisher -ne $env:XUEQING_WINDOWS_PUBLISHER) { throw 'Installed production package Publisher mismatch.' }
+            Start-Process 'xueqing://today'
+            Start-Sleep -Seconds 4
+            $appProcess = Get-Process -Name Xueqing.Windows -ErrorAction SilentlyContinue
+            if ($null -eq $appProcess) { throw 'xueqing:// protocol did not activate the installed production app.' }
+            $appProcess | Stop-Process -Force -ErrorAction SilentlyContinue
           }
           finally {
             Get-AppxPackage -Name Xueqing.Native -ErrorAction SilentlyContinue | ForEach-Object {
@@ -515,37 +429,17 @@ jobs:
             }
           }
 
-      - name: Upload signed Windows candidate
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
-        with:
-          name: xueqing-windows-signed-candidate
-          path: |
-            artifacts/release-signing/windows
-            artifacts/release-signing/setup
-          if-no-files-found: error
-          retention-days: 30
- } | Sort-Object FullName -Descending | Select-Object -First 1
-            if ($null -eq $signtool) { throw 'SignTool not found.' }
-            & $signtool.FullName sign /fd SHA256 /tr $env:XUEQING_WINDOWS_TIMESTAMP_URL /td SHA256 /f $pfx /p $env:XUEQING_WINDOWS_PFX_PASSWORD $signed
-            if ($LASTEXITCODE -ne 0) { throw 'Setup SignTool failed.' }
-          }
-          finally {
-            Remove-Item $pfx -Force -ErrorAction SilentlyContinue
-          }
-      - name: Verify signed Windows package and provenance
+          $certSha256 = $msixSignature.SignerCertificate.GetCertHashString([System.Security.Cryptography.HashAlgorithmName]::SHA256).ToLowerInvariant()
+          python -B tools/release/candidate_evidence.py windows --source-sha "${{ inputs.source_sha }}" --msix $msix.FullName --setup $setupFile.FullName --publisher "$env:XUEQING_WINDOWS_PUBLISHER" --certificate-sha256 $certSha256 --signing-mode "$env:XUEQING_WINDOWS_SIGNING_MODE" --output (Join-Path $out 'RELEASE-EVIDENCE.json')
+          if ($LASTEXITCODE -ne 0) { throw 'Windows release evidence generation failed.' }
+          python -B tools/release/candidate_evidence.py verify --input (Join-Path $out 'RELEASE-EVIDENCE.json')
+          if ($LASTEXITCODE -ne 0) { throw 'Windows release evidence verification failed.' }
+
+      - name: Cleanup protected PFX
+        if: always() && env.XUEQING_WINDOWS_SIGNING_MODE == 'pfx'
         shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $out = Join-Path $env:GITHUB_WORKSPACE 'artifacts\release-signing\windows'
-          $msix = Get-ChildItem $out -Recurse -Filter *.msix | Select-Object -First 1
-          if ($null -eq $msix) { throw 'Signed MSIX not found.' }
-          $signature = Get-AuthenticodeSignature $msix.FullName
-          if ($signature.Status -ne 'Valid') { throw "Signed MSIX Authenticode status is $($signature.Status)." }
-          if ($signature.SignerCertificate.Subject -ne $env:XUEQING_WINDOWS_PUBLISHER) { throw 'Signed certificate Subject does not match package Publisher.' }
-          "Subject=$($signature.SignerCertificate.Subject)" | Set-Content (Join-Path $out 'WINDOWS-SIGNING.txt')
-          "Thumbprint=$($signature.SignerCertificate.Thumbprint)" | Add-Content (Join-Path $out 'WINDOWS-SIGNING.txt')
-          $hash = Get-FileHash $msix.FullName -Algorithm SHA256
-          "$($hash.Hash.ToLowerInvariant())  $($msix.Name)" | Set-Content (Join-Path $out 'SHA256SUMS.txt') -Encoding ascii
+        run: Remove-Item (Join-Path $env:RUNNER_TEMP 'xueqing-release.pfx') -Force -ErrorAction SilentlyContinue
+
       - name: Upload signed Windows candidate
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
@@ -555,7 +449,7 @@ jobs:
           retention-days: 30
 
   release-candidate-record:
-    needs: [android-signed, windows-signed]
+    needs: [android-signed, android-signed-install, windows-signed]
     runs-on: ubuntu-latest
     environment: production-release
     timeout-minutes: 10
@@ -580,19 +474,23 @@ jobs:
           name: xueqing-windows-signed-candidate
           path: artifacts/candidate/windows
 
-      - name: Verify exact-source candidate provenance
+      - name: Verify exact-source candidate evidence
         shell: bash
         run: |
           set -euo pipefail
           expected='${{ inputs.source_sha }}'
           test "$(cat artifacts/candidate/android/SOURCE_COMMIT.txt)" = "$expected"
           test "$(cat artifacts/candidate/windows/SOURCE_COMMIT.txt)" = "$expected"
-          version="$(sed -n 's/^releaseVersion=//p' release/version.properties)"
-          test -f "artifacts/candidate/android/Xueqing-$version.apk"
-          test -f "artifacts/candidate/windows/Xueqing-$version-x64.msix"
-          test -f "artifacts/candidate/windows/XueqingSetup-$version-x64.exe"
-          cat artifacts/candidate/android/SHA256SUMS.txt
-          cat artifacts/candidate/windows/SHA256SUMS.txt
+          python3 -B tools/release/candidate_evidence.py verify --input artifacts/candidate/android/RELEASE-EVIDENCE.json
+          python3 -B tools/release/candidate_evidence.py verify --input artifacts/candidate/windows/RELEASE-EVIDENCE.json
+          python3 - "$expected" <<'PY'
+          import json, pathlib, sys
+          expected = sys.argv[1]
+          android = json.loads(pathlib.Path("artifacts/candidate/android/RELEASE-EVIDENCE.json").read_text())
+          windows = json.loads(pathlib.Path("artifacts/candidate/windows/RELEASE-EVIDENCE.json").read_text())
+          assert android["source_commit"] == expected == windows["source_commit"]
+          assert android["release_version"] == windows["release_version"]
+          PY
 
       - name: Create durable draft GitHub Release from signed bytes
         shell: bash
@@ -607,6 +505,7 @@ jobs:
             echo "A durable candidate record already exists for $tag; refusing to replace signed bytes." >&2
             exit 1
           fi
+
           notes="$RUNNER_TEMP/release-notes.md"
           {
             echo "# Xueqing $version"
@@ -631,7 +530,9 @@ jobs:
             "artifacts/candidate/android/Xueqing-$version.apk" \
             "artifacts/candidate/android/ANDROID-SIGNING.txt#ANDROID-SIGNING.txt" \
             "artifacts/candidate/android/SHA256SUMS.txt#SHA256SUMS-android.txt" \
+            "artifacts/candidate/android/RELEASE-EVIDENCE.json#RELEASE-EVIDENCE-android.json" \
             "artifacts/candidate/windows/Xueqing-$version-x64.msix" \
             "artifacts/candidate/windows/XueqingSetup-$version-x64.exe" \
             "artifacts/candidate/windows/WINDOWS-SIGNING.txt#WINDOWS-SIGNING.txt" \
-            "artifacts/candidate/windows/SHA256SUMS.txt#SHA256SUMS-windows.txt"
+            "artifacts/candidate/windows/SHA256SUMS.txt#SHA256SUMS-windows.txt" \
+            "artifacts/candidate/windows/RELEASE-EVIDENCE.json#RELEASE-EVIDENCE-windows.json"
