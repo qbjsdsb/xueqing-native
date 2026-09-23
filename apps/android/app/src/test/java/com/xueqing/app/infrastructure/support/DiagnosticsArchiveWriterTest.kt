@@ -34,6 +34,16 @@ class DiagnosticsArchiveWriterTest {
     }
 
     @Test
+    fun `unknown queue counts serialize as null`() {
+        val body = DiagnosticsArchiveWriter().serialize(
+            snapshot(queueCounts = DiagnosticQueueCounts(null, null, null)),
+        )
+        assertTrue(body.contains("\"pending_intents\": null"))
+        assertTrue(body.contains("\"outbox_items\": null"))
+        assertTrue(body.contains("\"attachment_staging\": null"))
+    }
+
+    @Test
     fun `private teaching sentinel cannot enter machine-readable error field`() {
         assertThrows(IllegalArgumentException::class.java) {
             snapshot(errorCodes = listOf("虚构学生甲：这段课堂观察绝不能进入诊断包"))
@@ -58,7 +68,10 @@ class DiagnosticsArchiveWriterTest {
         }
     }
 
-    private fun snapshot(errorCodes: List<String> = listOf("XQ_NETWORK_TIMEOUT")) =
+    private fun snapshot(
+        errorCodes: List<String> = listOf("XQ_NETWORK_TIMEOUT"),
+        queueCounts: DiagnosticQueueCounts = DiagnosticQueueCounts(1, 1, 0),
+    ) =
         DiagnosticsSnapshot(
             generatedAt = Instant.parse("2026-09-23T04:00:00Z"),
             osVersion = "17",
@@ -81,7 +94,7 @@ class DiagnosticsArchiveWriterTest {
                 "XQ_CLIENT_SUPPORTED",
                 "v1-initial",
             ),
-            queues = DiagnosticQueueCounts(1, 1, 0),
+            queues = queueCounts,
             recentErrorCodes = errorCodes,
         )
 }
