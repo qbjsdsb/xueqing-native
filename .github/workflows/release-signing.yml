@@ -101,10 +101,12 @@ jobs:
           mkdir -p "$out"
           signed="$out/Xueqing-$version.apk"
           apksigner="$ANDROID_HOME/build-tools/35.0.0/apksigner"
+          signing_alias="$(bash tools/release/select-android-signing-alias.sh "$ks")"
+          echo "::add-mask::$signing_alias"
 
           "$apksigner" sign \
             --ks "$ks" \
-            --ks-key-alias "$XUEQING_ANDROID_KEY_ALIAS" \
+            --ks-key-alias "$signing_alias" \
             --ks-pass env:XUEQING_ANDROID_KEYSTORE_PASSWORD \
             --key-pass env:XUEQING_ANDROID_KEY_PASSWORD \
             --out "$signed" \
