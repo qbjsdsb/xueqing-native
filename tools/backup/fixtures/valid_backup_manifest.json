@@ -1,0 +1,80 @@
+{
+  "schema_version": 1,
+  "archive_id": "76000000-0000-0000-0000-000000000001",
+  "created_at": "2026-09-21T12:40:00Z",
+  "source": {
+    "provider_id": "fictional-reference-provider",
+    "environment_id": "fictional-backup-rehearsal",
+    "region": "ap-southeast-1",
+    "source_commit": "d5650162ed066b823e0f545e2d02fc781ecd329a",
+    "migration_count": 14,
+    "migrations": [
+      "20260917123000_create_observation_v1",
+      "20260917143000_personal_bootstrap_v1",
+      "20260917200000_student_recent_observations_v1",
+      "20260918063000_provider_identity_links_v1",
+      "20260919151000_create_learning_case_v1",
+      "20260919174000_current_focus_today_v1",
+      "20260919193000_action_progression_v1",
+      "20260920043000_case_lifecycle_v1",
+      "20260920052000_student_learning_cases_v1",
+      "20260920055000_observation_attachment_v1",
+      "20260920125000_organization_management_v1",
+      "20260920143000_organization_invitation_v1",
+      "20260920160000_organization_invitation_acceptance_v1",
+      "20260920234000_organization_invitation_delivery_v1"
+    ],
+    "schema_fingerprint_sha256": "1111111111111111111111111111111111111111111111111111111111111111"
+  },
+  "consistency": {
+    "strategy": "quiesced-window",
+    "boundary_id": "fictional-boundary-001",
+    "database_started_at": "2026-09-21T12:39:00Z",
+    "database_finished_at": "2026-09-21T12:39:10Z",
+    "objects_started_at": "2026-09-21T12:39:10Z",
+    "objects_finished_at": "2026-09-21T12:39:15Z",
+    "maximum_data_loss_window_seconds": 15
+  },
+  "database": {
+    "format": "postgresql-custom",
+    "tool": "pg_dump",
+    "tool_version": "17.6",
+    "archive_relative_path": "database/xueqing.dump",
+    "byte_length": 4096,
+    "sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+    "row_counts": {
+      "organizations": 2,
+      "app_users": 3,
+      "observations": 1,
+      "learning_cases": 1,
+      "organization_invitation_deliveries": 1
+    },
+    "table_fingerprints_sha256": {
+      "organizations": "4444444444444444444444444444444444444444444444444444444444444444",
+      "app_users": "5555555555555555555555555555555555555555555555555555555555555555",
+      "observations": "6666666666666666666666666666666666666666666666666666666666666666",
+      "learning_cases": "7777777777777777777777777777777777777777777777777777777777777777",
+      "organization_invitation_deliveries": "8888888888888888888888888888888888888888888888888888888888888888"
+    }
+  },
+  "storage": {
+    "bucket_id": "teaching-attachments-v1",
+    "private": true,
+    "object_count": 1,
+    "objects": [
+      {
+        "logical_object_locator": "fictional/org-1/student-1/observation-1/attachment-1",
+        "archive_relative_path": "objects/fictional-attachment-1.jpg",
+        "byte_length": 128,
+        "mime_type": "image/jpeg",
+        "sha256": "3333333333333333333333333333333333333333333333333333333333333333"
+      }
+    ]
+  },
+  "security": {
+    "archive_encrypted": true,
+    "encryption_scheme": "fictional-recipient-encryption",
+    "key_stored_separately": true,
+    "production_material_in_public_ci": false
+  }
+}

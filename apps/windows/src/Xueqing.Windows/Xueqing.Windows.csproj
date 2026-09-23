@@ -24,6 +24,14 @@
     <Content Include="..\..\spikes\Xueqing.Windows.PackagingProbe\Assets\*.png">
       <Link>Assets\%(Filename)%(Extension)</Link>
     </Content>
+    <!-- Generated from deployment/production_profile.template.json for an exact source SHA.
+         Development/CI builds without a staged profile retain the existing prototype/local-reference path. -->
+    <Content Include="Deployment\deployment_profile.json"
+             Condition="Exists('Deployment\deployment_profile.json')">
+      <Link>deployment_profile.json</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.Windows.SDK.BuildTools" />

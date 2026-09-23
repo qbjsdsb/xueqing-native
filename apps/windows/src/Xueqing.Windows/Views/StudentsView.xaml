@@ -55,6 +55,7 @@
                 Grid.Row="1"
                 AutomationProperties.AutomationId="StudentSearchBox"
                 AutomationProperties.Name="搜索学生"
+                IsEnabled="{Binding IsStartupUnavailable, Converter={StaticResource BooleanToVisibilityConverter}, ConverterParameter=Invert}"
                 PlaceholderText="{Binding SearchPlaceholderText}"
                 TextChanged="SearchBox_TextChanged" />
 
@@ -69,7 +70,8 @@
                 KeyDown="StudentList_KeyDown"
                 SelectedItem="{Binding SelectedStudent, Mode=TwoWay}"
                 SelectionChanged="StudentList_SelectionChanged"
-                SelectionMode="Single">
+                SelectionMode="Single"
+                Visibility="{Binding IsStartupUnavailable, Converter={StaticResource BooleanToVisibilityConverter}, ConverterParameter=Invert}">
                 <ListView.ItemTemplate>
                     <DataTemplate>
                         <Grid Padding="6,8,8,9" MinHeight="52">
@@ -109,6 +111,16 @@
                     </DataTemplate>
                 </ListView.ItemTemplate>
             </ListView>
+
+            <TextBlock
+                Grid.Row="2"
+                Margin="4,18,12,0"
+                AutomationProperties.AutomationId="StudentWorkspaceUnavailable"
+                FontSize="14"
+                Opacity="0.68"
+                Text="{Binding StartupStatusText}"
+                TextWrapping="Wrap"
+                Visibility="{Binding IsStartupUnavailable, Converter={StaticResource BooleanToVisibilityConverter}}" />
 
             <!-- Keep a stable visible surface marker for UIA even as the visual
                  heading becomes more compact in the v2 reference layout. -->
@@ -167,6 +179,7 @@
                         <Button
                             Grid.Column="1"
                             VerticalAlignment="Top"
+                            AutomationProperties.AutomationId="RefreshAuthoritativeStudents"
                             AutomationProperties.Name="刷新任教学员与最近记录"
                             Click="RefreshAuthoritativeStudents_Click"
                             Content="刷新"
@@ -175,7 +188,7 @@
 
                     <StackPanel
                         Spacing="20"
-                        Visibility="{Binding IsAuthoritativeStudentWorkspace, Converter={StaticResource BooleanToVisibilityConverter}, ConverterParameter=Invert}">
+                        Visibility="{Binding IsPrototypeMode, Converter={StaticResource BooleanToVisibilityConverter}}">
 
                         <StackPanel Spacing="10">
                             <TextBlock FontSize="16" FontWeight="SemiBold" Text="正在关注" />
@@ -355,6 +368,51 @@
                             SelectedItem="{Binding SelectedTeachingContext, Mode=TwoWay}"
                             SelectionChanged="SubjectContextBox_SelectionChanged" />
 
+                        <StackPanel
+                            Spacing="8"
+                            Visibility="{Binding SupportsObservationCapture, Converter={StaticResource BooleanToVisibilityConverter}}">
+                            <TextBlock
+                                FontSize="16"
+                                FontWeight="SemiBold"
+                                Text="课堂观察" />
+                            <TextBox
+                                x:Name="ObservationDraftBox"
+                                MinHeight="96"
+                                MaxLength="10000"
+                                AcceptsReturn="True"
+                                AutomationProperties.AutomationId="ObservationDraftText"
+                                AutomationProperties.Name="课堂观察草稿"
+                                IsEnabled="{Binding CanEditObservationDraft}"
+                                PlaceholderText="记录刚刚发生的学习表现、错误或证据"
+                                Text="{Binding ObservationDraftText, Mode=OneWay}"
+                                TextChanged="ObservationDraftBox_TextChanged"
+                                TextWrapping="Wrap" />
+                            <Grid ColumnSpacing="12">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock
+                                    AutomationProperties.AutomationId="ObservationDraftStatus"
+                                    AutomationProperties.Name="课堂观察草稿状态"
+                                    Opacity="0.68"
+                                    Text="{Binding ObservationDraftStatusText}"
+                                    TextWrapping="Wrap" />
+                                <Button
+                                    Grid.Column="1"
+                                    AutomationProperties.AutomationId="ObservationSubmit"
+                                    AutomationProperties.Name="提交课堂观察"
+                                    Click="ObservationSubmit_Click"
+                                    Content="{Binding ObservationSubmitLabel}"
+                                    IsEnabled="{Binding CanSubmitObservationDraft}" />
+                            </Grid>
+                        </StackPanel>
+
+                        <Border
+                            Height="1"
+                            Background="{ThemeResource SystemControlForegroundBaseLowBrush}"
+                            Visibility="{Binding SupportsObservationCapture, Converter={StaticResource BooleanToVisibilityConverter}}" />
+
                         <StackPanel Spacing="8">
                             <TextBlock
                                 FontSize="16"
@@ -415,14 +473,14 @@
                                                     <Button
                                                         Visibility="Collapsed"
                                                         AutomationProperties.Name="调整当前关注的行动日期"
-                                                        Loaded="ActionProgressionButton_Loaded"
+                                                        Loaded="RescheduleFocusActionButton_Loaded"
                                                         Click="RescheduleFocusAction_Click"
                                                         Content="改期"
                                                         Tag="{Binding}" />
                                                     <Button
                                                         Visibility="Collapsed"
                                                         AutomationProperties.Name="验证当前关注并安排下一步"
-                                                        Loaded="ActionProgressionButton_Loaded"
+                                                        Loaded="VerifyFocusActionButton_Loaded"
                                                         Click="VerifyFocusAction_Click"
                                                         Content="验证"
                                                         Tag="{Binding}" />
@@ -557,6 +615,7 @@
                                                 Margin="12,0,0,0"
                                                 VerticalAlignment="Top"
                                                 AutomationProperties.Name="从这条课堂观察形成学情问题"
+                                                Loaded="CreateLearningCaseButton_Loaded"
                                                 Click="CreateLearningCase_Click"
                                                 Content="形成学情问题"
                                                 Tag="{Binding}" />

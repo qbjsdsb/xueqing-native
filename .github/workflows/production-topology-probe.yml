@@ -1,0 +1,131 @@
+name: production-topology-probe
+
+on:
+  pull_request:
+    paths:
+      - 'backend/supabase/functions/organization-invitation-delivery/**'
+      - 'docs/production/PROVIDER_TOPOLOGY.json'
+      - 'tools/production/**'
+      - '.github/workflows/production-topology-probe.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-topology-probe-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  hosted-edge-region:
+    name: hosted-edge-region
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+
+      - name: Validate hosted fictional E2E harness syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash -n tools/production/run-hosted-production-e2e.sh
+
+      - name: Probe production Invitation Delivery in Singapore
+        shell: bash
+        env:
+          XUEQING_PRODUCTION_FUNCTION_URL: https://vwcolaxwlauxhxwpeazt.supabase.co/functions/v1/organization-invitation-delivery
+          XUEQING_PRODUCTION_PUBLISHABLE_KEY: sb_publishable_LiQJhoknVavH1fZHTv5Hcg_xQVqaD3C
+          XUEQING_REQUIRED_EDGE_REGION: ap-southeast-1
+        run: |
+          set -euo pipefail
+
+          headers="$(mktemp)"
+          body="$(mktemp)"
+          trap 'rm -f "$headers" "$body"' EXIT
+
+          status="$(
+            curl --silent --show-error \
+              --dump-header "$headers" \
+              --output "$body" \
+              --write-out '%{http_code}' \
+              -X GET "$XUEQING_PRODUCTION_FUNCTION_URL" \
+              -H "apikey: $XUEQING_PRODUCTION_PUBLISHABLE_KEY" \
+              -H "x-region: $XUEQING_REQUIRED_EDGE_REGION"
+          )"
+
+          if [[ "$status" != "405" ]]; then
+            echo "Hosted region probe expected HTTP 405 after region guard, got $status." >&2
+            cat "$headers" >&2 || true
+            cat "$body" >&2 || true
+            exit 1
+          fi
+
+          actual_region="$(
+            awk -F': *' 'tolower($1) == "x-sb-edge-region" {gsub("\r", "", $2); print $2}' "$headers" | tail -n 1
+          )"
+          if [[ "$actual_region" != "$XUEQING_REQUIRED_EDGE_REGION" ]]; then
+            echo "Hosted region probe expected x-sb-edge-region=$XUEQING_REQUIRED_EDGE_REGION, got '$actual_region'." >&2
+            cat "$headers" >&2 || true
+            exit 1
+          fi
+
+          python3 - "$body" <<'PY'
+          import json
+          import pathlib
+          import sys
+
+          payload = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
+          assert payload.get("error") == "XQ_METHOD_NOT_ALLOWED", payload
+          PY
+
+          echo "Hosted Invitation Delivery region probe passed: Singapore runtime guard executed before method/auth/business processing."
+
+  hosted-fictional-acceptance:
+    name: hosted-fictional-acceptance
+    if: ${{ github.event_name == 'workflow_dispatch' }}
+    needs: hosted-edge-region
+    environment: production-acceptance
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      XUEQING_ACCEPTANCE_SERVICE_ROLE_KEY: ${{ secrets.XUEQING_ACCEPTANCE_SERVICE_ROLE_KEY }}
+
+    steps:
+      - name: Checkout exact dispatched source
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Require protected acceptance credential
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$XUEQING_ACCEPTANCE_SERVICE_ROLE_KEY"
+          echo "::add-mask::$XUEQING_ACCEPTANCE_SERVICE_ROLE_KEY"
+
+      - name: Render exact-source production profile
+        shell: bash
+        run: |
+          set -euo pipefail
+          profile="$RUNNER_TEMP/deployment_profile.json"
+          python3 -B tools/deployment/render_deployment_profile.py \
+            deployment/production_profile.template.json \
+            "$profile" \
+            "$(git rev-parse HEAD)"
+          python3 -B tools/deployment/verify_deployment_profile.py "$profile"
+          python3 - "$profile" >> "$GITHUB_ENV" <<'PY'
+          import json
+          import pathlib
+          import sys
+
+          profile = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
+          print("XUEQING_ACCEPTANCE_API_URL=" + profile["project_origin"])
+          print("XUEQING_ACCEPTANCE_PUBLISHABLE_KEY=" + profile["publishable_key"])
+          print("XUEQING_ACCEPTANCE_EDGE_REGION=" + profile["required_edge_region"])
+          PY
+
+      - name: Run isolated hosted fictional acceptance
+        shell: bash
+        run: bash tools/production/run-hosted-production-e2e.sh

@@ -9,5 +9,6 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\Xueqing.Windows.Core\Xueqing.Windows.Core.csproj" />
     <ProjectReference Include="..\..\src\Xueqing.Windows.Infrastructure\Xueqing.Windows.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\Xueqing.Windows.Presentation\Xueqing.Windows.Presentation.csproj" />
   </ItemGroup>
 </Project>

@@ -1,7 +1,5 @@
-using System.Net.Http.Headers;
-using System.Net.Http.Json;
-using System.Text.Json;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Xueqing.Windows.Core.Models;
 using Xueqing.Windows.Infrastructure.Remote;
 
 namespace Xueqing.Windows.ReferenceProviderE2E;
@@ -18,11 +16,14 @@ public sealed class ObservationReadReferenceProviderE2ETest
         var projectUri = new Uri(providerUrl, UriKind.Absolute);
         using var httpClient = new HttpClient();
 
+        ValueTask<string?> AccessTokenProvider(CancellationToken _) =>
+            ValueTask.FromResult<string?>(accessToken);
+
         var bootstrapReader = new PostgrestPersonalBootstrapReader(
             httpClient,
             projectUri,
             apiKey,
-            _ => ValueTask.FromResult<string?>(accessToken));
+            AccessTokenProvider);
         var bootstrapResult = await bootstrapReader.ReadAsync();
 
         Assert.IsTrue(bootstrapResult.IsSuccess, bootstrapResult.Failure?.Code);
@@ -32,40 +33,46 @@ public sealed class ObservationReadReferenceProviderE2ETest
         var context = bootstrapResult.Snapshot.TeachingContexts[0];
 
         var operationId = Guid.Parse("74000000-0000-0000-0000-000000000027");
-        const string rawText = "  Windows 读取闭环 · 虚构课堂观察原文  ";
-        var firstReceipt = await CreateObservationAsync(
+        const string rawText = "  Windows 写读闭环 · 虚构课堂观察原文  ";
+        var command = new PostgrestCreateObservationCommand(
             httpClient,
             projectUri,
             apiKey,
-            accessToken,
+            AccessTokenProvider);
+        var request = new CreateObservationRequest(
             operationId,
             context.OrganizationId,
             context.StudentId,
             context.SubjectProfileId,
             context.AssignmentId,
-            rawText);
-        var retryReceipt = await CreateObservationAsync(
-            httpClient,
-            projectUri,
-            apiKey,
-            accessToken,
-            operationId,
-            context.OrganizationId,
-            context.StudentId,
-            context.SubjectProfileId,
-            context.AssignmentId,
-            rawText);
+            rawText,
+            ClientCaptureMetadata: new Dictionary<string, string>
+            {
+                ["source"] = "windows_reference_provider_e2e",
+            });
 
-        Assert.AreEqual(firstReceipt.ObservationId, retryReceipt.ObservationId,
+        var first = await command.ExecuteAsync(
+            request,
+            bootstrapResult.Snapshot.ActorAppUserId);
+        var retry = await command.ExecuteAsync(
+            request,
+            bootstrapResult.Snapshot.ActorAppUserId);
+
+        Assert.IsTrue(first.IsSuccess, first.Failure?.Code);
+        Assert.IsTrue(retry.IsSuccess, retry.Failure?.Code);
+        Assert.IsNotNull(first.Receipt);
+        Assert.IsNotNull(retry.Receipt);
+        Assert.AreEqual(first.Receipt.ObservationId, retry.Receipt.ObservationId,
             "Retrying one intent must resolve to the same committed Observation.");
-        Assert.AreEqual(firstReceipt.ServerCommittedAt, retryReceipt.ServerCommittedAt,
+        Assert.AreEqual(first.Receipt.ServerCommittedAt, retry.Receipt.ServerCommittedAt,
             "Retrying one intent must reuse the authoritative receipt.");
+        Assert.AreEqual(bootstrapResult.Snapshot.ActorAppUserId, first.Receipt.ActorAppUserId);
 
         var recentReader = new PostgrestStudentRecentObservationsReader(
             httpClient,
             projectUri,
             apiKey,
-            _ => ValueTask.FromResult<string?>(accessToken));
+            AccessTokenProvider);
         var recentResult = await recentReader.ReadAsync(
             context.ObservationScope,
             bootstrapResult.Snapshot.ActorAppUserId);
@@ -74,55 +81,10 @@ public sealed class ObservationReadReferenceProviderE2ETest
         Assert.IsNotNull(recentResult.Snapshot);
         Assert.AreEqual(context.StudentDisplayName, recentResult.Snapshot.StudentDisplayName);
         var projected = recentResult.Snapshot.Observations.Single(
-            observation => observation.ObservationId == firstReceipt.ObservationId);
+            observation => observation.ObservationId == first.Receipt.ObservationId);
         Assert.AreEqual(rawText, projected.RawText);
-        Assert.AreEqual(firstReceipt.ServerCommittedAt, projected.CreatedAtServer);
+        Assert.AreEqual(first.Receipt.ServerCommittedAt, projected.CreatedAtServer);
         Assert.AreEqual(bootstrapResult.Snapshot.ActorAppUserId, projected.ActorAppUserId);
-    }
-
-    private static async Task<ObservationReceipt> CreateObservationAsync(
-        HttpClient httpClient,
-        Uri projectUri,
-        string apiKey,
-        string accessToken,
-        Guid operationId,
-        Guid organizationId,
-        Guid studentId,
-        Guid subjectProfileId,
-        Guid assignmentId,
-        string rawText)
-    {
-        var baseUri = projectUri.AbsoluteUri.EndsWith("/", StringComparison.Ordinal)
-            ? projectUri
-            : new Uri(projectUri.AbsoluteUri + "/", UriKind.Absolute);
-        using var request = new HttpRequestMessage(
-            HttpMethod.Post,
-            new Uri(baseUri, "rest/v1/rpc/create_observation"));
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
-        request.Headers.TryAddWithoutValidation("apikey", apiKey);
-        request.Content = JsonContent.Create(new
-        {
-            p_operation_id = operationId,
-            p_organization_id = organizationId,
-            p_student_id = studentId,
-            p_subject_profile_id = subjectProfileId,
-            p_assignment_id = assignmentId,
-            p_raw_text = rawText,
-            p_client_captured_at = (DateTimeOffset?)null,
-            p_client_capture_metadata = new { source = "windows_reference_provider_e2e" },
-        });
-
-        using var response = await httpClient.SendAsync(request);
-        var body = await response.Content.ReadAsStringAsync();
-        Assert.IsTrue(response.IsSuccessStatusCode,
-            $"CreateObservation failed with HTTP {(int)response.StatusCode}: {body}");
-
-        using var document = JsonDocument.Parse(body);
-        var root = document.RootElement;
-        var observationId = Guid.Parse(root.GetProperty("observation_id").GetString()
-            ?? throw new InvalidDataException("CreateObservation receipt is missing observation_id."));
-        var committedAt = root.GetProperty("server_committed_at").GetDateTimeOffset();
-        return new ObservationReceipt(observationId, committedAt);
     }
 
     private static string RequiredEnvironment(string name)
@@ -132,6 +94,4 @@ public sealed class ObservationReadReferenceProviderE2ETest
             ? throw new InvalidOperationException($"Required E2E environment variable '{name}' is missing.")
             : value;
     }
-
-    private sealed record ObservationReceipt(Guid ObservationId, DateTimeOffset ServerCommittedAt);
 }

@@ -112,6 +112,20 @@
                 </NavigationViewItem>
             </NavigationView.MenuItems>
 
+            <NavigationView.FooterMenuItems>
+                <NavigationViewItem
+                    x:Name="SignOutNav"
+                    AutomationProperties.AutomationId="SignOutNavigation"
+                    AutomationProperties.Name="退出登录"
+                    Content="退出登录"
+                    Tag="sign-out"
+                    Visibility="Collapsed">
+                    <NavigationViewItem.Icon>
+                        <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE8AC;" />
+                    </NavigationViewItem.Icon>
+                </NavigationViewItem>
+            </NavigationView.FooterMenuItems>
+
             <Grid>
                 <views:TodayView x:Name="TodayView" />
                 <views:StudentsView x:Name="StudentsView" Visibility="Collapsed" />

@@ -1,0 +1,155 @@
+name: backup-restore
+
+on:
+  pull_request:
+    paths:
+      - 'contracts/operations/BACKUP_RESTORE_V1.md'
+      - 'contracts/schemas/BACKUP_ARCHIVE_MANIFEST_V1.schema.json'
+      - 'docs/production/BACKUP_RESTORE_PRECONDITIONS.md'
+      - 'tools/backup/**'
+      - '.github/workflows/backup-restore.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backup-restore-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  manifest-contract:
+    name: manifest-contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+
+      - name: Test backup manifest validator
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/backup/test_verify_backup_manifest.py
+          python3 tools/backup/test_compute_restore_order.py
+          python3 tools/backup/check_rehearsal_shell_guards.py
+
+      - name: Validate fictional manifest fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/backup/verify_backup_manifest.py \
+            tools/backup/fixtures/valid_backup_manifest.json
+
+      - name: Reject accidental backup archives in repository
+        shell: bash
+        run: |
+          set -euo pipefail
+          forbidden="$(
+            find . -type f \
+              \( -name '*.dump' -o -name '*.backup' -o -name '*.bak' -o -name '*.age' -o -name '*.gpg' \) \
+              -not -path './.git/*' \
+              -print
+          )"
+          if [[ -n "$forbidden" ]]; then
+            echo "Backup/archive material must not be committed:" >&2
+            printf '%s\n' "$forbidden" >&2
+            exit 1
+          fi
+
+
+  fictional-local-restore:
+    name: fictional-local-restore
+    needs: manifest-contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+
+      - name: Setup stable Supabase CLI 2.117.0
+        uses: supabase/setup-cli@46f7f98c7f948ad727d22c1e67fab04c223a0520
+        with:
+          version: 2.117.0
+
+      - name: Start clean fictional source provider
+        shell: bash
+        run: |
+          set -euo pipefail
+          supabase start --workdir backend
+          supabase db reset --workdir backend
+
+      - name: Create encrypted fictional backup archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash backend/supabase/tests/create_fictional_backup_rehearsal.sh \
+            "$RUNNER_TEMP/xueqing-backup-rehearsal"
+
+      - name: Stop source provider before fresh restore
+        shell: bash
+        run: |
+          set -euo pipefail
+          supabase stop --workdir backend
+
+      - name: Restore into a fresh isolated provider and prove semantics
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash backend/supabase/tests/restore_fictional_backup_rehearsal.sh \
+            "$RUNNER_TEMP/xueqing-backup-rehearsal"
+
+      - name: Print measured fictional RPO and RTO evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          metrics_dir="$RUNNER_TEMP/xueqing-backup-rehearsal"
+          python3 - "$metrics_dir/backup_metrics.json" "$metrics_dir/restore_metrics.json" <<'PY'
+          import json
+          import pathlib
+          import sys
+
+          backup = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
+          restore = json.loads(pathlib.Path(sys.argv[2]).read_text(encoding="utf-8"))
+
+          if backup["maximum_data_loss_window_seconds"] != 0:
+              raise SystemExit("fictional quiesced rehearsal must prove a zero measured data-loss window")
+          if backup["quiescence_proven_by_equal_table_fingerprints"] is not True:
+              raise SystemExit("fictional quiescence fingerprint proof is missing")
+
+          required_nonnegative = [
+              backup["database_backup_duration_ms"],
+              backup["object_backup_duration_ms"],
+              backup["consistency_capture_span_ms"],
+              backup["backup_total_duration_ms"],
+              restore["integrity_validation_duration_ms"],
+              restore["database_restore_duration_ms"],
+              restore["object_restore_duration_ms"],
+              restore["semantic_validation_duration_ms"],
+              restore["restore_total_duration_ms"],
+          ]
+          if any(not isinstance(value, int) or value < 0 for value in required_nonnegative):
+              raise SystemExit("backup/restore timing evidence must be non-negative integer milliseconds")
+          if backup["backup_total_duration_ms"] <= 0 or restore["restore_total_duration_ms"] <= 0:
+              raise SystemExit("backup/restore total duration evidence must be positive")
+
+          print("fictional backup metrics:", json.dumps(backup, sort_keys=True))
+          print("fictional restore metrics:", json.dumps(restore, sort_keys=True))
+          PY
+
+      - name: Prove backup material was not published as a repository artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s "$RUNNER_TEMP/xueqing-backup-rehearsal/archive.tar.gpg"
+          test -s "$RUNNER_TEMP/xueqing-backup-rehearsal/rehearsal.key"
+          echo "Rehearsal material remained runner-local and was not uploaded."
+
+      - name: Remove rehearsal material
+        if: always()
+        shell: bash
+        run: |
+          rm -rf "$RUNNER_TEMP/xueqing-backup-rehearsal" || true
+          supabase stop --workdir backend || true

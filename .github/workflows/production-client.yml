@@ -1,0 +1,109 @@
+name: production-client
+
+on:
+  pull_request:
+    paths:
+      - 'contracts/operations/PRODUCTION_CLIENT_DEPLOYMENT_SESSION_V1.md'
+      - 'contracts/schemas/DEPLOYMENT_PROFILE_V1.schema.json'
+      - 'tools/deployment/**'
+      - 'deployment/**'
+      - '.github/workflows/production-client.yml'
+      - 'apps/windows/**'
+      - 'apps/android/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-client-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  deployment-profile-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Validate deployment profile contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -B tools/deployment/test_verify_deployment_profile.py
+          python3 -B tools/deployment/test_verify_native_artifact_profile.py
+          python3 -B tools/deployment/verify_deployment_profile.py \
+            tools/deployment/fixtures/valid_deployment_profile.json
+
+      - name: Render exact-source production profile
+        shell: bash
+        env:
+          SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SOURCE_COMMIT"
+          rendered="$RUNNER_TEMP/xueqing-production-deployment-profile.json"
+          python3 -B tools/deployment/render_deployment_profile.py \
+            deployment/production_profile.template.json \
+            "$rendered" \
+            "$SOURCE_COMMIT"
+          python3 -B tools/deployment/verify_deployment_profile.py "$rendered"
+          python3 - "$rendered" "$SOURCE_COMMIT" <<'PY'
+          import json
+          import pathlib
+          import sys
+
+          value = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
+          assert value["source"]["commit"] == sys.argv[2]
+          assert value["profile_id"] == "xueqing-prod-sg-v1"
+          assert value["environment_id"] == "production-sg-v1"
+          assert value["trust_domain_id"] == "xueqing-native-prod-sg"
+          assert value["required_edge_region"] == "ap-southeast-1"
+          assert value["capabilities"] == [
+              "auth",
+              "database-rpc",
+              "edge-functions",
+              "private-storage",
+          ]
+          PY
+
+      - name: Stage identical native production profiles
+        shell: bash
+        env:
+          SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          windows_profile="apps/windows/src/Xueqing.Windows/Deployment/deployment_profile.json"
+          android_profile="apps/android/app/src/release/assets/deployment_profile.json"
+          python3 -B tools/deployment/stage_deployment_profile.py \
+            deployment/production_profile.template.json \
+            "$SOURCE_COMMIT" \
+            "$windows_profile" \
+            "$android_profile"
+          cmp "$windows_profile" "$android_profile"
+          python3 -B tools/deployment/verify_deployment_profile.py "$windows_profile"
+          python3 -B tools/deployment/verify_deployment_profile.py "$android_profile"
+          git check-ignore -q "$windows_profile"
+          git check-ignore -q "$android_profile"
+          if git ls-files --error-unmatch "$windows_profile" >/dev/null 2>&1 || \
+             git ls-files --error-unmatch "$android_profile" >/dev/null 2>&1; then
+            echo 'Rendered deployment profiles must not be committed.' >&2
+            exit 1
+          fi
+
+      - name: Reject committed session material in deployment tooling
+        shell: bash
+        run: |
+          set -euo pipefail
+          if grep -RIniE \
+            --exclude-dir='__pycache__' \
+            --exclude='test_verify_deployment_profile.py' \
+            --exclude='verify_deployment_profile.py' \
+            '(refresh_token|access_token|service[_-]?role|sb_secret_|postgres(ql)?://)' \
+            tools/deployment deployment contracts/schemas/DEPLOYMENT_PROFILE_V1.schema.json; then
+            echo 'Deployment profile/tooling contains forbidden session or privileged credential material.' >&2
+            exit 1
+          fi

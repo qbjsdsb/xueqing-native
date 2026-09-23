@@ -5,6 +5,10 @@ import com.xueqing.app.application.attachment.AttachmentCommitProtocolFailure
 import com.xueqing.app.application.attachment.AttachmentCommitResult
 import com.xueqing.app.application.attachment.AttachmentCommitUnknownReason
 import com.xueqing.app.application.attachment.AttachmentStorageRemote
+import com.xueqing.app.application.attachment.AttachmentReadRemote
+import com.xueqing.app.application.attachment.AttachmentReadRejection
+import com.xueqing.app.application.attachment.AttachmentReadResult
+import com.xueqing.app.application.attachment.AttachmentReadUnknownReason
 import com.xueqing.app.application.attachment.AttachmentUploadRejection
 import com.xueqing.app.application.attachment.AttachmentUploadResult
 import com.xueqing.app.application.attachment.AttachmentUploadUnknownReason
@@ -81,6 +85,121 @@ class SupabaseObservationAttachmentStorageAdapter(
 
     private companion object {
         const val BUCKET_ID = "teaching-attachments-v1"
+        val TRANSIENT_HTTP_STATUSES = setOf(408, 425, 429)
+    }
+}
+
+class SupabaseObservationAttachmentReadAdapter(
+    private val sessionTokenSource: SessionTokenSource,
+    private val transport: StorageDownloadTransport,
+) : AttachmentReadRemote {
+    override fun read(
+        receipt: CommitObservationAttachmentReceipt,
+    ): AttachmentReadResult {
+        if (!isValidCommittedReceipt(receipt)) {
+            return AttachmentReadResult.Rejected(
+                AttachmentReadRejection.InvalidMetadata,
+            )
+        }
+
+        val accessToken = sessionTokenSource.currentAccessToken()
+            ?.takeIf(String::isNotBlank)
+            ?: return AttachmentReadResult.AuthenticationRequired
+
+        return when (
+            val result = transport.download(
+                StorageDownloadCall(
+                    bucketId = receipt.bucketId,
+                    objectName = receipt.objectName,
+                    accessToken = accessToken,
+                ),
+            )
+        ) {
+            StorageDownloadTransportResult.Timeout ->
+                AttachmentReadResult.UnknownResult(
+                    AttachmentReadUnknownReason.Timeout,
+                )
+
+            StorageDownloadTransportResult.NetworkFailure ->
+                AttachmentReadResult.UnknownResult(
+                    AttachmentReadUnknownReason.NetworkFailure,
+                )
+
+            is StorageDownloadTransportResult.Response -> when {
+                result.statusCode in 200..299 -> {
+                    val responseContentType = result.contentType
+                        ?.substringBefore(';')
+                        ?.trim()
+                        ?.lowercase()
+                    if (
+                        responseContentType != receipt.contentType ||
+                        result.body.size.toLong() != receipt.byteSize ||
+                        result.body.isEmpty() ||
+                        result.body.size > MAX_BYTES
+                    ) {
+                        AttachmentReadResult.Rejected(
+                            AttachmentReadRejection.InvalidMetadata,
+                        )
+                    } else {
+                        AttachmentReadResult.Loaded(
+                            contentType = responseContentType,
+                            bytes = result.body,
+                        )
+                    }
+                }
+
+                result.statusCode == 401 ->
+                    AttachmentReadResult.AuthenticationRequired
+
+                result.statusCode == 403 || result.statusCode == 404 ->
+                    AttachmentReadResult.Rejected(
+                        AttachmentReadRejection.AccessDenied,
+                    )
+
+                result.statusCode in TRANSIENT_HTTP_STATUSES ||
+                    result.statusCode >= 500 ->
+                    AttachmentReadResult.UnknownResult(
+                        AttachmentReadUnknownReason.ServerFailure,
+                    )
+
+                else ->
+                    AttachmentReadResult.Rejected(
+                        AttachmentReadRejection.UnexpectedResponse,
+                    )
+            }
+        }
+    }
+
+    private fun isValidCommittedReceipt(
+        receipt: CommitObservationAttachmentReceipt,
+    ): Boolean {
+        if (
+            receipt.command != COMMAND_NAME ||
+            receipt.bucketId != BUCKET_ID ||
+            receipt.contentType !in ALLOWED_CONTENT_TYPES ||
+            receipt.byteSize !in 1..MAX_BYTES ||
+            receipt.subjectKey.isBlank()
+        ) {
+            return false
+        }
+
+        return receipt.objectName == canonicalObjectName(receipt)
+    }
+
+    private fun canonicalObjectName(
+        receipt: CommitObservationAttachmentReceipt,
+    ): String =
+        "v1/org/${receipt.organizationId}" +
+            "/student/${receipt.studentId}" +
+            "/profile/${receipt.subjectProfileId}" +
+            "/observation/${receipt.observationId}" +
+            "/attachment/${receipt.attachmentId}"
+
+    private companion object {
+        const val COMMAND_NAME = "commit_observation_attachment_v1"
+        const val BUCKET_ID = "teaching-attachments-v1"
+        const val MAX_BYTES = 6_291_456L
+        val ALLOWED_CONTENT_TYPES = setOf("image/jpeg", "image/png", "image/webp")
         val TRANSIENT_HTTP_STATUSES = setOf(408, 425, 429)
     }
 }

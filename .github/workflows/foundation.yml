@@ -51,6 +51,7 @@ jobs:
             docs/architecture/DRAFT_ENGINE.md
             docs/architecture/PROJECTION_CONTRACT.md
             docs/architecture/PROVIDER_CONFORMANCE.md
+            docs/architecture/PROVIDER_PORTABILITY.md
             docs/architecture/TIME_SEMANTICS.md
             docs/architecture/LOCAL_DATA_SECURITY.md
             docs/architecture/THREAT_MODEL.md
@@ -71,6 +72,11 @@ jobs:
             docs/adr/0002-android-compose.md
             docs/adr/0013-v1-projection-snapshot-sync.md
             contracts/fixtures/README.md
+            contracts/operations/PRODUCTION_PROVIDER_REGION_DATA_RESIDENCY_V1.md
+            docs/production/PROVIDER_TOPOLOGY.json
+            docs/production/PROVIDER_DECISION_MATRIX.md
+            docs/production/BACKUP_RESTORE_PRECONDITIONS.md
+            tools/production/verify_provider_topology.py
           )
           for file in "${required[@]}"; do
             test -f "$file" || { echo "Missing $file"; exit 1; }
@@ -81,6 +87,29 @@ jobs:
         run: |
           set -euo pipefail
           python3 tools/architecture/check-boundaries.py
+
+      - name: Validate production provider topology evidence shape
+        shell: bash
+        run: |
+          set -euo pipefail
+          manifest=docs/production/PROVIDER_TOPOLOGY.json
+          python3 tools/production/verify_provider_topology.py "$manifest"
+
+          status="$(python3 -c 'import json; print(json.load(open("docs/production/PROVIDER_TOPOLOGY.json", encoding="utf-8"))["status"])')"
+          if [[ "$status" == "accepted" ]]; then
+            python3 tools/production/verify_provider_topology.py "$manifest" --require-accepted
+          else
+            if python3 tools/production/verify_provider_topology.py "$manifest" --require-accepted; then
+              echo "Blocked production topology unexpectedly passed accepted-state validation." >&2
+              exit 1
+            fi
+          fi
+
+      - name: Test production provider topology verifier
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m unittest tools/production/test_verify_provider_topology.py
 
       - name: Reject obvious secret/private-data file types
         shell: bash
