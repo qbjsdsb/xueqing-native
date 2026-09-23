@@ -38,9 +38,9 @@ public sealed record DiagnosticCompatibility(
     string? PolicyRevision);
 
 public sealed record DiagnosticQueueCounts(
-    int PendingIntents,
-    int OutboxItems,
-    int AttachmentStaging);
+    int? PendingIntents,
+    int? OutboxItems,
+    int? AttachmentStaging);
 
 public sealed record DiagnosticsSnapshot(
     DateTimeOffset GeneratedAt,
