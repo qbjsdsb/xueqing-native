@@ -5,9 +5,22 @@ import argparse
 import pathlib
 import xml.etree.ElementTree as ET
 
-from tools.release.verify_release_identity import read_properties
-
 ROOT = pathlib.Path(__file__).resolve().parents[2]
+
+def read_properties(path: pathlib.Path) -> dict[str, str]:
+    values: dict[str, str] = {}
+    for raw in path.read_text(encoding="utf-8").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        if "=" not in line:
+            raise ValueError(f"invalid release property line: {raw}")
+        key, value = line.split("=", 1)
+        if not key or key in values or value != value.strip():
+            raise ValueError(f"invalid release property: {raw}")
+        values[key] = value
+    return values
+
 
 
 def render(publisher: str, output: pathlib.Path) -> None:
