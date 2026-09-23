@@ -3,6 +3,8 @@ name: windows-spike
 on:
   pull_request:
     paths:
+      - 'release/**'
+      - 'tools/release/**'
       - 'apps/windows/**'
       - 'contracts/sync/**'
       - 'docs/architecture/WINDOWS_OUTBOX_SPIKE.md'
