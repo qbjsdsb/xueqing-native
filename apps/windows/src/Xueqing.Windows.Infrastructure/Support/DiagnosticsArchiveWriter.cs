@@ -98,9 +98,9 @@ public static partial class DiagnosticsArchiveWriter
         Require(value.Deployment.TrustDomainId, 96, nameof(value.Deployment.TrustDomainId));
         Require(value.Deployment.ProviderId, 32, nameof(value.Deployment.ProviderId));
 
-        if (value.Queues.PendingIntents < 0 ||
-            value.Queues.OutboxItems < 0 ||
-            value.Queues.AttachmentStaging < 0)
+        if (value.Queues.PendingIntents is < 0 ||
+            value.Queues.OutboxItems is < 0 ||
+            value.Queues.AttachmentStaging is < 0)
         {
             throw new ArgumentException("Diagnostic queue counts cannot be negative.", nameof(value));
         }
