@@ -7,6 +7,7 @@ on:
       - 'tools/release/**'
       - 'apps/android/app/build.gradle.kts'
       - 'apps/windows/src/Xueqing.Windows/**'
+      - 'apps/windows/src/Xueqing.Setup/**'
       - 'deployment/**'
       - 'tools/deployment/**'
       - '.github/workflows/release-dry-run.yml'
@@ -75,10 +76,19 @@ jobs:
         shell: pwsh
         run: |
           ./tools/release/build-windows-release.ps1 -RepositoryRoot "$env:GITHUB_WORKSPACE" -Publisher 'CN=Xueqing Native Release Candidate Test' -OutputDirectory "$env:GITHUB_WORKSPACE\artifacts\release-dry-run\windows"
+      - name: Prove XueqingSetup installs the signed production package identity
+        shell: pwsh
+        run: |
+          $unsigned = Get-ChildItem "$env:GITHUB_WORKSPACE\artifacts\release-dry-run\windows" -Filter *.msix | Select-Object -First 1
+          if ($null -eq $unsigned) { throw 'Unsigned release dry-run MSIX not found.' }
+          ./tools/release/test-windows-setup.ps1 -RepositoryRoot "$env:GITHUB_WORKSPACE" -UnsignedMsixPath $unsigned.FullName -Publisher 'CN=Xueqing Native Release Candidate Test' -OutputDirectory "$env:GITHUB_WORKSPACE\artifacts\release-dry-run\setup"
+
       - name: Upload Windows dry-run artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: xueqing-windows-release-dry-run
-          path: artifacts/release-dry-run/windows
+          path: |
+            artifacts/release-dry-run/windows
+            artifacts/release-dry-run/setup
           if-no-files-found: error
           retention-days: 7
