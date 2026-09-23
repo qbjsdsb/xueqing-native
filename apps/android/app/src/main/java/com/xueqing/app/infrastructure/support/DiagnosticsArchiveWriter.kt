@@ -67,9 +67,12 @@ class DiagnosticsArchiveWriter(
             }
         })
         put("queues", buildJsonObject {
-            put("pending_intents", snapshot.queues.pendingIntents)
-            put("outbox_items", snapshot.queues.outboxItems)
-            put("attachment_staging", snapshot.queues.attachmentStaging)
+            snapshot.queues.pendingIntents?.let { put("pending_intents", it) }
+                ?: put("pending_intents", kotlinx.serialization.json.JsonNull)
+            snapshot.queues.outboxItems?.let { put("outbox_items", it) }
+                ?: put("outbox_items", kotlinx.serialization.json.JsonNull)
+            snapshot.queues.attachmentStaging?.let { put("attachment_staging", it) }
+                ?: put("attachment_staging", kotlinx.serialization.json.JsonNull)
         })
         put("recent_error_codes", buildJsonArray {
             snapshot.recentErrorCodes.forEach { add(JsonPrimitive(it)) }
