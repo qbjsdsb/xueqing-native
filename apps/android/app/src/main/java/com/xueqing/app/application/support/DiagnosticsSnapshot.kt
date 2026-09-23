@@ -39,9 +39,9 @@ data class DiagnosticCompatibility(
 )
 
 data class DiagnosticQueueCounts(
-    val pendingIntents: Int,
-    val outboxItems: Int,
-    val attachmentStaging: Int,
+    val pendingIntents: Int?,
+    val outboxItems: Int?,
+    val attachmentStaging: Int?,
 )
 
 data class DiagnosticsSnapshot(
@@ -72,9 +72,9 @@ data class DiagnosticsSnapshot(
         require(deployment.environmentId.isNotBlank() && deployment.environmentId.length <= 64)
         require(deployment.trustDomainId.isNotBlank() && deployment.trustDomainId.length <= 96)
         require(deployment.providerId.isNotBlank() && deployment.providerId.length <= 32)
-        require(queues.pendingIntents >= 0)
-        require(queues.outboxItems >= 0)
-        require(queues.attachmentStaging >= 0)
+        require(queues.pendingIntents == null || queues.pendingIntents >= 0)
+        require(queues.outboxItems == null || queues.outboxItems >= 0)
+        require(queues.attachmentStaging == null || queues.attachmentStaging >= 0)
         require(recentErrorCodes.size <= 20)
         require(recentErrorCodes.all(ERROR_CODE::matches))
         compatibility.reasonCode?.let { require(ERROR_CODE.matches(it)) }
