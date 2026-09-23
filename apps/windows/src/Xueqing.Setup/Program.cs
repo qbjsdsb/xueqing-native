@@ -2,7 +2,6 @@ using System.Diagnostics;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
-using System.Security.Cryptography.X509Certificates;
 using Windows.Management.Deployment;
 
 namespace Xueqing.Setup;
@@ -42,7 +41,6 @@ internal static class Program
                 await ExtractPayloadAsync(packagePath);
                 VerifyHash(packagePath, expectedHash);
                 VerifyAuthenticodeTrust(packagePath);
-                VerifyPublisher(packagePath, expectedPublisher);
 
                 var packageManager = new PackageManager();
                 var deployment = await packageManager.AddPackageAsync(
@@ -58,11 +56,23 @@ internal static class Program
                     throw new InvalidOperationException($"MSIX 安装未完成：{detail}");
                 }
 
-                var installed = packageManager.FindPackagesForUser(string.Empty)
-                    .FirstOrDefault(package => string.Equals(package.Id.Name, expectedPackageName, StringComparison.Ordinal));
+                var installed = packageManager.FindPackagesForUser(
+                        string.Empty,
+                        expectedPackageName,
+                        expectedPublisher)
+                    .OrderByDescending(package => package.Id.Version.Major)
+                    .ThenByDescending(package => package.Id.Version.Minor)
+                    .ThenByDescending(package => package.Id.Version.Build)
+                    .ThenByDescending(package => package.Id.Version.Revision)
+                    .FirstOrDefault();
                 if (installed is null)
                 {
-                    throw new InvalidOperationException("安装完成后未找到预期的 Xueqing.Native 包身份。");
+                    throw new InvalidOperationException(
+                        "安装完成后未找到与预期 Package Name / Publisher 匹配的 Xueqing.Native 包。");
+                }
+                if (!string.Equals(installed.Id.Publisher, expectedPublisher, StringComparison.Ordinal))
+                {
+                    throw new InvalidOperationException("安装后的 Package Publisher 与发布元数据不一致。");
                 }
 
                 if (!noLaunch)
@@ -142,16 +152,6 @@ internal static class Program
                 Convert.FromHexString(expectedHash)))
         {
             throw new CryptographicException("内嵌 MSIX 的 SHA-256 与发布记录不一致。");
-        }
-    }
-
-    private static void VerifyPublisher(string packagePath, string expectedPublisher)
-    {
-        using var signer = X509CertificateLoader.LoadCertificateFromFile(packagePath);
-        if (!string.Equals(signer.Subject, expectedPublisher, StringComparison.Ordinal))
-        {
-            throw new CryptographicException(
-                $"MSIX 签名发布者不匹配。期望：{expectedPublisher}；实际：{signer.Subject}");
         }
     }
 
