@@ -206,6 +206,18 @@ jobs:
           & $signtool.FullName sign /fd SHA256 /tr $env:XUEQING_WINDOWS_TIMESTAMP_URL /td SHA256 /f $pfx /p $env:XUEQING_WINDOWS_PFX_PASSWORD $signed
           if ($LASTEXITCODE -ne 0) { throw 'SignTool failed.' }
           Remove-Item $pfx -Force
+      - name: Normalize signed MSIX artifact name
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $out = Join-Path $env:GITHUB_WORKSPACE 'artifacts\release-signing\windows'
+          $packages = @(Get-ChildItem $out -Recurse -Filter *.msix)
+          if ($packages.Count -ne 1) { throw "Expected exactly one signed MSIX before normalization; found $($packages.Count)." }
+          $version = (Get-Content release/version.properties | Where-Object { $_ -like 'releaseVersion=*' }).Split('=',2)[1]
+          $canonical = Join-Path $out "Xueqing-$version-x64.msix"
+          if ($packages[0].FullName -ne $canonical) {
+            Move-Item $packages[0].FullName $canonical -Force
+          }
       - name: Build single-file XueqingSetup from exact signed MSIX
         shell: pwsh
         run: |
