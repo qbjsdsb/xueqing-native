@@ -64,6 +64,7 @@ completed_gates:
   - production-client-deployment-profile-session-auth
   - windows-agent-readiness
   - android-final-native-ux-acceptance
+  - client-compatibility-privacy-safe-diagnostics
 
 open_gates:
   - signing-and-recovery-gate
@@ -73,10 +74,55 @@ next_execution:
   parallel_limit: 1
   lines:
     - signing-and-recovery-gate
-  manual_acceptance: []
-  operator_blocked: []
+  manual_acceptance:
+    - production-signed-rc-clean-install-upgrade-and-trust
+  operator_blocked:
+    - android-production-signing-material
+    - windows-trusted-signing-provider-identity
+    - independent-offline-signing-recovery-verification
   after_current_green:
     - v1-release-candidate-acceptance
+
+current_evidence:
+  main_head: d8b3761bc5729f4ee572767b15a1079dc2fcb35c
+  signing_distribution_infrastructure:
+    merged_pr: 86
+    merge_commit: fa22975d03ff518fe66a120c6ede69b4cd36138a
+    exact_head_release_gate_run: 35847554829
+    status: accepted-infrastructure
+  signpath_readiness:
+    merged_pr: 87
+    merge_commit: 8b14890a2b099776fef76bc059400963178cb0a3
+    status: repository-policy-ready
+  controlled_signing_request:
+    merged_pr: 88
+    merge_commit: d8b3761bc5729f4ee572767b15a1079dc2fcb35c
+    request_branch: release/sign/1.0.0-rc.1
+    request_run: 35853886035
+    status: dispatch-path-proven
+  manual_acceptance_account:
+    run: 35853075970
+    source_commit: 8b14890a2b099776fef76bc059400963178cb0a3
+    status: ready-and-bootstrap-verified
+  main_governance:
+    ruleset: Protect main
+    strict: true
+    bypass: none
+    required_checks:
+      - repository-foundation
+      - release-gate
+  production_signing_preflight:
+    run: 35853903759
+    source_commit: d8b3761bc5729f4ee572767b15a1079dc2fcb35c
+    status: failed-closed-on-missing-external-signing-material
+    missing:
+      - XUEQING_ANDROID_KEYSTORE_B64
+      - XUEQING_ANDROID_KEYSTORE_PASSWORD
+      - XUEQING_ANDROID_KEY_ALIAS
+      - XUEQING_ANDROID_KEY_PASSWORD
+      - XUEQING_WINDOWS_SIGNING_MODE
+      - XUEQING_WINDOWS_PUBLISHER
+      - windows-signing-provider-configuration
 
 later:
   - cloudbase-provider-conformance-spike
