@@ -31,7 +31,10 @@ def required_workflows(files: list[str]) -> set[str]:
         "tools/release/",
         "contracts/operations/RELEASE_IDENTITY_SIGNING_V1.md",
         ".github/workflows/release-gate.yml",
+        ".github/workflows/release-dry-run.yml",
+        ".github/workflows/release-signing.yml",
         ".github/workflows/release-candidate.yml",
+        ".github/workflows/manual-acceptance-account.yml",
     ))
     android_scope = release_scope or any_match(files, ("apps/android/",))
     windows_scope = release_scope or any_match(files, ("apps/windows/", "tools/packaging/", "tools/ux/"))
@@ -44,7 +47,11 @@ def required_workflows(files: list[str]) -> set[str]:
     ))
 
     if release_scope:
-        required.add("release-dry-run")
+        required.update({
+            "release-dry-run",
+            "backend-api",
+            "production-topology-probe",
+        })
     if android_scope:
         required.update({"android-spike", "android-observation-slice"})
     if windows_scope:
