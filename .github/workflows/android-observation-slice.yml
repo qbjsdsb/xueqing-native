@@ -3,6 +3,8 @@ name: android-observation-slice
 on:
   pull_request:
     paths:
+      - 'release/**'
+      - 'tools/release/**'
       # Provider/schema E2E should follow provider, persistence and shared
       # contract boundaries. Pure Compose/ViewModel presentation refactors are
       # covered by android-spike and must not start a Supabase stack by themselves.
