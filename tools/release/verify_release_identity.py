@@ -12,6 +12,7 @@ ANDROID_GRADLE = ROOT / "apps" / "android" / "app" / "build.gradle.kts"
 WINDOWS_SETUP_PROJECT = ROOT / "apps" / "windows" / "src" / "Xueqing.Setup" / "Xueqing.Setup.csproj"
 WINDOWS_SETUP_PROGRAM = ROOT / "apps" / "windows" / "src" / "Xueqing.Setup" / "Program.cs"
 WINDOWS_SETUP_BUILDER = ROOT / "tools" / "release" / "build-windows-setup.ps1"
+RELEASE_SIGNING_WORKFLOW = ROOT / ".github" / "workflows" / "release-signing.yml"
 
 SEMVER_RC = re.compile(r"^\d+\.\d+\.\d+-rc\.\d+$")
 WINDOWS_VERSION = re.compile(r"^\d+\.\d+\.\d+\.\d+$")
@@ -105,6 +106,28 @@ def verify() -> None:
         raise ValueError("Windows Setup builder must not recursively invoke itself")
     if "Get-FileHash" not in setup_builder or "XueqingEmbeddedMsix" not in setup_builder:
         raise ValueError("Windows Setup builder must bind the embedded MSIX hash and bytes")
+
+    signing_workflow = RELEASE_SIGNING_WORKFLOW.read_text(encoding="utf-8")
+    for needle in (
+        "environment: production-release",
+        "XUEQING_ANDROID_KEYSTORE_B64",
+        "XUEQING_WINDOWS_SIGNING_MODE",
+        "Build single-file XueqingSetup from exact signed MSIX",
+        "Normalize signed MSIX artifact name",
+        "Signed Setup install smoke",
+        "release-candidate-record:",
+        "Create durable draft GitHub Release from signed bytes",
+        "actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131",
+    ):
+        if needle not in signing_workflow:
+            raise ValueError(f"release signing workflow contract missing: {needle}")
+    forbidden_release_literals = (
+        "BEGIN PRIVATE KEY",
+        "BEGIN RSA PRIVATE KEY",
+        "BEGIN EC PRIVATE KEY",
+    )
+    if any(value in signing_workflow for value in forbidden_release_literals):
+        raise ValueError("release signing workflow contains private key material")
 
     gradle = ANDROID_GRADLE.read_text(encoding="utf-8")
     if 'applicationId = releaseVersionProperties.getProperty("androidApplicationId")' not in gradle:
