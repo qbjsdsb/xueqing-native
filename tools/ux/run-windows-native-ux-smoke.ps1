@@ -349,10 +349,32 @@ function Attach-To-App {
     }
 }
 
+function Wait-For-AppProcessesToExit {
+    param([int]$TimeoutSeconds = 10)
+
+    $deadline = [DateTimeOffset]::UtcNow.AddSeconds($TimeoutSeconds)
+    do {
+        $remaining = @(
+            Get-Process -Name $ProcessName -ErrorAction SilentlyContinue
+        )
+        if ($remaining.Count -eq 0) {
+            return
+        }
+
+        Start-Sleep -Milliseconds 200
+    } while ([DateTimeOffset]::UtcNow -lt $deadline)
+
+    $remainingIds = @(
+        Get-Process -Name $ProcessName -ErrorAction SilentlyContinue |
+            Select-Object -ExpandProperty Id
+    )
+    throw "Process '$ProcessName' did not fully exit before restart. Remaining process ids: $($remainingIds -join ', ')."
+}
+
 function Restart-App {
     Get-Process -Name $ProcessName -ErrorAction SilentlyContinue |
         Stop-Process -Force -ErrorAction SilentlyContinue
-    Start-Sleep -Milliseconds 350
+    Wait-For-AppProcessesToExit
     Start-Process -FilePath $script:executablePath | Out-Null
     Attach-To-App
 }

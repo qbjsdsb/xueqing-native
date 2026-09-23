@@ -1,9 +1,11 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Input;
 using Windows.System;
 using Xueqing.Windows.Core.Layout;
 using Xueqing.Windows.Core.Models;
+using Xueqing.Windows.Core.Agent;
 using Xueqing.Windows.ViewModels;
 
 namespace Xueqing.Windows.Views;
@@ -103,6 +105,32 @@ public sealed partial class StudentsView : UserControl
         }
     }
 
+    private async void ObservationDraftBox_TextChanged(
+        object sender,
+        TextChangedEventArgs e)
+    {
+        if (sender is not TextBox textBox ||
+            DataContext is not MainWindowViewModel viewModel ||
+            !viewModel.SupportsObservationCapture ||
+            string.Equals(
+                textBox.Text,
+                viewModel.ObservationDraftText,
+                StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        await viewModel.UpdateObservationDraftAsync(textBox.Text);
+    }
+
+    private async void ObservationSubmit_Click(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is MainWindowViewModel viewModel)
+        {
+            await viewModel.SubmitObservationDraftAsync();
+        }
+    }
+
     private async void RefreshAuthoritativeStudents_Click(object sender, RoutedEventArgs e)
     {
         if (DataContext is MainWindowViewModel viewModel)
@@ -119,10 +147,41 @@ public sealed partial class StudentsView : UserControl
         }
     }
 
-    private void ActionProgressionButton_Loaded(object sender, RoutedEventArgs e)
+    private void RescheduleFocusActionButton_Loaded(object sender, RoutedEventArgs e)
     {
-        if (sender is Button button &&
-            DataContext is MainWindowViewModel viewModel)
+        if (sender is not Button button)
+        {
+            return;
+        }
+
+        ApplyActionProgressionVisibility(button);
+        if (button.Tag is LearningFocusDisplayItem item && item.CaseId != Guid.Empty)
+        {
+            AutomationProperties.SetAutomationId(
+                button,
+                AgentAutomationIds.FocusReschedule(item.CaseId));
+        }
+    }
+
+    private void VerifyFocusActionButton_Loaded(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button button)
+        {
+            return;
+        }
+
+        ApplyActionProgressionVisibility(button);
+        if (button.Tag is LearningFocusDisplayItem item && item.CaseId != Guid.Empty)
+        {
+            AutomationProperties.SetAutomationId(
+                button,
+                AgentAutomationIds.FocusVerify(item.CaseId));
+        }
+    }
+
+    private void ApplyActionProgressionVisibility(Button button)
+    {
+        if (DataContext is MainWindowViewModel viewModel)
         {
             button.Visibility = viewModel.SupportsActionProgression
                 ? Visibility.Visible
@@ -140,6 +199,13 @@ public sealed partial class StudentsView : UserControl
                 viewModel.SupportsCaseLifecycle && item.CanRunLifecycleAction
                     ? Visibility.Visible
                     : Visibility.Collapsed;
+
+            if (item.CaseId != Guid.Empty)
+            {
+                AutomationProperties.SetAutomationId(
+                    button,
+                    AgentAutomationIds.CaseLifecycle(item.CaseId));
+            }
         }
     }
 
@@ -191,6 +257,18 @@ public sealed partial class StudentsView : UserControl
             lookup);
     }
 
+
+    private void CreateLearningCaseButton_Loaded(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button button &&
+            button.Tag is StudentRecentObservation observation &&
+            observation.ObservationId != Guid.Empty)
+        {
+            AutomationProperties.SetAutomationId(
+                button,
+                AgentAutomationIds.ObservationCreateLearningCase(observation.ObservationId));
+        }
+    }
 
     private async void CreateLearningCase_Click(object sender, RoutedEventArgs e)
     {

@@ -1,4 +1,5 @@
 using Microsoft.UI.Xaml;
+using Xueqing.Windows.Core.Agent;
 using Xueqing.Windows.Infrastructure.Auth;
 using Xueqing.Windows.Integration;
 using Xueqing.Windows.ViewModels;
@@ -10,6 +11,7 @@ public partial class App : Application
     private const string PrototypeModeVariable = "XUEQING_WINDOWS_PROTOTYPE_MODE";
     private Window? _window;
     private ProductionProviderClientRuntime? _productionRuntime;
+    private AgentNavigationRequest? _pendingAgentNavigation;
 
     public App()
     {
@@ -18,18 +20,26 @@ public partial class App : Application
 
     protected override async void OnLaunched(LaunchActivatedEventArgs args)
     {
+        _pendingAgentNavigation = AgentProtocolActivation.ReadCurrentNavigation();
+
         var localReferenceWorkspace =
             LocalReferenceProviderTeachingWorkspaceFactory.CreateFromEnvironment();
 
         if (localReferenceWorkspace is not null)
         {
-            ReplaceWindow(new MainWindow(new MainWindowViewModel(localReferenceWorkspace)));
+            ReplaceWindow(
+                new MainWindow(
+                    new MainWindowViewModel(localReferenceWorkspace),
+                    initialAgentNavigation: ConsumePendingAgentNavigation()));
             return;
         }
 
         if (IsExplicitPrototypeMode())
         {
-            ReplaceWindow(new MainWindow(new MainWindowViewModel()));
+            ReplaceWindow(
+                new MainWindow(
+                    new MainWindowViewModel(),
+                    initialAgentNavigation: ConsumePendingAgentNavigation()));
             return;
         }
 
@@ -262,7 +272,8 @@ public partial class App : Application
             new MainWindow(
                 new MainWindowViewModel(
                     _productionRuntime.CreateTeachingWorkspace()),
-                SignOutCurrentWorkspaceAsync));
+                SignOutCurrentWorkspaceAsync,
+                ConsumePendingAgentNavigation()));
     }
 
     private void ShowSignIn(
@@ -301,6 +312,13 @@ public partial class App : Application
         {
             _ = WindowsPackagedAppIntegrationProbe.RunAndWriteReportAsync();
         }
+    }
+
+    private AgentNavigationRequest? ConsumePendingAgentNavigation()
+    {
+        var request = _pendingAgentNavigation;
+        _pendingAgentNavigation = null;
+        return request;
     }
 
     private static bool IsExplicitPrototypeMode() =>

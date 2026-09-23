@@ -126,6 +126,9 @@ jobs:
             Add-AppxPackage -Path $packagePath.FullName -ForceApplicationShutdown -ErrorAction Stop
             $package = Get-AppxPackage -Name $packageName -ErrorAction Stop
             $executable = Join-Path $package.InstallLocation "$processName.exe"
+
+            ./tools/ux/run-windows-agent-protocol-smoke.ps1 -ProcessName $processName -ProtocolUri 'xueqing://today' -DiagnosticOutput (Join-Path $diagnosticDirectory 'windows-agent-protocol.json')
+
             $env:XUEQING_WINDOWS_PROTOTYPE_MODE = '1'
             try {
               Start-Process -FilePath $executable | Out-Null
@@ -134,6 +137,11 @@ jobs:
             finally {
               Remove-Item Env:\XUEQING_WINDOWS_PROTOTYPE_MODE -ErrorAction SilentlyContinue
             }
+
+            ./tools/ux/run-windows-agent-quick-capture-smoke.ps1 `
+              -ExecutablePath $executable `
+              -ProcessName $processName `
+              -DiagnosticOutput (Join-Path $diagnosticDirectory 'windows-agent-quick-capture.json')
           }
           finally {
             Get-Process -Name $processName -ErrorAction SilentlyContinue |

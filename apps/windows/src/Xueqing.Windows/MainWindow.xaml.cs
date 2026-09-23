@@ -1,5 +1,6 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Xueqing.Windows.Core.Agent;
 using Xueqing.Windows.Core.Layout;
 using Xueqing.Windows.ViewModels;
 
@@ -8,6 +9,7 @@ namespace Xueqing.Windows;
 public sealed partial class MainWindow : Window
 {
     private readonly Func<Task>? _signOutAction;
+    private AgentNavigationRequest? _initialAgentNavigation;
     private bool _organizationWorkspace;
     private bool _signingOut;
 
@@ -20,10 +22,12 @@ public sealed partial class MainWindow : Window
 
     public MainWindow(
         MainWindowViewModel viewModel,
-        Func<Task>? signOutAction = null)
+        Func<Task>? signOutAction = null,
+        AgentNavigationRequest? initialAgentNavigation = null)
     {
         ViewModel = viewModel ?? throw new ArgumentNullException(nameof(viewModel));
         _signOutAction = signOutAction;
+        _initialAgentNavigation = initialAgentNavigation;
         InitializeComponent();
         Title = "学情";
         ExtendsContentIntoTitleBar = true;
@@ -47,6 +51,51 @@ public sealed partial class MainWindow : Window
         ApplyWorkspace(isOrganization: false);
         await ViewModel.InitializeAsync();
         ApplyOrganizationWorkspaceAccess();
+        await ApplyInitialAgentNavigationAsync();
+    }
+
+    private async Task ApplyInitialAgentNavigationAsync()
+    {
+        var request = _initialAgentNavigation;
+        _initialAgentNavigation = null;
+        if (request is null)
+        {
+            return;
+        }
+
+        ApplyWorkspace(isOrganization: false);
+
+        switch (request.Kind)
+        {
+            case AgentNavigationTargetKind.Today:
+                Shell.SelectedItem = TodayNav;
+                ShowSurface("today");
+                return;
+
+            case AgentNavigationTargetKind.Student
+                when request.EntityId is { } studentId &&
+                     ViewModel.TrySelectAuthoritativeStudent(studentId):
+                Shell.SelectedItem = StudentsNav;
+                ShowSurface("students");
+                return;
+
+            case AgentNavigationTargetKind.LearningCase
+                when request.EntityId is { } caseId &&
+                     ViewModel.TrySelectAuthoritativeLearningCase(caseId):
+                Shell.SelectedItem = LearningNav;
+                ShowSurface("learning");
+                await ViewModel.LoadSelectedTeachingContextAsync();
+                return;
+
+            default:
+                // Unknown, unauthorized or ambiguous application-owned ids
+                // fail closed to the ordinary authenticated Students surface.
+                // No authority/context is fabricated from the external URI.
+                ViewModel.SelectedStudent = null;
+                Shell.SelectedItem = StudentsNav;
+                ShowSurface("students");
+                return;
+        }
     }
 
     private void RootGrid_SizeChanged(object sender, SizeChangedEventArgs e)

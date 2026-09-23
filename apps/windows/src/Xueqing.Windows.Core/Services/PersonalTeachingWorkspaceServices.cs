@@ -15,4 +15,5 @@ public sealed record PersonalTeachingWorkspaceServices(
     IOrganizationInvitationCommand? OrganizationInvitations = null,
     IAcceptOrganizationInvitationCommand? OrganizationInvitationAcceptance = null,
     IOrganizationInvitationDeliveryCommand? OrganizationInvitationDelivery = null,
-    IOrganizationInvitationRecoveryStore? OrganizationInvitationRecovery = null);
+    IOrganizationInvitationRecoveryStore? OrganizationInvitationRecovery = null,
+    ObservationQuickCaptureCoordinator? ObservationCapture = null);
