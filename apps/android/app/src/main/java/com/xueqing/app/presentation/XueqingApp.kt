@@ -52,27 +52,40 @@ internal fun XueqingApp(
     onSessionBoundaryChanged: () -> Unit = {},
 ) {
     XueqingTheme {
-        if (sessionController != null) {
-            val sessionState by sessionController.state.collectAsState()
-            if (sessionState.stage != ClientSessionStage.Authenticated) {
-                SessionGateScreen(
-                    controller = sessionController,
-                    stage = sessionState.stage,
-                    message = sessionState.message,
+        Surface(
+            modifier = Modifier.fillMaxSize(),
+            color = MaterialTheme.colorScheme.background,
+        ) {
+            if (sessionController != null) {
+                val sessionState by sessionController.state.collectAsState()
+                if (sessionState.stage != ClientSessionStage.Authenticated) {
+                    SessionGateScreen(
+                        controller = sessionController,
+                        stage = sessionState.stage,
+                        message = sessionState.message,
+                        onSessionBoundaryChanged = onSessionBoundaryChanged,
+                    )
+                } else {
+                    AuthenticatedWorkspace(
+                        quickCaptureViewModel = quickCaptureViewModel,
+                        studentDirectoryViewModel = studentDirectoryViewModel,
+                        learningReadViewModel = learningReadViewModel,
+                        startInQuickCapture = startInQuickCapture,
+                        sessionController = sessionController,
+                        onSessionBoundaryChanged = onSessionBoundaryChanged,
+                    )
+                }
+            } else {
+                AuthenticatedWorkspace(
+                    quickCaptureViewModel = quickCaptureViewModel,
+                    studentDirectoryViewModel = studentDirectoryViewModel,
+                    learningReadViewModel = learningReadViewModel,
+                    startInQuickCapture = startInQuickCapture,
+                    sessionController = null,
                     onSessionBoundaryChanged = onSessionBoundaryChanged,
                 )
-                return@XueqingTheme
             }
         }
-
-        AuthenticatedWorkspace(
-            quickCaptureViewModel = quickCaptureViewModel,
-            studentDirectoryViewModel = studentDirectoryViewModel,
-            learningReadViewModel = learningReadViewModel,
-            startInQuickCapture = startInQuickCapture,
-            sessionController = sessionController,
-            onSessionBoundaryChanged = onSessionBoundaryChanged,
-        )
     }
 }
 

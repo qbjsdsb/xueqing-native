@@ -50,6 +50,51 @@ class QuickCaptureLifecycleInstrumentedTest {
         awaitLocalSafe()
     }
 
+
+    @Test
+    fun systemBackFromStudentScopedCaptureReturnsToStudentAndPreservesDraft() {
+        composeRule.onNodeWithText("学生").performClick()
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            composeRule.onAllNodesWithTag(
+                "student-row-20000000-0000-0000-0000-000000000001:30000000-0000-0000-0000-000000000001",
+            ).fetchSemanticsNodes(atLeastOneRootRequired = false).isNotEmpty()
+        }
+        composeRule.onNodeWithTag(
+            "student-row-20000000-0000-0000-0000-000000000001:30000000-0000-0000-0000-000000000001",
+        ).performClick()
+        composeRule.onNodeWithText("学生详情").assertExists()
+        composeRule.onNodeWithTag(
+            "student-subject-record-40000000-0000-0000-0000-000000000001",
+        ).performClick()
+        awaitQuickCaptureInput()
+
+        val text = "返回测试：从学生详情进入记录，系统返回后草稿仍应安全保留。"
+        composeRule.onNodeWithTag("quick-capture-input").performTextReplacement(text)
+        awaitLocalSafe()
+
+        composeRule.activityRule.scenario.onActivity { activity ->
+            activity.onBackPressedDispatcher.onBackPressed()
+        }
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            composeRule.onAllNodesWithTag("quick-capture-input")
+                .fetchSemanticsNodes(atLeastOneRootRequired = false)
+                .isEmpty()
+        }
+
+        composeRule.onNodeWithText("学生详情").assertExists()
+        composeRule.onNodeWithText("虚构学生甲").assertExists()
+        composeRule.onNodeWithTag(
+            "student-subject-record-40000000-0000-0000-0000-000000000001",
+        ).performClick()
+        awaitQuickCaptureInput()
+        composeRule.onNodeWithTag("quick-capture-input").assertTextContains(text)
+        awaitLocalSafe()
+
+        composeRule.onNodeWithText("丢弃草稿").performClick()
+        awaitEditableTextEmpty()
+        awaitLocalSafe()
+    }
+
     @Test
     fun discardAfterLifecycleFlushDoesNotReturnAfterActivityRecreation() {
         openQuickCapture()
@@ -82,6 +127,10 @@ class QuickCaptureLifecycleInstrumentedTest {
 
     private fun openQuickCapture() {
         composeRule.onNodeWithText("记录").performClick()
+        awaitQuickCaptureInput()
+    }
+
+    private fun awaitQuickCaptureInput() {
         composeRule.waitUntil(timeoutMillis = 5_000) {
             composeRule.onAllNodesWithTag("quick-capture-input")
                 .fetchSemanticsNodes(atLeastOneRootRequired = false)

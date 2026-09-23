@@ -13,7 +13,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
@@ -25,6 +27,9 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 
 @Composable
@@ -54,6 +59,8 @@ internal fun QuickCaptureScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .safeDrawingPadding()
+            .imePadding()
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 20.dp, vertical = 16.dp),
     ) {
@@ -126,6 +133,7 @@ internal fun QuickCaptureScreen(
                     .heightIn(min = 220.dp)
                     .padding(top = 10.dp)
                     .testTag("quick-capture-input"),
+                label = { Text("课堂观察") },
                 placeholder = { Text("例如：概括题仍然容易照抄原句，不能主动压缩信息。") },
             )
 
@@ -168,6 +176,7 @@ internal fun QuickCaptureScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier
                         .padding(top = 8.dp)
+                        .semantics { liveRegion = LiveRegionMode.Polite }
                         .testTag("quick-capture-attachment-status"),
                 )
             }
@@ -187,6 +196,7 @@ internal fun QuickCaptureScreen(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier
                     .padding(top = 12.dp)
+                    .semantics { liveRegion = LiveRegionMode.Polite }
                     .testTag("quick-capture-draft-status"),
             )
 
@@ -197,6 +207,7 @@ internal fun QuickCaptureScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier
                         .padding(top = 8.dp)
+                        .semantics { liveRegion = LiveRegionMode.Polite }
                         .testTag("quick-capture-submission-status"),
                 )
             }
@@ -206,7 +217,8 @@ internal fun QuickCaptureScreen(
                 enabled = draftLoaded && draftWritable && !attachmentBusy && state.text.isNotBlank(),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 28.dp),
+                    .padding(top = 28.dp)
+                    .testTag("quick-capture-submit"),
             ) {
                 Text("提交记录")
             }
