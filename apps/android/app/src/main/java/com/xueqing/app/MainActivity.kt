@@ -2,9 +2,11 @@ package com.xueqing.app
 
 import android.content.Intent
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import com.xueqing.app.presentation.LearningReadViewModel
@@ -13,6 +15,25 @@ import com.xueqing.app.presentation.StudentDirectoryViewModel
 import com.xueqing.app.presentation.XueqingApp
 
 class MainActivity : ComponentActivity() {
+    private val diagnosticsDocument = registerForActivityResult(
+        ActivityResultContracts.CreateDocument("application/zip"),
+    ) { uri ->
+        if (uri == null) return@registerForActivityResult
+        val result = runCatching {
+            val output = requireNotNull(contentResolver.openOutputStream(uri, "wt")) {
+                "Unable to open diagnostics destination."
+            }
+            output.use {
+                BuildVariantRuntimeHooks.writeDiagnostics(applicationContext, it)
+            }
+        }
+        Toast.makeText(
+            this,
+            if (result.isSuccess) "诊断信息已导出" else "诊断信息导出失败",
+            Toast.LENGTH_SHORT,
+        ).show()
+    }
+
     private lateinit var quickCaptureViewModel: QuickCaptureViewModel
     private lateinit var studentDirectoryViewModel: StudentDirectoryViewModel
     private lateinit var learningReadViewModel: LearningReadViewModel
@@ -60,6 +81,9 @@ class MainActivity : ComponentActivity() {
                 startInQuickCapture = intent.getBooleanExtra(EXTRA_OPEN_QUICK_CAPTURE, false),
                 sessionController = sessionController,
                 onSessionBoundaryChanged = ::restartForSessionBoundary,
+                onExportDiagnostics = {
+                    diagnosticsDocument.launch("Xueqing-Diagnostics.zip")
+                },
             )
         }
     }
