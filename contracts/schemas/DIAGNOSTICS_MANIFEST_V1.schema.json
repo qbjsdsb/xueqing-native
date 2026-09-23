@@ -102,9 +102,9 @@
       "additionalProperties": false,
       "required": ["pending_intents", "outbox_items", "attachment_staging"],
       "properties": {
-        "pending_intents": { "type": "integer", "minimum": 0 },
-        "outbox_items": { "type": "integer", "minimum": 0 },
-        "attachment_staging": { "type": "integer", "minimum": 0 }
+        "pending_intents": { "type": ["integer", "null"], "minimum": 0 },
+        "outbox_items": { "type": ["integer", "null"], "minimum": 0 },
+        "attachment_staging": { "type": ["integer", "null"], "minimum": 0 }
       }
     },
     "recent_error_codes": {
