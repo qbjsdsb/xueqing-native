@@ -18,6 +18,8 @@ public enum DeliverOrganizationInvitationFailureKind
     AlreadyDelivered,
     ProviderRejected,
     ResultUnknown,
+    CompatibilityBlocked,
+    CompatibilityUnavailable,
     InvalidResponse,
 }
 
