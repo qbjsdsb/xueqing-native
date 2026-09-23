@@ -44,6 +44,8 @@ public enum CaseLifecycleFailureKind
     LocalDurabilityFailure,
     ResultUnknown,
     Transient,
+    CompatibilityBlocked,
+    CompatibilityUnavailable,
     InvalidResponse,
 }
 
