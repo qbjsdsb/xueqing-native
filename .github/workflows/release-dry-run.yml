@@ -49,6 +49,47 @@ jobs:
         run: |
           set -euo pipefail
           python3 -B tools/deployment/stage_deployment_profile.py deployment/production_profile.template.json "${{ github.event.pull_request.head.sha }}" apps/android/app/src/release/assets/deployment_profile.json
+      - name: Prove Android signing alias preflight
+        shell: bash
+        run: |
+          set -euo pipefail
+          ks="$RUNNER_TEMP/android-signing-alias-test.jks"
+          cert="$RUNNER_TEMP/android-signing-alias-test.cer"
+          export XUEQING_ANDROID_KEYSTORE_PASSWORD='dry-run-store-password'
+          export XUEQING_ANDROID_KEY_PASSWORD='dry-run-key-password'
+
+          keytool -genkeypair \
+            -alias release-key \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 30 \
+            -dname 'CN=Xueqing Android Release Dry Run' \
+            -keystore "$ks" \
+            -storetype JKS \
+            -storepass "$XUEQING_ANDROID_KEYSTORE_PASSWORD" \
+            -keypass "$XUEQING_ANDROID_KEY_PASSWORD"
+
+          keytool -exportcert \
+            -alias release-key \
+            -keystore "$ks" \
+            -storepass "$XUEQING_ANDROID_KEYSTORE_PASSWORD" \
+            -file "$cert"
+
+          keytool -importcert \
+            -alias certificate-only \
+            -keystore "$ks" \
+            -storepass "$XUEQING_ANDROID_KEYSTORE_PASSWORD" \
+            -file "$cert" \
+            -noprompt
+
+          export XUEQING_ANDROID_KEY_ALIAS='release-key'
+          test "$(bash tools/release/select-android-signing-alias.sh "$ks")" = 'release-key'
+
+          export XUEQING_ANDROID_KEY_ALIAS='certificate-only'
+          test "$(bash tools/release/select-android-signing-alias.sh "$ks")" = 'release-key'
+
+          rm -f "$ks" "$cert"
+
       - name: Build production-shaped unsigned APK
         shell: bash
         run: bash tools/release/build-android-release.sh "$GITHUB_WORKSPACE" "$GITHUB_WORKSPACE/artifacts/release-dry-run/android"
