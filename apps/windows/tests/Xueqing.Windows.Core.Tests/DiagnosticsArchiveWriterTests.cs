@@ -25,6 +25,17 @@ public sealed class DiagnosticsArchiveWriterTests
     }
 
     [TestMethod]
+    public void Unknown_queue_counts_are_serialized_as_null()
+    {
+        var body = DiagnosticsArchiveWriter.Serialize(
+            Snapshot() with { Queues = new DiagnosticQueueCounts(null, null, null) });
+
+        StringAssert.Contains(body, "\"pending_intents\": null");
+        StringAssert.Contains(body, "\"outbox_items\": null");
+        StringAssert.Contains(body, "\"attachment_staging\": null");
+    }
+
+    [TestMethod]
     public void Freeform_private_teaching_text_cannot_enter_error_codes()
     {
         var bad = Snapshot() with
