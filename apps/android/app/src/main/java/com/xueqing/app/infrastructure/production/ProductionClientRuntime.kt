@@ -1,7 +1,8 @@
 package com.xueqing.app.infrastructure.production
 
 import android.content.Context
-import com.xueqing.app.BuildConfig
+import android.content.pm.PackageManager
+import android.os.Build
 import com.xueqing.app.application.bootstrap.PersonalBootstrapProtocolFailure
 import com.xueqing.app.application.bootstrap.PersonalBootstrapRemote
 import com.xueqing.app.application.bootstrap.PersonalBootstrapResult
@@ -367,7 +368,7 @@ class ProductionClientRuntime private constructor(
                 ),
                 request = ClientCompatibilityRequest(
                     platform = "android",
-                    appVersion = BuildConfig.VERSION_NAME,
+                    appVersion = installedAppVersion(appContext),
                     contractVersion = CLIENT_CONTRACT_VERSION,
                 ),
             )
@@ -407,6 +408,21 @@ class ProductionClientRuntime private constructor(
                     transport = rpcTransport,
                 ),
             )
+        }
+
+        private fun installedAppVersion(context: Context): String {
+            val packageInfo = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                context.packageManager.getPackageInfo(
+                    context.packageName,
+                    PackageManager.PackageInfoFlags.of(0),
+                )
+            } else {
+                @Suppress("DEPRECATION")
+                context.packageManager.getPackageInfo(context.packageName, 0)
+            }
+            return requireNotNull(packageInfo.versionName) {
+                "Installed package versionName is unavailable."
+            }
         }
 
         fun unavailableBootstrapRemote(): PersonalBootstrapRemote =
