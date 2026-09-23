@@ -33,6 +33,8 @@ public enum CreateOrganizationInvitationFailureKind
     OperationConflict,
     AlreadyPending,
     ResultUnknown,
+    CompatibilityBlocked,
+    CompatibilityUnavailable,
     InvalidResponse,
 }
 
