@@ -76,6 +76,61 @@ public sealed class XueqingMcpTools(IXueqingMcpBackend backend)
         CancellationToken cancellationToken = default) =>
         Serialize(await backend.SaveObservationDraftAsync(studentId, expectedEpoch, text, organizationId, subjectProfileId, assignmentId, cancellationToken));
 
+    [McpServerTool(Name = "xueqing_list_student_papers", ReadOnly = true, Idempotent = true, Destructive = false, OpenWorld = false)]
+    [Description("List photographed exam/homework paper submissions for a student ordered by paperDate descending (includes paper kind, score, confirmation state, page count, and mistake count).")]
+    public async Task<string> ListStudentPapersAsync(
+        [Description("Student UUID (or prototype student key/name in prototype mode).")] string studentId,
+        [Description("Optional subjectProfileId UUID to disambiguate multi-subject contexts.")] string? subjectProfileId = null,
+        [Description("Rolling window in days (7 to 365, default 90).")] int windowDays = 90,
+        [Description("Maximum papers to return (1 to 50, default 20).")] int limit = 20,
+        CancellationToken cancellationToken = default) =>
+        Serialize(await backend.ListStudentPapersAsync(studentId, subjectProfileId, windowDays, limit, cancellationToken));
+
+    [McpServerTool(Name = "xueqing_get_paper_detail", ReadOnly = true, Idempotent = true, Destructive = false, OpenWorld = false)]
+    [Description("Retrieve structured mistakes (question label, topic tags, root cause, section position, points lost, correction state) and page references for one exam/homework paper.")]
+    public async Task<string> GetPaperDetailAsync(
+        [Description("Student UUID (or prototype student key/name in prototype mode).")] string studentId,
+        [Description("Paper submission UUID returned by xueqing_list_student_papers.")] string paperSubmissionId,
+        [Description("Optional subjectProfileId UUID.")] string? subjectProfileId = null,
+        CancellationToken cancellationToken = default) =>
+        Serialize(await backend.GetPaperDetailAsync(studentId, paperSubmissionId, subjectProfileId, cancellationToken));
+
+    [McpServerTool(Name = "xueqing_get_student_longitudinal_metrics", ReadOnly = true, Idempotent = true, Destructive = false, OpenWorld = false)]
+    [Description("Retrieve deterministic longitudinal paper analytics: authoritative score average (excluding unverified AI grading), weekly paper cadence/volume, late-section fatigue ratio, root-cause evolution (recent 30d vs prior window), recurring topic leaderboard, and recent study plan drafts.")]
+    public async Task<string> GetStudentLongitudinalMetricsAsync(
+        [Description("Student UUID (or prototype student key/name in prototype mode).")] string studentId,
+        [Description("Optional subjectProfileId UUID.")] string? subjectProfileId = null,
+        [Description("Rolling window in days (7 to 365, default 90).")] int windowDays = 90,
+        CancellationToken cancellationToken = default) =>
+        Serialize(await backend.GetStudentLongitudinalMetricsAsync(studentId, subjectProfileId, windowDays, cancellationToken));
+
+    [McpServerTool(Name = "xueqing_save_study_plan_draft", ReadOnly = false, Idempotent = false, Destructive = false, OpenWorld = false)]
+    [Description("Save an AI-generated longitudinal stage brief and candidate Learning Case / Next Action drafts (status='draft' only; never silently mutates Learning Cases or Today actions). Returns a canonical xueqing:// deep link for teacher review and explicit adoption.")]
+    public async Task<string> SaveStudyPlanDraftAsync(
+        [Description("Student UUID.")] string studentId,
+        [Description("Short title for the stage brief & study plan draft (1-200 chars).")] string title,
+        [Description("Markdown stage brief referencing specific paper dates and question labels.")] string briefMarkdown,
+        [Description("Optional JSON array string of evidence references, e.g. [{\"paper_submission_id\":\"...\",\"question_label\":\"Q10\"}].")] string? evidenceRefsJson = null,
+        [Description("Optional JSON array string of candidate actions, e.g. [{\"kind\":\"create_learning_case\",\"title\":\"...\",\"next_action\":\"...\"}].")] string? proposedActionsJson = null,
+        [Description("Analysis window in days (7 to 365, default 90).")] int windowDays = 90,
+        [Description("Number of papers analyzed in this brief.")] int paperCountAnalyzed = 0,
+        [Description("Optional organization UUID.")] string? organizationId = null,
+        [Description("Optional subjectProfileId UUID.")] string? subjectProfileId = null,
+        [Description("Optional assignmentId UUID.")] string? assignmentId = null,
+        CancellationToken cancellationToken = default) =>
+        Serialize(await backend.SaveStudyPlanDraftAsync(
+            studentId,
+            title,
+            briefMarkdown,
+            evidenceRefsJson,
+            proposedActionsJson,
+            windowDays,
+            paperCountAnalyzed,
+            organizationId,
+            subjectProfileId,
+            assignmentId,
+            cancellationToken));
+
     [McpServerTool(Name = "xueqing_build_deep_link", ReadOnly = true, Idempotent = true, Destructive = false, OpenWorld = false)]
     [Description("Validate and format a canonical xueqing:// deep link (today, student, or learning) for opening in the native desktop app.")]
     public Task<string> BuildDeepLinkAsync(

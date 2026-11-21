@@ -23,6 +23,10 @@ public interface IXueqingMcpBackend : IDisposable
     Task<object> GetStudentCasesAsync(string studentId, string? subjectProfileId, int timelineLimit, CancellationToken cancellationToken);
     Task<object> GetObservationDraftAsync(string studentId, string? organizationId, string? subjectProfileId, string? assignmentId, CancellationToken cancellationToken);
     Task<object> SaveObservationDraftAsync(string studentId, long expectedEpoch, string text, string? organizationId, string? subjectProfileId, string? assignmentId, CancellationToken cancellationToken);
+    Task<object> ListStudentPapersAsync(string studentId, string? subjectProfileId, int windowDays, int limit, CancellationToken cancellationToken);
+    Task<object> GetPaperDetailAsync(string studentId, string paperSubmissionId, string? subjectProfileId, CancellationToken cancellationToken);
+    Task<object> GetStudentLongitudinalMetricsAsync(string studentId, string? subjectProfileId, int windowDays, CancellationToken cancellationToken);
+    Task<object> SaveStudyPlanDraftAsync(string studentId, string title, string briefMarkdown, string? evidenceRefsJson, string? proposedActionsJson, int windowDays, int paperCountAnalyzed, string? organizationId, string? subjectProfileId, string? assignmentId, CancellationToken cancellationToken);
 }
 
 internal static class XueqingMcpHostHelpers
@@ -113,6 +117,7 @@ internal sealed class PrototypeXueqingMcpBackend : IXueqingMcpBackend
     private readonly MainWindowViewModel _viewModel = new();
     private readonly string _draftDbPath;
     private readonly SqliteObservationDraftStore _draftStore;
+    private readonly SqliteObservationDraftStore _studyPlanDraftStore;
 
     public PrototypeXueqingMcpBackend(string? explicitDataRoot)
     {
@@ -120,6 +125,11 @@ internal sealed class PrototypeXueqingMcpBackend : IXueqingMcpBackend
         _draftDbPath = Path.Combine(dataRoot, "mcp-prototype", "observation-draft.db");
         var keyStore = XueqingMcpHostHelpers.CreatePlatformKeyStore(_draftDbPath);
         _draftStore = new SqliteObservationDraftStore(_draftDbPath, keyStore);
+
+        var planDbPath = Path.Combine(dataRoot, "mcp-prototype", "study-plan-draft.db");
+        _studyPlanDraftStore = new SqliteObservationDraftStore(
+            planDbPath,
+            XueqingMcpHostHelpers.CreatePlatformKeyStore(planDbPath));
     }
 
     public Task<object> GetStatusAsync(CancellationToken cancellationToken)
@@ -416,6 +426,255 @@ internal sealed class PrototypeXueqingMcpBackend : IXueqingMcpBackend
             ? parsed
             : XueqingMcpHostHelpers.DeterministicGuid("prototype-student/" + id);
 
+    public Task<object> ListStudentPapersAsync(
+        string studentId,
+        string? subjectProfileId,
+        int windowDays,
+        int limit,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var student = FindPrototypeStudent(studentId);
+        if (student is null)
+        {
+            return Task.FromResult<object>(new { found = false, error = "XQ_STUDENT_NOT_FOUND" });
+        }
+
+        var snapshot = BuildPrototypeLongitudinal(student);
+        var clampedLimit = Math.Clamp(limit, 1, 50);
+        var papers = snapshot.Papers.Take(clampedLimit).Select(p => new
+        {
+            paperSubmissionId = p.PaperSubmissionId.ToString("D"),
+            paperDate = p.PaperDate.ToString("yyyy-MM-dd"),
+            paperKind = PaperEvidenceWireNames.ToWire(p.PaperKind),
+            kindLabel = p.KindLabel,
+            p.Title,
+            gradingSource = p.GradingSource.ToString(),
+            confirmationState = p.ConfirmationState.ToString(),
+            confirmationLabel = p.ConfirmationLabel,
+            p.QuestionCount,
+            p.MistakeCount,
+            p.ScoreEarned,
+            p.ScoreTotal,
+            scoreDisplay = p.ScoreDisplay,
+            p.DurationMinutes,
+            pageCount = p.Pages.Count,
+            p.ExtractionSummary,
+        }).ToArray();
+
+        return Task.FromResult<object>(new
+        {
+            found = true,
+            mode = "prototype",
+            studentId = snapshot.StudentId.ToString("D"),
+            studentDisplayName = snapshot.StudentDisplayName,
+            subjectKey = snapshot.SubjectKey,
+            windowDays = Math.Clamp(windowDays, 7, 365),
+            count = papers.Length,
+            papers,
+            deepLink = $"xueqing://student/{snapshot.StudentId:D}",
+        });
+    }
+
+    public Task<object> GetPaperDetailAsync(
+        string studentId,
+        string paperSubmissionId,
+        string? subjectProfileId,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var student = FindPrototypeStudent(studentId);
+        if (student is null)
+        {
+            return Task.FromResult<object>(new { found = false, error = "XQ_STUDENT_NOT_FOUND" });
+        }
+
+        var snapshot = BuildPrototypeLongitudinal(student);
+        var paper = snapshot.Papers.FirstOrDefault(p =>
+            string.Equals(p.PaperSubmissionId.ToString("D"), paperSubmissionId?.Trim(), StringComparison.OrdinalIgnoreCase));
+        if (paper is null)
+        {
+            return Task.FromResult<object>(new { found = false, error = "XQ_PAPER_NOT_FOUND" });
+        }
+
+        return Task.FromResult<object>(new
+        {
+            found = true,
+            mode = "prototype",
+            studentId = snapshot.StudentId.ToString("D"),
+            paper = new
+            {
+                paperSubmissionId = paper.PaperSubmissionId.ToString("D"),
+                paperDate = paper.PaperDate.ToString("yyyy-MM-dd"),
+                paperKind = PaperEvidenceWireNames.ToWire(paper.PaperKind),
+                paper.KindLabel,
+                paper.Title,
+                gradingSource = paper.GradingSource.ToString(),
+                confirmationState = paper.ConfirmationState.ToString(),
+                paper.QuestionCount,
+                paper.MistakeCount,
+                paper.ScoreEarned,
+                paper.ScoreTotal,
+                paper.DurationMinutes,
+                paper.ExtractionSummary,
+                pages = paper.Pages.Select(pg => new
+                {
+                    pg.PageIndex,
+                    attachmentId = pg.AttachmentId.ToString("D"),
+                    pg.HeaderRedacted,
+                    pg.ContentType,
+                    pg.ByteSize,
+                }).ToArray(),
+                mistakes = paper.Mistakes.Select(m => new
+                {
+                    mistakeId = m.MistakeId.ToString("D"),
+                    m.PageIndex,
+                    m.QuestionLabel,
+                    m.TopicTags,
+                    errorRootCause = PaperEvidenceWireNames.ToWire(m.ErrorRootCause),
+                    errorRootCauseLabel = PaperEvidenceWireNames.ToChineseLabel(m.ErrorRootCause),
+                    paperSectionPosition = m.PaperSectionPosition.ToString().ToLowerInvariant(),
+                    paperSectionLabel = PaperEvidenceWireNames.ToChineseLabel(m.PaperSectionPosition),
+                    m.PointsLost,
+                    m.CorrectedOnPaper,
+                    m.Summary,
+                    m.Provenance,
+                }).ToArray(),
+            },
+            deepLink = $"xueqing://student/{snapshot.StudentId:D}",
+        });
+    }
+
+    public async Task<object> GetStudentLongitudinalMetricsAsync(
+        string studentId,
+        string? subjectProfileId,
+        int windowDays,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var student = FindPrototypeStudent(studentId);
+        if (student is null)
+        {
+            return new { found = false, error = "XQ_STUDENT_NOT_FOUND" };
+        }
+
+        var snapshot = BuildPrototypeLongitudinal(student);
+        string? savedPlanJson = null;
+        try
+        {
+            var scope = ResolveScope(student.Id, null, null, null);
+            var opened = await _studyPlanDraftStore.OpenAsync(scope, cancellationToken);
+            savedPlanJson = opened.Recovered?.Text;
+        }
+        catch
+        {
+            // Prototype metrics stay readable even without keyring; writing study plan still fails closed.
+        }
+
+        return new
+        {
+            found = true,
+            mode = "prototype",
+            contract = "student_paper_longitudinal_v1",
+            studentId = snapshot.StudentId.ToString("D"),
+            studentDisplayName = snapshot.StudentDisplayName,
+            subjectKey = snapshot.SubjectKey,
+            windowDays = Math.Clamp(windowDays, 7, 365),
+            summary = snapshot.Summary,
+            weeklyCadence = snapshot.WeeklyCadence.Select(w => new
+            {
+                weekStart = w.WeekStart.ToString("yyyy-MM-dd"),
+                w.PaperCount,
+                w.ConfirmedCount,
+                w.MistakeCount,
+                w.HomeworkCount,
+                w.QuizCount,
+                w.UnitTestCount,
+                w.ExamCount,
+            }).ToArray(),
+            rootCauseBreakdown = snapshot.RootCauseBreakdown.Select(r => new
+            {
+                errorRootCause = PaperEvidenceWireNames.ToWire(r.ErrorRootCause),
+                r.Label,
+                r.Recent30dCount,
+                r.PriorWindowCount,
+                r.TotalCount,
+            }).ToArray(),
+            recurringTopics = snapshot.RecurringTopics.Select(t => new
+            {
+                t.TopicTag,
+                t.OccurrenceCount,
+                t.PaperCount,
+                firstSeenDate = t.FirstSeenDate.ToString("yyyy-MM-dd"),
+                lastSeenDate = t.LastSeenDate.ToString("yyyy-MM-dd"),
+            }).ToArray(),
+            hasLocalStudyPlanDraft = !string.IsNullOrWhiteSpace(savedPlanJson),
+            latestLocalStudyPlanDraftJson = savedPlanJson,
+            deepLink = $"xueqing://student/{snapshot.StudentId:D}",
+        };
+    }
+
+    public async Task<object> SaveStudyPlanDraftAsync(
+        string studentId,
+        string title,
+        string briefMarkdown,
+        string? evidenceRefsJson,
+        string? proposedActionsJson,
+        int windowDays,
+        int paperCountAnalyzed,
+        string? organizationId,
+        string? subjectProfileId,
+        string? assignmentId,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(title) || string.IsNullOrWhiteSpace(briefMarkdown))
+        {
+            return new { saved = false, error = "XQ_INVALID_STUDY_PLAN_DRAFT", message = "Title and briefMarkdown are required." };
+        }
+
+        var scope = ResolveScope(studentId, organizationId, subjectProfileId, assignmentId);
+        var payloadJson = System.Text.Json.JsonSerializer.Serialize(new
+        {
+            draftId = Guid.NewGuid().ToString("D"),
+            title = title.Trim(),
+            briefMarkdown = briefMarkdown.Trim(),
+            evidenceRefsJson = string.IsNullOrWhiteSpace(evidenceRefsJson) ? "[]" : evidenceRefsJson,
+            proposedActionsJson = string.IsNullOrWhiteSpace(proposedActionsJson) ? "[]" : proposedActionsJson,
+            windowDays = Math.Clamp(windowDays, 7, 365),
+            paperCountAnalyzed = Math.Max(0, paperCountAnalyzed),
+            status = "draft",
+            savedAtUtc = DateTimeOffset.UtcNow,
+        });
+
+        var opened = await _studyPlanDraftStore.OpenAsync(scope, cancellationToken);
+        var saved = await _studyPlanDraftStore.SaveAsync(
+            scope,
+            opened.Epoch,
+            payloadJson,
+            DateTimeOffset.UtcNow,
+            cancellationToken);
+
+        return new
+        {
+            mode = "prototype",
+            encrypted = true,
+            saved,
+            status = "draft",
+            mutatedLearningCases = false,
+            deepLink = $"xueqing://student/{scope.StudentId:D}",
+            nextStep = "Study plan draft saved in encrypted local storage. Open the native Xueqing app via deepLink for teacher review and explicit adoption.",
+        };
+    }
+
+    private StudentPaperLongitudinalSnapshot BuildPrototypeLongitudinal(StudentSummary student) =>
+        PrototypePaperLongitudinalFixtureFactory.Create(
+            ResolvePrototypeStudentUuid(student.Id),
+            student.DisplayName,
+            student.PrimarySubject,
+            PrototypeOrgId,
+            PrototypeSubjectProfileId,
+            PrototypeAssignmentId);
+
     public void Dispose()
     {
     }
@@ -438,6 +697,7 @@ internal sealed class ProductionXueqingMcpBackend : IXueqingMcpBackend
     private readonly PostgrestStudentLearningFocusReader? _focusReader;
     private readonly PostgrestStudentRecentObservationsReader? _recentReader;
     private readonly PostgrestStudentLearningCasesReader? _casesReader;
+    private readonly PostgrestPaperEvidenceClient? _paperClient;
 
     public ProductionXueqingMcpBackend(XueqingMcpOptions options)
     {
@@ -468,6 +728,7 @@ internal sealed class ProductionXueqingMcpBackend : IXueqingMcpBackend
             _focusReader = new PostgrestStudentLearningFocusReader(_httpClient, _profile.ProjectOrigin, _profile.PublishableKey, _tokenSource.GetCurrentAccessTokenAsync);
             _recentReader = new PostgrestStudentRecentObservationsReader(_httpClient, _profile.ProjectOrigin, _profile.PublishableKey, _tokenSource.GetCurrentAccessTokenAsync);
             _casesReader = new PostgrestStudentLearningCasesReader(_httpClient, _profile.ProjectOrigin, _profile.PublishableKey, _tokenSource.GetCurrentAccessTokenAsync);
+            _paperClient = new PostgrestPaperEvidenceClient(_httpClient, _profile.ProjectOrigin, _profile.PublishableKey, _tokenSource.GetCurrentAccessTokenAsync);
         }
         catch (Exception ex)
         {
@@ -754,6 +1015,194 @@ internal sealed class ProductionXueqingMcpBackend : IXueqingMcpBackend
             conflict = !saved,
             submittedToServer = false,
             expectedEpoch,
+            deepLink = $"xueqing://student/{scope.StudentId:D}",
+        };
+    }
+
+    public async Task<object> ListStudentPapersAsync(
+        string studentId,
+        string? subjectProfileId,
+        int windowDays,
+        int limit,
+        CancellationToken cancellationToken)
+    {
+        var (bootstrap, scope, error) = await ResolveAuthoritativeDraftScopeAsync(studentId, null, subjectProfileId, null, cancellationToken);
+        if (error is not null || bootstrap is null || scope is null || _paperClient is null)
+        {
+            return error ?? new { ok = false, error = "XQ_CLIENT_UNAVAILABLE" };
+        }
+
+        var read = await _paperClient.ReadAsync(
+            new StudentLearningScope(scope.OrganizationId, scope.StudentId, scope.SubjectProfileId),
+            bootstrap.ActorAppUserId,
+            windowDays,
+            limit,
+            cancellationToken);
+        if (!read.IsSuccess || read.Snapshot is null)
+        {
+            return new { ok = false, error = read.Failure?.Code ?? "XQ_PAPER_READ_FAILED" };
+        }
+
+        var s = read.Snapshot;
+        return new
+        {
+            found = true,
+            mode = "production",
+            studentId = s.StudentId.ToString("D"),
+            studentDisplayName = s.StudentDisplayName,
+            subjectKey = s.SubjectKey,
+            windowDays = s.WindowDays,
+            count = s.Papers.Count,
+            papers = s.Papers.Select(p => new
+            {
+                paperSubmissionId = p.PaperSubmissionId.ToString("D"),
+                paperDate = p.PaperDate.ToString("yyyy-MM-dd"),
+                paperKind = PaperEvidenceWireNames.ToWire(p.PaperKind),
+                p.KindLabel,
+                p.Title,
+                gradingSource = p.GradingSource.ToString(),
+                confirmationState = p.ConfirmationState.ToString(),
+                p.QuestionCount,
+                p.MistakeCount,
+                p.ScoreEarned,
+                p.ScoreTotal,
+                p.DurationMinutes,
+                pageCount = p.Pages.Count,
+                p.ExtractionSummary,
+            }).ToArray(),
+            deepLink = $"xueqing://student/{s.StudentId:D}",
+        };
+    }
+
+    public async Task<object> GetPaperDetailAsync(
+        string studentId,
+        string paperSubmissionId,
+        string? subjectProfileId,
+        CancellationToken cancellationToken)
+    {
+        var (bootstrap, scope, error) = await ResolveAuthoritativeDraftScopeAsync(studentId, null, subjectProfileId, null, cancellationToken);
+        if (error is not null || bootstrap is null || scope is null || _paperClient is null)
+        {
+            return error ?? new { ok = false, error = "XQ_CLIENT_UNAVAILABLE" };
+        }
+
+        var read = await _paperClient.ReadAsync(
+            new StudentLearningScope(scope.OrganizationId, scope.StudentId, scope.SubjectProfileId),
+            bootstrap.ActorAppUserId,
+            365,
+            50,
+            cancellationToken);
+        if (!read.IsSuccess || read.Snapshot is null)
+        {
+            return new { ok = false, error = read.Failure?.Code ?? "XQ_PAPER_READ_FAILED" };
+        }
+
+        var paper = read.Snapshot.Papers.FirstOrDefault(p =>
+            string.Equals(p.PaperSubmissionId.ToString("D"), paperSubmissionId?.Trim(), StringComparison.OrdinalIgnoreCase));
+        if (paper is null)
+        {
+            return new { found = false, error = "XQ_PAPER_NOT_FOUND" };
+        }
+
+        return new
+        {
+            found = true,
+            mode = "production",
+            studentId = read.Snapshot.StudentId.ToString("D"),
+            paper,
+            deepLink = $"xueqing://student/{read.Snapshot.StudentId:D}",
+        };
+    }
+
+    public async Task<object> GetStudentLongitudinalMetricsAsync(
+        string studentId,
+        string? subjectProfileId,
+        int windowDays,
+        CancellationToken cancellationToken)
+    {
+        var (bootstrap, scope, error) = await ResolveAuthoritativeDraftScopeAsync(studentId, null, subjectProfileId, null, cancellationToken);
+        if (error is not null || bootstrap is null || scope is null || _paperClient is null)
+        {
+            return error ?? new { ok = false, error = "XQ_CLIENT_UNAVAILABLE" };
+        }
+
+        var read = await _paperClient.ReadAsync(
+            new StudentLearningScope(scope.OrganizationId, scope.StudentId, scope.SubjectProfileId),
+            bootstrap.ActorAppUserId,
+            windowDays,
+            30,
+            cancellationToken);
+        if (!read.IsSuccess || read.Snapshot is null)
+        {
+            return new { ok = false, error = read.Failure?.Code ?? "XQ_PAPER_READ_FAILED" };
+        }
+
+        var s = read.Snapshot;
+        return new
+        {
+            found = true,
+            mode = "production",
+            contract = "student_paper_longitudinal_v1",
+            studentId = s.StudentId.ToString("D"),
+            s.StudentDisplayName,
+            s.SubjectKey,
+            s.WindowDays,
+            s.Summary,
+            s.WeeklyCadence,
+            s.RootCauseBreakdown,
+            s.RecurringTopics,
+            s.RecentStudyPlanDrafts,
+            deepLink = $"xueqing://student/{s.StudentId:D}",
+        };
+    }
+
+    public async Task<object> SaveStudyPlanDraftAsync(
+        string studentId,
+        string title,
+        string briefMarkdown,
+        string? evidenceRefsJson,
+        string? proposedActionsJson,
+        int windowDays,
+        int paperCountAnalyzed,
+        string? organizationId,
+        string? subjectProfileId,
+        string? assignmentId,
+        CancellationToken cancellationToken)
+    {
+        var (_, scope, error) = await ResolveAuthoritativeDraftScopeAsync(studentId, organizationId, subjectProfileId, assignmentId, cancellationToken);
+        if (error is not null || scope is null || _paperClient is null)
+        {
+            return error ?? new { ok = false, error = "XQ_CLIENT_UNAVAILABLE" };
+        }
+
+        var save = await _paperClient.SaveDraftAsync(
+            new SaveStudyPlanDraftRequest(
+                Guid.NewGuid(),
+                scope.OrganizationId,
+                scope.StudentId,
+                scope.SubjectProfileId,
+                scope.AssignmentId,
+                title,
+                briefMarkdown,
+                string.IsNullOrWhiteSpace(evidenceRefsJson) ? "[]" : evidenceRefsJson,
+                string.IsNullOrWhiteSpace(proposedActionsJson) ? "[]" : proposedActionsJson,
+                Math.Clamp(windowDays, 7, 365),
+                Math.Max(0, paperCountAnalyzed)),
+            cancellationToken);
+
+        if (!save.IsSuccess || save.Receipt is null)
+        {
+            return new { saved = false, error = save.Failure?.Code ?? "XQ_SAVE_STUDY_PLAN_FAILED" };
+        }
+
+        return new
+        {
+            mode = "production",
+            saved = true,
+            draftId = save.Receipt.DraftId.ToString("D"),
+            status = save.Receipt.Status,
+            version = save.Receipt.Version,
+            mutatedLearningCases = false,
             deepLink = $"xueqing://student/{scope.StudentId:D}",
         };
     }

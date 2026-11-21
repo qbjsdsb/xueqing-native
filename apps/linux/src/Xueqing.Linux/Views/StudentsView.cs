@@ -40,6 +40,7 @@ internal sealed class StudentsView
     private readonly Gtk.Button _protoDraftSaveButton;
     private readonly Gtk.Button _protoDraftReloadButton;
     private readonly Gtk.Label _protoDeepLinkLabel;
+    private readonly PaperLongitudinalPanel _protoPaperPanel;
     private SqliteObservationDraftStore? _prototypeDraftStore;
     private ObservationDraftScope? _prototypeDraftScope;
     private string? _lastLoadedProtoStudentId;
@@ -247,12 +248,15 @@ internal sealed class StudentsView
         detailBox.Append(detailHeaderRow);
 
         // Prototype Detail Panel (includes real SQLite3MC + libsecret draft shared with Xueqing.Mcp!)
+        _protoPaperPanel = new PaperLongitudinalPanel(_dialogParent);
         _prototypeDetailPanel = BuildPrototypeDetailPanel(
             out _protoDraftTextView,
             out _protoDraftStatusLabel,
             out _protoDraftSaveButton,
             out _protoDraftReloadButton,
             out _protoDeepLinkLabel);
+        _prototypeDetailPanel.Append(Gtk.Separator.New(Gtk.Orientation.Horizontal));
+        _prototypeDetailPanel.Append(_protoPaperPanel.Widget);
         detailBox.Append(_prototypeDetailPanel);
 
         // Authoritative Detail Panel
@@ -1025,6 +1029,7 @@ internal sealed class StudentsView
 
         _lastLoadedProtoStudentId = student.Id;
         var loadVersion = ++_prototypeDraftLoadVersion;
+        await _protoPaperPanel.LoadPrototypeAsync(student);
 
         var scope = PrototypeDraftIdentity.CreateScopeForStudent(student.Id);
         _prototypeDraftScope = scope;

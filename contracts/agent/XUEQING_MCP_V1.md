@@ -15,7 +15,7 @@ Expose a narrow, auditable Model Context Protocol (`stdio`) interface so AI agen
 3. **Human handoff**: After drafting an observation with `xueqing_save_observation_draft`, the agent returns the canonical deep link from `xueqing_build_deep_link` so the teacher inspects and explicitly submits it in the native Windows/Linux client.
 4. **Prototype mode (`--prototype`)**: Uses deterministic synthetic fixtures (`MainWindowViewModel` prototype mode) plus an isolated encrypted local draft database so CI and local MCP clients can verify the full protocol without production credentials or real student data.
 
-## V1 Tool Surface (8 Tools)
+## Tool Surface (12 Tools)
 
 | Tool | Read-Only | Purpose |
 | :--- | :---: | :--- |
@@ -26,4 +26,8 @@ Expose a narrow, auditable Model Context Protocol (`stdio`) interface so AI agen
 | `xueqing_get_student_cases` | Yes | Return Learning Cases (state, responsibility, next action, due date, timeline when available). |
 | `xueqing_get_observation_draft` | Yes | Open/read encrypted local observation draft and current `epoch` for `(organizationId, studentId, subjectId)`. |
 | `xueqing_save_observation_draft` | No (local draft only) | Save observation draft text into encrypted `SqliteObservationDraftStore` using optimistic `expectedEpoch`. |
+| `xueqing_list_student_papers` | Yes | List photographed exam/homework paper submissions ordered by `paperDate` descending. |
+| `xueqing_get_paper_detail` | Yes | Retrieve structured mistake items, root causes, section positions, and page references for one paper. |
+| `xueqing_get_student_longitudinal_metrics` | Yes | Retrieve deterministic longitudinal KPIs, weekly cadence, root-cause shifts, recurring topics, and recent study plan drafts. |
+| `xueqing_save_study_plan_draft` | No (draft only) | Save an AI stage brief and candidate Learning Case / Next Action drafts (`status='draft'`, never mutates authoritative Cases) and return canonical `xueqing://` deep link. |
 | `xueqing_build_deep_link` | Yes | Validate and format canonical `xueqing://today`, `xueqing://student/<uuid>`, or `xueqing://learning/<uuid>`. |
