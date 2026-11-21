@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <AssemblyName>Xueqing.Linux</AssemblyName>
+    <RootNamespace>Xueqing.Linux</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../../windows/src/Xueqing.Windows.Core/Xueqing.Windows.Core.csproj" />
+    <ProjectReference Include="../../../windows/src/Xueqing.Windows.Infrastructure/Xueqing.Windows.Infrastructure.csproj" />
+    <ProjectReference Include="../../../windows/src/Xueqing.Windows.Presentation/Xueqing.Windows.Presentation.csproj" />
+    <ProjectReference Include="../Xueqing.Linux.Infrastructure/Xueqing.Linux.Infrastructure.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="GirCore.Adw-1" />
+    <PackageReference Include="GirCore.Gtk-4.0" />
+  </ItemGroup>
+</Project>

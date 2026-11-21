@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Name=学情
+Name[en]=Xueqing
+Comment=以学生学情为核心的长期教学工作台
+Comment[en]=Student-centered long-term teaching workbench
+Exec=xueqing-linux %u
+Icon=com.xueqing.app
+Terminal=false
+Categories=Education;Office;
+Keywords=xueqing;teaching;students;learning;学情;教学;
+StartupNotify=true
+StartupWMClass=com.xueqing.app
+MimeType=x-scheme-handler/xueqing;

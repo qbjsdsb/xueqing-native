@@ -49,13 +49,35 @@ jobs:
             --no-banner \
             --progress off
 
-      - name: Build Linux infrastructure, GTK4/libadwaita spike, and Xueqing.Mcp
+      - name: Build Linux infrastructure, formal GTK4/libadwaita client, spike, tests, and Xueqing.Mcp
         shell: bash
         run: |
           set -euo pipefail
           dotnet build apps/linux/src/Xueqing.Linux.Infrastructure/Xueqing.Linux.Infrastructure.csproj -c Release --nologo
+          dotnet build apps/linux/src/Xueqing.Linux/Xueqing.Linux.csproj -c Release --nologo
           dotnet build apps/linux/spikes/Xueqing.Linux.NativeSpike/Xueqing.Linux.NativeSpike.csproj -c Release --nologo
+          dotnet build apps/linux/tests/Xueqing.Linux.Tests/Xueqing.Linux.Tests.csproj -c Release --nologo
           dotnet build apps/mcp/Xueqing.Mcp/Xueqing.Mcp.csproj -c Release --nologo
+
+      - name: Run Xueqing.Linux infrastructure & security tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          apps/linux/tests/Xueqing.Linux.Tests/bin/Release/net10.0/Xueqing.Linux.Tests \
+            --minimum-expected-tests 6 \
+            --no-banner \
+            --progress off
+
+      - name: Verify Xueqing.Linux CLI help and fail-closed security check without keyring
+        shell: bash
+        run: |
+          set -euo pipefail
+          apps/linux/src/Xueqing.Linux/bin/Release/net10.0/Xueqing.Linux --help | grep -q "Xueqing.Linux"
+          if env -u DBUS_SESSION_BUS_ADDRESS apps/linux/src/Xueqing.Linux/bin/Release/net10.0/Xueqing.Linux --security-check; then
+            echo "ERROR: --security-check unexpectedly passed without Secret Service!" >&2
+            exit 1
+          fi
+          echo "Verified Xueqing.Linux --security-check fails closed without Secret Service."
 
       - name: Verify Xueqing.Mcp stdio protocol & fail-closed headless keyring boundary
         shell: bash

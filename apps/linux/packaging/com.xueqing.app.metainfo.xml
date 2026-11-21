@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>com.xueqing.app</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <name>Xueqing</name>
+  <name xml:lang="zh_CN">学情</name>
+  <summary>Student-centered long-term teaching workbench</summary>
+  <summary xml:lang="zh_CN">以学生学情为核心的长期教学工作台</summary>
+  <description>
+    <p>
+      Xueqing is a native Linux desktop client built with GTK4, libadwaita, and .NET 10.
+      It helps teachers record classroom observations, track long-term learning cases,
+      and manage today's teaching follow-up actions with fail-closed local encryption
+      backed by SQLite3MC and Linux Secret Service.
+    </p>
+  </description>
+  <launchable type="desktop-id">com.xueqing.app.desktop</launchable>
+  <provides>
+    <binary>xueqing-linux</binary>
+  </provides>
+  <supports>
+    <control>pointing</control>
+    <control>keyboard</control>
+  </supports>
+  <requires>
+    <display_length compare="ge">360</display_length>
+  </requires>
+  <content_rating type="oars-1.1" />
+</component>
