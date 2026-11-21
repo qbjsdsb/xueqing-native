@@ -14,6 +14,8 @@ att1_id='99700000-0000-0000-0000-000000000011'
 att1_op='99700000-0000-0000-0000-000000000012'
 att2_id='99700000-0000-0000-0000-000000000021'
 att2_op='99700000-0000-0000-0000-000000000022'
+att3_id='99700000-0000-0000-0000-000000000023'
+att3_op='99700000-0000-0000-0000-000000000024'
 paper1_create_op='99700000-0000-0000-0000-000000000031'
 paper1_extract_op='99700000-0000-0000-0000-000000000032'
 paper1_confirm_op='99700000-0000-0000-0000-000000000033'
@@ -34,6 +36,7 @@ user_a=''
 user_b=''
 object_1=''
 object_2=''
+object_3=''
 
 supabase status --workdir backend -o env > "$status_env"
 set -a
@@ -68,15 +71,26 @@ cleanup() {
   fi
   psql_db >/dev/null 2>&1 <<SQL
 reset role;
+delete from public.paper_mistake_items
+ where paper_submission_id in (
+   select id from public.paper_submissions
+    where operation_id in ('$paper1_create_op'::uuid, '$paper2_create_op'::uuid)
+ );
+delete from public.paper_pages
+ where paper_submission_id in (
+   select id from public.paper_submissions
+    where operation_id in ('$paper1_create_op'::uuid, '$paper2_create_op'::uuid)
+ );
 delete from public.paper_submissions
  where operation_id in ('$paper1_create_op'::uuid, '$paper2_create_op'::uuid);
 delete from public.observation_attachments
- where operation_id in ('$att1_op'::uuid, '$att2_op'::uuid);
+ where operation_id in ('$att1_op'::uuid, '$att2_op'::uuid, '$att3_op'::uuid);
 delete from public.operation_receipts
  where operation_id in (
    '$obs_op'::uuid,
    '$att1_op'::uuid,
    '$att2_op'::uuid,
+   '$att3_op'::uuid,
    '$paper1_create_op'::uuid,
    '$paper1_extract_op'::uuid,
    '$paper1_confirm_op'::uuid,
@@ -90,7 +104,7 @@ delete from public.identity_links
    and external_subject in ('$user_a', '$user_b');
 SQL
 
-  for path in "$object_1" "$object_2"; do
+  for path in "$object_1" "$object_2" "$object_3"; do
     if [[ -n "$path" ]]; then
       curl -sS -o /dev/null -X DELETE \
         "$api_url/storage/v1/object/$bucket/$path" \
@@ -178,13 +192,25 @@ SQL
 }
 
 rpc() {
-  local token="$1" name="$2" body="$3"
-  curl --fail-with-body --silent --show-error \
-    -X POST "$api_url/rest/v1/rpc/$name" \
-    -H "apikey: $ANON_KEY" \
-    -H "Authorization: Bearer $token" \
-    -H 'Content-Type: application/json' \
-    --data "$body"
+  local token="$1" name="$2" body="$3" out status
+  out="$(mktemp)"
+  status="$(
+    curl --silent --show-error \
+      --output "$out" \
+      --write-out '%{http_code}' \
+      -X POST "$api_url/rest/v1/rpc/$name" \
+      -H "apikey: $ANON_KEY" \
+      -H "Authorization: Bearer $token" \
+      -H 'Content-Type: application/json' \
+      --data "$body"
+  )"
+  if [[ ! "$status" =~ ^2 ]]; then
+    echo "RPC $name failed with HTTP $status: $(cat "$out")" >&2
+    rm -f "$out"
+    return 1
+  fi
+  cat "$out"
+  rm -f "$out"
 }
 
 printf '%s' 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9Z0xkAAAAASUVORK5CYII=' \
@@ -205,8 +231,9 @@ observation_id="$(printf '%s' "$obs_resp" | json_get observation_id)"
 
 object_1="v1/org/$organization_id/student/$student_id/profile/$profile_id/observation/$observation_id/attachment/$att1_id"
 object_2="v1/org/$organization_id/student/$student_id/profile/$profile_id/observation/$observation_id/attachment/$att2_id"
+object_3="v1/org/$organization_id/student/$student_id/profile/$profile_id/observation/$observation_id/attachment/$att3_id"
 
-for pair in "$att1_id|$att1_op|$object_1" "$att2_id|$att2_op|$object_2"; do
+for pair in "$att1_id|$att1_op|$object_1" "$att2_id|$att2_op|$object_2" "$att3_id|$att3_op|$object_3"; do
   IFS='|' read -r aid aop obj <<< "$pair"
   curl --fail-with-body --silent --show-error \
     -X POST "$api_url/storage/v1/object/$bucket/$obj" \
@@ -225,7 +252,7 @@ paper1_resp="$(rpc "$token_a" create_paper_submission_v1 \
 paper1_id="$(printf '%s' "$paper1_resp" | json_get paper_submission_id)"
 
 paper2_resp="$(rpc "$token_a" create_paper_submission_v1 \
-  "{\"p_operation_id\":\"$paper2_create_op\",\"p_organization_id\":\"$organization_id\",\"p_student_id\":\"$student_id\",\"p_subject_profile_id\":\"$profile_id\",\"p_assignment_id\":\"$assignment_a\",\"p_paper_date\":\"$today_utc\",\"p_paper_kind\":\"homework\",\"p_title\":\"MALFORMED_FIXTURE_PAPER\",\"p_source_observation_id\":\"$observation_id\",\"p_pages\":[{\"page_index\":1,\"attachment_id\":\"$att1_id\",\"header_redacted\":true}]}")"
+  "{\"p_operation_id\":\"$paper2_create_op\",\"p_organization_id\":\"$organization_id\",\"p_student_id\":\"$student_id\",\"p_subject_profile_id\":\"$profile_id\",\"p_assignment_id\":\"$assignment_a\",\"p_paper_date\":\"$today_utc\",\"p_paper_kind\":\"homework\",\"p_title\":\"MALFORMED_FIXTURE_PAPER\",\"p_source_observation_id\":\"$observation_id\",\"p_pages\":[{\"page_index\":1,\"attachment_id\":\"$att3_id\",\"header_redacted\":true}]}")"
 paper2_id="$(printf '%s' "$paper2_resp" | json_get paper_submission_id)"
 
 # Start local mock Gemini Interactions API v1 server reachable from Docker bridge
