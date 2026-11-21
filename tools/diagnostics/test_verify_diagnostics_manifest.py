@@ -53,6 +53,16 @@ class DiagnosticsManifestVerifierTests(unittest.TestCase):
         }
         verify(value)
 
+    def test_allows_linux_platform_and_rejects_unknown_platform(self):
+        linux_value = copy.deepcopy(self.value)
+        linux_value["platform"]["kind"] = "linux"
+        verify(linux_value)
+
+        unknown_value = copy.deepcopy(self.value)
+        unknown_value["platform"]["kind"] = "unknown-os"
+        with self.assertRaises(ValueError):
+            verify(unknown_value)
+
 
 if __name__ == "__main__":
     unittest.main()

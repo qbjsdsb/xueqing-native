@@ -24,7 +24,7 @@
       "additionalProperties": false,
       "required": ["kind", "os_version", "architecture", "package_identity"],
       "properties": {
-        "kind": { "enum": ["android", "windows"] },
+        "kind": { "enum": ["android", "windows", "linux"] },
         "os_version": { "type": "string", "minLength": 1, "maxLength": 128 },
         "architecture": { "type": "string", "minLength": 1, "maxLength": 32 },
         "package_identity": { "type": "string", "minLength": 1, "maxLength": 160 }

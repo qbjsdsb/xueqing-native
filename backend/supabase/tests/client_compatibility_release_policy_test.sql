@@ -1,7 +1,7 @@
 begin;
 set local search_path = public, extensions;
 
-select plan(12);
+select plan(17);
 
 select is(
     (select policy_revision from public.client_compatibility_policies where platform = 'android'),
@@ -37,6 +37,24 @@ select is(
     (select recommended_app_version from public.client_compatibility_policies where platform = 'windows'),
     '1.0.0.1',
     'Windows RC recommended version matches release identity'
+);
+
+select is(
+    (select policy_revision from public.client_compatibility_policies where platform = 'linux'),
+    'v1-rc1',
+    'Linux RC policy revision is frozen'
+);
+
+select is(
+    (select supported_app_versions from public.client_compatibility_policies where platform = 'linux'),
+    array['1.0.0-rc.1']::text[],
+    'Linux RC policy supports only the frozen RC version'
+);
+
+select is(
+    (select recommended_app_version from public.client_compatibility_policies where platform = 'linux'),
+    '1.0.0-rc.1',
+    'Linux RC recommended version matches release identity'
 );
 
 select set_config('request.jwt.claim.sub', 'a0000000-0000-0000-0000-000000000001', true);
@@ -88,6 +106,20 @@ select is(
         #>> '{decision,update_uri}',
     'https://github.com/qbjsdsb/xueqing-native/releases',
     'Windows response exposes durable release guidance'
+);
+
+select is(
+    public.get_client_compatibility_v1('linux', '1.0.0-rc.1', 1)
+        #>> '{decision,state}',
+    'supported',
+    'Frozen Linux RC is supported'
+);
+
+select is(
+    public.get_client_compatibility_v1('linux', '1.0.0-rc.2', 1)
+        #>> '{decision,state}',
+    'update_required',
+    'Unlisted Linux RC does not receive guessed support'
 );
 
 reset role;

@@ -1,7 +1,7 @@
 begin;
 set local search_path = public, extensions;
 
-select plan(18);
+select plan(19);
 
 select ok(
     compatibility.prosecdef,
@@ -160,10 +160,17 @@ select is(
 );
 
 select throws_ok(
-    $$ select public.get_client_compatibility_v1('linux', '1.0.0', 1) $$,
+    $$ select public.get_client_compatibility_v1('unknown-os', '1.0.0', 1) $$,
     'P0001',
     'XQ_CLIENT_PLATFORM_INVALID',
     'unknown platform fails closed'
+);
+
+select throws_ok(
+    $$ select public.get_client_compatibility_v1('linux', '1.0.0-rc.1', 1) $$,
+    'P0001',
+    'XQ_COMPATIBILITY_POLICY_UNAVAILABLE',
+    'missing linux platform policy fails closed instead of fabricating support'
 );
 
 select throws_ok(

@@ -57,7 +57,7 @@ def verify(value):
         raise ValueError("generated_at must be offset-aware")
 
     platform = exact(root["platform"], PLATFORM, "platform")
-    if platform["kind"] not in {"android", "windows"}:
+    if platform["kind"] not in {"android", "windows", "linux"}:
         raise ValueError("platform kind is invalid")
     bounded(platform["os_version"], "os_version", 128)
     bounded(platform["architecture"], "architecture", 32)
