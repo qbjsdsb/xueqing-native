@@ -8,6 +8,8 @@ import com.xueqing.app.application.bootstrap.PersonalBootstrapRemote
 import com.xueqing.app.application.bootstrap.PersonalBootstrapResult
 import com.xueqing.app.application.bootstrap.PersonalTeachingContext
 import com.xueqing.app.application.observation.CreateObservationRequest
+import com.xueqing.app.application.paper.PaperCaptureMetadata
+import com.xueqing.app.application.paper.PaperKind
 import com.xueqing.app.durability.AttachmentStagingRecoveryScheduler
 import com.xueqing.app.durability.AttachmentStagingState
 import com.xueqing.app.durability.AttachmentStagingStore
@@ -26,6 +28,7 @@ import com.xueqing.app.infrastructure.media.ImageDerivativeFactory
 import com.xueqing.app.infrastructure.media.ImageDerivativeTooLargeException
 import com.xueqing.app.infrastructure.media.PhotoAttachmentStager
 import java.time.Instant
+import java.time.LocalDate
 import java.util.UUID
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -80,6 +83,13 @@ data class QuickCaptureUiState(
     val recoveredFromDisk: Boolean = false,
     val attachmentStatus: AttachmentDraftStatus = AttachmentDraftStatus.None,
     val attachmentCount: Int = 0,
+    val maxAttachmentCount: Int = PaperCaptureMetadata.MAX_PAGES,
+    val headerRedactionEnabled: Boolean = true,
+    val redactedAttachmentCount: Int = 0,
+    val paperCaptureMode: Boolean = false,
+    val paperKind: PaperKind = PaperKind.Homework,
+    val paperDate: String = "",
+    val paperTitle: String = "",
     val attachmentErrorCode: String? = null,
     val submissionStatus: ObservationSubmissionStatus = ObservationSubmissionStatus.None,
     val submissionErrorCode: String? = null,
@@ -111,6 +121,7 @@ class QuickCaptureViewModel(
     private var submissionObservationJob: Job? = null
     private var selectionGeneration: Long = 0
     private var revision: Long = 0
+    private val stagedRedactedPageIndices = mutableListOf<Int>()
 
     val uiState: StateFlow<QuickCaptureUiState> = _uiState.asStateFlow()
 
@@ -213,6 +224,31 @@ class QuickCaptureViewModel(
         )
     }
 
+    fun onHeaderRedactionToggled(enabled: Boolean) {
+        _uiState.update { it.copy(headerRedactionEnabled = enabled) }
+    }
+
+    fun onPaperCaptureModeToggled(enabled: Boolean) {
+        _uiState.update { state ->
+            state.copy(
+                paperCaptureMode = enabled,
+                paperDate = state.paperDate.ifBlank { LocalDate.now().toString() },
+            )
+        }
+    }
+
+    fun onPaperKindSelected(kind: PaperKind) {
+        _uiState.update { it.copy(paperKind = kind) }
+    }
+
+    fun onPaperDateChanged(dateText: String) {
+        _uiState.update { it.copy(paperDate = dateText.take(10)) }
+    }
+
+    fun onPaperTitleChanged(title: String) {
+        _uiState.update { it.copy(paperTitle = title.take(PaperCaptureMetadata.MAX_TITLE_LENGTH)) }
+    }
+
     fun onPhotoSelected(uri: Uri) {
         val currentState = _uiState.value
         val selectedSession = session ?: return
@@ -224,9 +260,15 @@ class QuickCaptureViewModel(
             currentState.teachingContextStatus != TeachingContextStatus.Ready ||
             currentState.draftStatus == LocalDraftStatus.Loading ||
             currentState.attachmentStatus == AttachmentDraftStatus.Protecting ||
-            currentState.attachmentCount > 0
+            currentState.attachmentCount >= currentState.maxAttachmentCount
         ) {
             return
+        }
+
+        val redactionRatio = if (currentState.headerRedactionEnabled) {
+            ImageDerivativeFactory.DEFAULT_HEADER_REDACTION_RATIO
+        } else {
+            0f
         }
 
         _uiState.update {
@@ -253,17 +295,31 @@ class QuickCaptureViewModel(
                         assignmentId = selectedContext.assignmentId.toString(),
                         attachmentId = attachmentIdFactory(),
                         uri = uri,
+                        headerRedactionRatio = redactionRatio,
                     )
+
+                    val actualCount = withContext(Dispatchers.IO) {
+                        attachmentStagingStore
+                            .readForDraft(selectedScope, selectedSession.epoch)
+                            .count {
+                                it.state == AttachmentStagingState.Staged &&
+                                    it.parentObservationOperationId == null
+                            }
+                    }
 
                     if (
                         selectedGeneration == selectionGeneration &&
                         scope?.storageKey == selectedScope.storageKey &&
                         session?.epoch == selectedSession.epoch
                     ) {
+                        if (redactionRatio > 0f && actualCount > 0) {
+                            stagedRedactedPageIndices.add(actualCount)
+                        }
                         _uiState.update {
                             it.copy(
                                 attachmentStatus = AttachmentDraftStatus.SafeOnDevice,
-                                attachmentCount = 1,
+                                attachmentCount = actualCount,
+                                redactedAttachmentCount = stagedRedactedPageIndices.size,
                                 attachmentErrorCode = null,
                             )
                         }
@@ -277,7 +333,6 @@ class QuickCaptureViewModel(
                         _uiState.update {
                             it.copy(
                                 attachmentStatus = AttachmentDraftStatus.Failed,
-                                attachmentCount = 0,
                                 attachmentErrorCode = attachmentErrorCode(failure),
                             )
                         }
@@ -324,10 +379,12 @@ class QuickCaptureViewModel(
                         scope?.storageKey == selectedScope.storageKey &&
                         session?.epoch == selectedSession.epoch
                     ) {
+                        stagedRedactedPageIndices.clear()
                         _uiState.update {
                             it.copy(
                                 attachmentStatus = AttachmentDraftStatus.None,
                                 attachmentCount = 0,
+                                redactedAttachmentCount = 0,
                                 attachmentErrorCode = null,
                             )
                         }
@@ -379,6 +436,7 @@ class QuickCaptureViewModel(
                             store.open(currentScope)
                         }
                         revision = Math.addExact(revision, 1)
+                        stagedRedactedPageIndices.clear()
                         _uiState.update {
                             it.copy(
                                 text = "",
@@ -386,6 +444,8 @@ class QuickCaptureViewModel(
                                 recoveredFromDisk = false,
                                 attachmentStatus = AttachmentDraftStatus.None,
                                 attachmentCount = 0,
+                                redactedAttachmentCount = 0,
+                                paperTitle = "",
                                 attachmentErrorCode = null,
                             )
                         }
@@ -420,6 +480,19 @@ class QuickCaptureViewModel(
                 revision = Math.addExact(revision, 1)
                 val capturedAtEpochMillis = clock()
                 val operationId = operationIdFactory()
+                val resolvedPaperDate = runCatching {
+                    LocalDate.parse(currentState.paperDate.trim())
+                }.getOrElse { LocalDate.now() }
+                val captureMetadata = PaperCaptureMetadata(
+                    enabled = currentState.paperCaptureMode,
+                    paperDate = resolvedPaperDate,
+                    paperKind = currentState.paperKind,
+                    title = currentState.paperTitle,
+                    headerRedactionEnabled = currentState.headerRedactionEnabled,
+                ).toClientCaptureMetadata(
+                    pageCount = currentState.attachmentCount,
+                    redactedPageIndices = stagedRedactedPageIndices.toList(),
+                )
                 val request = CreateObservationRequest(
                     operationId = operationId,
                     organizationId = currentContext.organizationId,
@@ -428,7 +501,7 @@ class QuickCaptureViewModel(
                     assignmentId = currentContext.assignmentId,
                     rawText = finalText,
                     clientCapturedAt = Instant.ofEpochMilli(capturedAtEpochMillis),
-                    clientCaptureMetadata = mapOf("surface" to "quick_capture"),
+                    clientCaptureMetadata = captureMetadata,
                 )
                 val outbox = ObservationOutboxEntity(
                     operationId = operationId.toString(),
@@ -467,6 +540,7 @@ class QuickCaptureViewModel(
                     session = withContext(Dispatchers.IO) {
                         store.open(currentScope)
                     }
+                    stagedRedactedPageIndices.clear()
                     _uiState.update {
                         it.copy(
                             text = "",
@@ -474,6 +548,11 @@ class QuickCaptureViewModel(
                             recoveredFromDisk = false,
                             attachmentStatus = AttachmentDraftStatus.None,
                             attachmentCount = 0,
+                            redactedAttachmentCount = 0,
+                            paperCaptureMode = false,
+                            paperKind = PaperKind.Homework,
+                            paperDate = LocalDate.now().toString(),
+                            paperTitle = "",
                             attachmentErrorCode = null,
                         )
                     }
@@ -582,6 +661,7 @@ class QuickCaptureViewModel(
             // Another selection may arrive while Room opens this draft.
             if (generation != selectionGeneration) return
             session = opened
+            stagedRedactedPageIndices.clear()
             _uiState.value = QuickCaptureUiState(
                 text = opened.recovered?.text.orEmpty(),
                 teachingContextStatus = TeachingContextStatus.Ready,
@@ -595,6 +675,7 @@ class QuickCaptureViewModel(
                     AttachmentDraftStatus.SafeOnDevice
                 },
                 attachmentCount = stagedAttachments.size,
+                paperDate = LocalDate.now().toString(),
             )
             observeSubmission(draftScope)
         } catch (_: Throwable) {

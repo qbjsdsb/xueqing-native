@@ -6,6 +6,7 @@ import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import com.xueqing.app.application.paper.PaperKind
 import com.xueqing.app.presentation.design.XueqingTheme
 import org.junit.Rule
 import org.junit.Test
@@ -75,5 +76,46 @@ class QuickCaptureAttachmentUiInstrumentedTest {
         composeRule.onNodeWithText("添加照片").assertIsNotEnabled()
         composeRule.onNodeWithText("丢弃草稿").assertIsNotEnabled()
         composeRule.onNodeWithText("提交记录").assertIsNotEnabled()
+    }
+
+    @Test
+    fun paperCaptureModeShowsFourKindsAndMultiPageRedactedSummary() {
+        composeRule.setContent {
+            XueqingTheme {
+                QuickCaptureScreen(
+                    state = QuickCaptureUiState(
+                        text = "单元测两页已拍完，准备提交。",
+                        teachingContextStatus = TeachingContextStatus.Ready,
+                        studentDisplayName = "虚构学生甲",
+                        subjectLabel = "数学",
+                        draftStatus = LocalDraftStatus.SafeOnDevice,
+                        attachmentStatus = AttachmentDraftStatus.SafeOnDevice,
+                        attachmentCount = 2,
+                        redactedAttachmentCount = 2,
+                        headerRedactionEnabled = true,
+                        paperCaptureMode = true,
+                        paperKind = PaperKind.UnitTest,
+                        paperDate = "2026-11-22",
+                        paperTitle = "第三单元小数除法",
+                    ),
+                    onTextChanged = {},
+                    onClose = {},
+                    onChooseStudent = {},
+                    onPhotoSelected = {},
+                    onRemovePhoto = {},
+                    onDiscard = {},
+                    onSubmit = {},
+                )
+            }
+        }
+
+        composeRule.onNodeWithTag("quick-capture-add-photo").assertIsEnabled()
+        composeRule.onNodeWithTag("quick-capture-header-redaction-toggle").assertExists()
+        composeRule.onNodeWithTag("quick-capture-paper-kind-homework").assertExists()
+        composeRule.onNodeWithTag("quick-capture-paper-kind-quiz").assertExists()
+        composeRule.onNodeWithTag("quick-capture-paper-kind-unit_test").assertExists()
+        composeRule.onNodeWithTag("quick-capture-paper-kind-exam").assertExists()
+        composeRule.onNodeWithTag("quick-capture-paper-date").assertTextContains("2026-11-22")
+        composeRule.onNodeWithText("已安全保存 2 页照片（2 页已遮挡卷头姓名区）").assertExists()
     }
 }
