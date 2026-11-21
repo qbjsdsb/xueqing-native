@@ -8,6 +8,7 @@ on:
       - 'contracts/operations/RELEASE_IDENTITY_SIGNING_V1.md'
       - 'backend/supabase/**'
       - 'contracts/commands/**'
+      - 'contracts/papers/**'
       - 'contracts/projections/**'
       - 'contracts/errors/**'
       - '.github/workflows/backend-api.yml'
@@ -144,6 +145,18 @@ jobs:
         run: |
           set -euo pipefail
           bash backend/supabase/tests/observation_attachment_concurrency.sh
+
+      - name: Prove Paper Extraction required-region guard fails closed
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash backend/supabase/tests/extract_paper_region_guard_conformance.sh
+
+      - name: Prove Paper Extraction Edge Function via mock Gemini Interactions API
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash backend/supabase/tests/extract_paper_provider_conformance.sh
 
       - name: Print safe local-stack diagnostics on failure
         if: failure()
