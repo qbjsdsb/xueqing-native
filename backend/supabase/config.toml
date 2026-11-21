@@ -32,3 +32,10 @@ enable_signup = true
 # the user-scoped, server-authoritative begin-delivery RPC. Keep gateway JWT
 # verification off so current asymmetric Supabase Auth JWTs are supported.
 verify_jwt = false
+
+[functions.extract-paper-v1]
+# The function never uses service_role credentials. Every database read, private
+# Storage object download, and ai_draft RPC write runs strictly under the caller
+# Bearer JWT. Keep gateway JWT verification off so asymmetric Supabase Auth JWTs
+# are supported while the function enforces Authorization fail-closed.
+verify_jwt = false
