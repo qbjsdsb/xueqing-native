@@ -134,6 +134,11 @@ private fun AuthenticatedWorkspace(
             onRemovePhoto = quickCaptureViewModel::removePhoto,
             onDiscard = quickCaptureViewModel::discard,
             onSubmit = quickCaptureViewModel::submit,
+            onHeaderRedactionToggled = quickCaptureViewModel::onHeaderRedactionToggled,
+            onPaperCaptureModeToggled = quickCaptureViewModel::onPaperCaptureModeToggled,
+            onPaperKindSelected = quickCaptureViewModel::onPaperKindSelected,
+            onPaperDateChanged = quickCaptureViewModel::onPaperDateChanged,
+            onPaperTitleChanged = quickCaptureViewModel::onPaperTitleChanged,
         )
     } else if (selectedStudent != null) {
         StudentDetailScreen(

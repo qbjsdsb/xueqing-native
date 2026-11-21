@@ -80,4 +80,44 @@ class ImageDerivativeFactoryInstrumentedTest {
 
         sourceFile.delete()
     }
+
+    @Test
+    fun headerRedactionMasksTopBandWithoutAlteringBodyPixels() {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val sourceFile = File(context.cacheDir, "xueqing-header-redaction-source.jpg")
+        val bitmap = Bitmap.createBitmap(800, 1000, Bitmap.Config.ARGB_8888)
+        bitmap.eraseColor(Color.WHITE)
+        sourceFile.outputStream().use { output ->
+            assertTrue(bitmap.compress(Bitmap.CompressFormat.JPEG, 96, output))
+        }
+        bitmap.recycle()
+
+        val derivative = ImageDerivativeFactory().create(
+            source = object : ImageDerivativeFactory.ReopenableSource {
+                override fun open() = FileInputStream(sourceFile)
+            },
+            headerRedactionRatio = ImageDerivativeFactory.DEFAULT_HEADER_REDACTION_RATIO,
+        )
+
+        val decoded = BitmapFactory.decodeByteArray(
+            derivative.bytes,
+            0,
+            derivative.bytes.size,
+        )
+        assertEquals(800, decoded.width)
+        assertEquals(1000, decoded.height)
+
+        val headerPixel = decoded.getPixel(400, 40)
+        assertTrue(Color.red(headerPixel) < 60)
+        assertTrue(Color.green(headerPixel) < 60)
+        assertTrue(Color.blue(headerPixel) < 80)
+
+        val bodyPixel = decoded.getPixel(400, 500)
+        assertTrue(Color.red(bodyPixel) > 220)
+        assertTrue(Color.green(bodyPixel) > 220)
+        assertTrue(Color.blue(bodyPixel) > 220)
+
+        decoded.recycle()
+        sourceFile.delete()
+    }
 }

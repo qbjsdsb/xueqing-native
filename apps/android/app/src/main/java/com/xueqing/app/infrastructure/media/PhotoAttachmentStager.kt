@@ -21,13 +21,15 @@ class PhotoAttachmentStager(
         assignmentId: String,
         attachmentId: UUID,
         uri: Uri,
+        headerRedactionRatio: Float = 0f,
     ): AttachmentStagingEntity {
         val derivative = withContext(Dispatchers.IO) {
             derivativeFactory.create(
-                ImageDerivativeFactory.ContentResolverSource(
+                source = ImageDerivativeFactory.ContentResolverSource(
                     contentResolver = contentResolver,
                     uri = uri,
                 ),
+                headerRedactionRatio = headerRedactionRatio,
             )
         }
 

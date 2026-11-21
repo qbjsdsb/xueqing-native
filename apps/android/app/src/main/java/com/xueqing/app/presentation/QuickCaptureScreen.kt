@@ -5,6 +5,7 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -22,15 +23,19 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import com.xueqing.app.application.paper.PaperKind
 
 @Composable
 internal fun QuickCaptureScreen(
@@ -42,6 +47,11 @@ internal fun QuickCaptureScreen(
     onRemovePhoto: () -> Unit,
     onDiscard: () -> Unit,
     onSubmit: () -> Unit,
+    onHeaderRedactionToggled: (Boolean) -> Unit = {},
+    onPaperCaptureModeToggled: (Boolean) -> Unit = {},
+    onPaperKindSelected: (PaperKind) -> Unit = {},
+    onPaperDateChanged: (String) -> Unit = {},
+    onPaperTitleChanged: (String) -> Unit = {},
 ) {
     BackHandler(onBack = onClose)
 
@@ -142,6 +152,7 @@ internal fun QuickCaptureScreen(
                     .fillMaxWidth()
                     .padding(top = 16.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
                 OutlinedButton(
                     onClick = {
@@ -152,10 +163,16 @@ internal fun QuickCaptureScreen(
                     enabled = draftLoaded &&
                         draftWritable &&
                         !attachmentBusy &&
-                        state.attachmentCount == 0,
+                        state.attachmentCount < state.maxAttachmentCount,
                     modifier = Modifier.testTag("quick-capture-add-photo"),
                 ) {
-                    Text("添加照片")
+                    Text(
+                        if (state.attachmentCount == 0) {
+                            "添加照片"
+                        } else {
+                            "继续加页 (${state.attachmentCount}/${state.maxAttachmentCount})"
+                        },
+                    )
                 }
 
                 if (state.attachmentCount > 0) {
@@ -166,6 +183,126 @@ internal fun QuickCaptureScreen(
                     ) {
                         Text("移除照片")
                     }
+                }
+            }
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 12.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
+                    Text(
+                        text = "自动遮挡卷头姓名区",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    Text(
+                        text = "选图时抹黑顶部姓名/学校区并清除 EXIF 定位",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Switch(
+                    checked = state.headerRedactionEnabled,
+                    onCheckedChange = onHeaderRedactionToggled,
+                    enabled = !attachmentBusy,
+                    modifier = Modifier
+                        .semantics { contentDescription = "自动遮挡卷头姓名区" }
+                        .testTag("quick-capture-header-redaction-toggle"),
+                )
+            }
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
+                    Text(
+                        text = "按试卷/作业归档",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    Text(
+                        text = "记录日期与类型，便于后续纵向趋势分析",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Switch(
+                    checked = state.paperCaptureMode,
+                    onCheckedChange = onPaperCaptureModeToggled,
+                    enabled = draftLoaded && !attachmentBusy,
+                    modifier = Modifier
+                        .semantics { contentDescription = "按试卷或作业归档" }
+                        .testTag("quick-capture-paper-mode-toggle"),
+                )
+            }
+
+            if (state.paperCaptureMode) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    Text(
+                        text = "试卷类型",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        PaperKind.entries.forEach { kind ->
+                            val selected = state.paperKind == kind
+                            if (selected) {
+                                Button(
+                                    onClick = { onPaperKindSelected(kind) },
+                                    modifier = Modifier.testTag("quick-capture-paper-kind-${kind.wireValue}"),
+                                ) {
+                                    Text(kind.displayLabel)
+                                }
+                            } else {
+                                OutlinedButton(
+                                    onClick = { onPaperKindSelected(kind) },
+                                    modifier = Modifier.testTag("quick-capture-paper-kind-${kind.wireValue}"),
+                                ) {
+                                    Text(kind.displayLabel)
+                                }
+                            }
+                        }
+                    }
+
+                    OutlinedTextField(
+                        value = state.paperDate,
+                        onValueChange = onPaperDateChanged,
+                        enabled = draftLoaded,
+                        singleLine = true,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("quick-capture-paper-date"),
+                        label = { Text("试卷日期 (YYYY-MM-DD)") },
+                        placeholder = { Text("默认今天") },
+                    )
+
+                    OutlinedTextField(
+                        value = state.paperTitle,
+                        onValueChange = onPaperTitleChanged,
+                        enabled = draftLoaded,
+                        singleLine = true,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("quick-capture-paper-title"),
+                        label = { Text("匿名标题（可选）") },
+                        placeholder = { Text("例如：第3单元小数除法周测") },
+                    )
                 }
             }
 
@@ -249,7 +386,14 @@ private fun submissionMessage(state: QuickCaptureUiState): String? = when (state
 private fun attachmentMessage(state: QuickCaptureUiState): String? = when (state.attachmentStatus) {
     AttachmentDraftStatus.None -> null
     AttachmentDraftStatus.Protecting -> "正在保护照片…"
-    AttachmentDraftStatus.SafeOnDevice -> "照片已安全保存在本机"
+    AttachmentDraftStatus.SafeOnDevice -> when {
+        state.attachmentCount <= 1 && state.redactedAttachmentCount == 0 ->
+            "照片已安全保存在本机"
+        state.redactedAttachmentCount > 0 ->
+            "已安全保存 ${state.attachmentCount} 页照片（${state.redactedAttachmentCount} 页已遮挡卷头姓名区）"
+        else ->
+            "已安全保存 ${state.attachmentCount} 页照片（已去除 EXIF）"
+    }
     AttachmentDraftStatus.Failed -> when (state.attachmentErrorCode) {
         "too_large" -> "照片处理失败 · 文件过大，请换一张"
         "local_key_unavailable" -> "照片保护不可用 · 文字草稿不受影响"

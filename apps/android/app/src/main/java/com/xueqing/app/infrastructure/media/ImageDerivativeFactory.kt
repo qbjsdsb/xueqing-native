@@ -6,8 +6,11 @@ import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Matrix
+import android.graphics.Paint
+import android.graphics.Rect
 import android.media.ExifInterface
 import android.net.Uri
+import com.xueqing.app.application.paper.HeaderRedactionPolicy
 import com.xueqing.app.durability.ProtectedAttachmentFileStore
 import java.io.ByteArrayOutputStream
 import java.io.IOException
@@ -45,7 +48,17 @@ class ImageDerivativeFactory(
         require(maxEncodedBytes > 0)
     }
 
-    fun create(source: ReopenableSource): Derivative {
+    fun create(
+        source: ReopenableSource,
+        headerRedactionRatio: Float = 0f,
+    ): Derivative {
+        require(
+            headerRedactionRatio == 0f ||
+                headerRedactionRatio in HeaderRedactionPolicy.MIN_TOP_BAND_RATIO..HeaderRedactionPolicy.MAX_TOP_BAND_RATIO,
+        ) {
+            "Header redaction ratio must be 0 or within ${HeaderRedactionPolicy.MIN_TOP_BAND_RATIO}..${HeaderRedactionPolicy.MAX_TOP_BAND_RATIO}"
+        }
+
         val orientation = readOrientation(source)
         val bounds = readBounds(source)
         require(bounds.first > 0 && bounds.second > 0) { "Selected image has invalid dimensions" }
@@ -73,6 +86,14 @@ class ImageDerivativeFactory(
             if (resized !== current) {
                 current.recycle()
                 current = resized
+            }
+
+            if (headerRedactionRatio > 0f) {
+                val redacted = applyHeaderRedaction(current, headerRedactionRatio)
+                if (redacted !== current) {
+                    current.recycle()
+                    current = redacted
+                }
             }
 
             return encode(current)
@@ -157,6 +178,29 @@ class ImageDerivativeFactory(
         return Bitmap.createScaledBitmap(source, width, height, true)
     }
 
+    private fun applyHeaderRedaction(
+        source: Bitmap,
+        headerRedactionRatio: Float,
+    ): Bitmap {
+        val target = if (source.isMutable && source.config == Bitmap.Config.ARGB_8888) {
+            source
+        } else {
+            source.copy(Bitmap.Config.ARGB_8888, true)
+                ?: throw IOException("Unable to allocate mutable bitmap for header redaction")
+        }
+
+        val bandHeight = (target.height * headerRedactionRatio).roundToInt()
+            .coerceIn(1, target.height)
+        val canvas = Canvas(target)
+        val paint = Paint().apply {
+            color = HEADER_REDACTION_MASK_COLOR
+            style = Paint.Style.FILL
+            isAntiAlias = false
+        }
+        canvas.drawRect(Rect(0, 0, target.width, bandHeight), paint)
+        return target
+    }
+
     private fun encode(bitmap: Bitmap): Derivative {
         if (bitmap.hasAlpha()) {
             val png = compress(bitmap, Bitmap.CompressFormat.PNG, 100)
@@ -216,6 +260,8 @@ class ImageDerivativeFactory(
 
     companion object {
         const val DEFAULT_MAX_LONG_EDGE_PIXELS = 2560
+        const val DEFAULT_HEADER_REDACTION_RATIO = HeaderRedactionPolicy.DEFAULT_TOP_BAND_RATIO
+        val HEADER_REDACTION_MASK_COLOR: Int = Color.rgb(24, 32, 44)
         private const val MIN_LONG_EDGE_PIXELS = 640
         private val JPEG_QUALITY_STEPS = intArrayOf(92, 88, 84, 80, 76)
     }
