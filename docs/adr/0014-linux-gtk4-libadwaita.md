@@ -1,6 +1,6 @@
 # ADR-0014 — Linux desktop client uses .NET 10, GTK4 and libadwaita (GirCore)
 
-**Status: Proposed (Spike-Verified)**
+**Status: Accepted (Formal Linux Client & Platform Contracts Implemented)**
 
 ## Decision
 

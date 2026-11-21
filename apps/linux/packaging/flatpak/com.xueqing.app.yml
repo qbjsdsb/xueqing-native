@@ -1,0 +1,34 @@
+id: com.xueqing.app
+runtime: org.gnome.Platform
+runtime-version: '48'
+sdk: org.gnome.Sdk
+command: xueqing-linux
+finish-args:
+  - --share=ipc
+  - --share=network
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --device=dri
+  - --talk-name=org.freedesktop.secrets
+modules:
+  - name: xueqing-linux
+    buildsystem: simple
+    build-commands:
+      - install -d /app/lib/xueqing /app/bin /app/share/applications /app/share/metainfo
+      - cp -a publish/* /app/lib/xueqing/
+      - |
+        cat <<'EOF' > /app/bin/xueqing-linux
+        #!/usr/bin/env bash
+        exec /app/lib/xueqing/Xueqing.Linux "$@"
+        EOF
+      - chmod 755 /app/bin/xueqing-linux
+      - install -Dm644 com.xueqing.app.desktop /app/share/applications/com.xueqing.app.desktop
+      - install -Dm644 com.xueqing.app.metainfo.xml /app/share/metainfo/com.xueqing.app.metainfo.xml
+    sources:
+      - type: dir
+        path: ../../../../apps/linux/src/Xueqing.Linux/bin/Release/net10.0/linux-x64/publish
+        dest: publish
+      - type: file
+        path: ../com.xueqing.app.desktop
+      - type: file
+        path: ../com.xueqing.app.metainfo.xml

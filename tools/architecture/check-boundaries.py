@@ -39,6 +39,19 @@ RULES = (
         ),
     ),
     Rule(
+        name="linux-infrastructure-purity",
+        root=Path("apps/linux/src/Xueqing.Linux.Infrastructure"),
+        suffixes=(".cs", ".csproj"),
+        forbidden=(
+            "GirCore",
+            "Gtk.",
+            "Adw.",
+            "Gdk.",
+            "Microsoft.UI.Xaml",
+            "Windows.Storage",
+        ),
+    ),
+    Rule(
         name="android-application-does-not-depend-on-presentation",
         root=Path("apps/android/app/src/main/java/com/xueqing/app/application"),
         suffixes=(".kt",),
