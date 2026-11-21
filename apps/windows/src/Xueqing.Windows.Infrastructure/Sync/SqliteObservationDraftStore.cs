@@ -23,6 +23,16 @@ public sealed class SqliteObservationDraftStore
             DefaultBusyTimeoutSeconds);
     }
 
+    public SqliteObservationDraftStore(
+        string databasePath,
+        ILocalDatabaseKeyStore keyStore)
+    {
+        _connectionFactory = new EncryptedSqliteConnectionFactory(
+            PrepareDatabasePath(databasePath),
+            keyStore,
+            DefaultBusyTimeoutSeconds);
+    }
+
     internal SqliteObservationDraftStore(
         string databasePath,
         ReadOnlySpan<byte> testMasterKey)

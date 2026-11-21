@@ -4,16 +4,8 @@ using System.Text;
 
 namespace Xueqing.Windows.Infrastructure.LocalData;
 
-internal sealed class LocalDatabaseKeyUnavailableException : InvalidOperationException
-{
-    public LocalDatabaseKeyUnavailableException(string message)
-        : base(message)
-    {
-    }
-}
-
 [SupportedOSPlatform("windows")]
-internal sealed class WindowsDpapiDatabaseKeyStore
+public sealed class WindowsDpapiDatabaseKeyStore : ILocalDatabaseKeyStore
 {
     private const int MasterKeyLengthBytes = 32;
     private const int ExistingKeyReadAttempts = 8;

@@ -26,6 +26,17 @@ public sealed class SqliteActionProgressionRecoveryStore
             DefaultBusyTimeoutSeconds);
     }
 
+    public SqliteActionProgressionRecoveryStore(
+        string databasePath,
+        ILocalDatabaseKeyStore keyStore)
+    {
+        var fullPath = PrepareDatabasePath(databasePath);
+        _connectionFactory = new EncryptedSqliteConnectionFactory(
+            fullPath,
+            keyStore,
+            DefaultBusyTimeoutSeconds);
+    }
+
     internal SqliteActionProgressionRecoveryStore(
         string databasePath,
         ReadOnlySpan<byte> testMasterKey)

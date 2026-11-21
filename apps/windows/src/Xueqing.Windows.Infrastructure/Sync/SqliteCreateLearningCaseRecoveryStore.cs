@@ -25,6 +25,17 @@ public sealed class SqliteCreateLearningCaseRecoveryStore
             DefaultBusyTimeoutSeconds);
     }
 
+    public SqliteCreateLearningCaseRecoveryStore(
+        string databasePath,
+        ILocalDatabaseKeyStore keyStore)
+    {
+        var fullPath = PrepareDatabasePath(databasePath);
+        _connectionFactory = new EncryptedSqliteConnectionFactory(
+            fullPath,
+            keyStore,
+            DefaultBusyTimeoutSeconds);
+    }
+
     internal SqliteCreateLearningCaseRecoveryStore(
         string databasePath,
         ReadOnlySpan<byte> testMasterKey)

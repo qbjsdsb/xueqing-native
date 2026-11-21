@@ -32,7 +32,7 @@ public static partial class DiagnosticsArchiveWriter
             generated_at = snapshot.GeneratedAt,
             platform = new
             {
-                kind = "windows",
+                kind = snapshot.PlatformKind,
                 os_version = snapshot.OsVersion,
                 architecture = snapshot.Architecture,
                 package_identity = snapshot.PackageIdentity,
@@ -80,6 +80,11 @@ public static partial class DiagnosticsArchiveWriter
 
     private static void Validate(DiagnosticsSnapshot value)
     {
+        if (value.PlatformKind is not ("android" or "windows" or "linux"))
+        {
+            throw new ArgumentException("Diagnostic platform kind is invalid.", nameof(value));
+        }
+
         Require(value.OsVersion, 128, nameof(value.OsVersion));
         Require(value.Architecture, 32, nameof(value.Architecture));
         Require(value.PackageIdentity, 160, nameof(value.PackageIdentity));

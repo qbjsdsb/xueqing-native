@@ -23,6 +23,17 @@ public sealed class SqliteDurableOutboxStore : IOutboxStore
         _connectionFactory = new EncryptedSqliteConnectionFactory(fullPath, DefaultBusyTimeoutSeconds);
     }
 
+    public SqliteDurableOutboxStore(
+        string databasePath,
+        ILocalDatabaseKeyStore keyStore)
+    {
+        var fullPath = PrepareDatabasePath(databasePath);
+        _connectionFactory = new EncryptedSqliteConnectionFactory(
+            fullPath,
+            keyStore,
+            DefaultBusyTimeoutSeconds);
+    }
+
     internal SqliteDurableOutboxStore(string databasePath, ReadOnlySpan<byte> testMasterKey)
     {
         var fullPath = PrepareDatabasePath(databasePath);
