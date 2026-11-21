@@ -1,0 +1,129 @@
+name: linux-mcp-spike
+
+on:
+  pull_request:
+    paths:
+      - 'apps/linux/**'
+      - 'apps/mcp/**'
+      - 'apps/windows/src/Xueqing.Windows.Core/**'
+      - 'apps/windows/src/Xueqing.Windows.Infrastructure/**'
+      - 'apps/windows/src/Xueqing.Windows.Presentation/**'
+      - 'apps/windows/tests/Xueqing.Windows.Core.Tests/**'
+      - 'contracts/agent/**'
+      - 'docs/adr/0014-linux-gtk4-libadwaita.md'
+      - 'docs/adr/0015-local-mcp-surface.md'
+      - '.github/workflows/linux-mcp-spike.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: linux-mcp-spike-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  linux-and-mcp-verify:
+    name: linux-infrastructure-spike-and-mcp
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+      - uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1
+        with:
+          dotnet-version: '10.0.401'
+
+      - name: Verify Windows Infrastructure locked restore remains intact
+        shell: bash
+        run: |
+          set -euo pipefail
+          dotnet restore apps/windows/src/Xueqing.Windows.Infrastructure/Xueqing.Windows.Infrastructure.csproj --locked-mode
+
+      - name: Build and run platform-neutral desktop tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          dotnet build apps/windows/tests/Xueqing.Windows.Core.Tests/Xueqing.Windows.Core.Tests.csproj -c Release --nologo
+          apps/windows/tests/Xueqing.Windows.Core.Tests/bin/Release/net10.0/Xueqing.Windows.Core.Tests \
+            --minimum-expected-tests 220 \
+            --no-banner \
+            --progress off
+
+      - name: Build Linux infrastructure, GTK4/libadwaita spike, and Xueqing.Mcp
+        shell: bash
+        run: |
+          set -euo pipefail
+          dotnet build apps/linux/src/Xueqing.Linux.Infrastructure/Xueqing.Linux.Infrastructure.csproj -c Release --nologo
+          dotnet build apps/linux/spikes/Xueqing.Linux.NativeSpike/Xueqing.Linux.NativeSpike.csproj -c Release --nologo
+          dotnet build apps/mcp/Xueqing.Mcp/Xueqing.Mcp.csproj -c Release --nologo
+
+      - name: Verify Xueqing.Mcp stdio protocol & fail-closed headless keyring boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, os, shutil, subprocess, tempfile
+
+          bin_path = "apps/mcp/Xueqing.Mcp/bin/Release/net10.0/Xueqing.Mcp"
+          temp_root = tempfile.mkdtemp(prefix="xueqing-mcp-ci-")
+          env = os.environ.copy()
+          env.pop("DBUS_SESSION_BUS_ADDRESS", None)
+
+          try:
+              p = subprocess.Popen(
+                  [bin_path, "--prototype", "--data-root", temp_root],
+                  stdin=subprocess.PIPE,
+                  stdout=subprocess.PIPE,
+                  stderr=subprocess.PIPE,
+                  text=True,
+                  env=env,
+              )
+
+              def rpc(req):
+                  p.stdin.write(json.dumps(req) + "\n")
+                  p.stdin.flush()
+                  if "id" in req:
+                      line = p.stdout.readline()
+                      assert line, f"EOF waiting for {req['method']}; stderr={p.stderr.read()}"
+                      return json.loads(line)
+                  return None
+
+              init = rpc({
+                  "jsonrpc": "2.0", "id": 1, "method": "initialize",
+                  "params": {"protocolVersion": "2025-03-26", "capabilities": {}, "clientInfo": {"name": "ci", "version": "1.0"}}
+              })
+              assert init["result"]["serverInfo"]["name"] == "xueqing-mcp"
+              rpc({"jsonrpc": "2.0", "method": "notifications/initialized"})
+
+              tools = rpc({"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}})["result"]["tools"]
+              assert len(tools) == 8, [t["name"] for t in tools]
+
+              def call_raw(req_id, name, args):
+                  return rpc({"jsonrpc": "2.0", "id": req_id, "method": "tools/call", "params": {"name": name, "arguments": args}})
+
+              status = json.loads(call_raw(3, "xueqing_status", {})["result"]["content"][0]["text"])
+              assert status["mode"] == "prototype" and status["totalStudents"] == 1000
+
+              students = json.loads(call_raw(4, "xueqing_list_students", {"page": 1, "pageSize": 3})["result"]["content"][0]["text"])
+              assert len(students["students"]) == 3
+              first_id = students["students"][0]["studentId"]
+
+              today = json.loads(call_raw(5, "xueqing_get_today_actions", {"limit": 5})["result"]["content"][0]["text"])
+              assert today["count"] > 0
+
+              link_ok = json.loads(call_raw(6, "xueqing_build_deep_link", {"target": "student", "entityId": first_id})["result"]["content"][0]["text"])
+              assert link_ok["valid"] is True and link_ok["uri"] == f"xueqing://student/{first_id}"
+
+              link_bad = json.loads(call_raw(7, "xueqing_build_deep_link", {"target": "student", "entityId": "bad?x=1"})["result"]["content"][0]["text"])
+              assert link_bad["valid"] is False
+
+              # Without DBUS_SESSION_BUS_ADDRESS, opening encrypted draft must fail closed
+              draft_resp = call_raw(8, "xueqing_get_observation_draft", {"studentId": first_id})
+              assert draft_resp["result"].get("isError", False) is True, draft_resp
+
+              p.stdin.close()
+              p.wait(timeout=5)
+              print("CI Xueqing.Mcp protocol + fail-closed checks PASSED.")
+          finally:
+              shutil.rmtree(temp_root, ignore_errors=True)
+          PY

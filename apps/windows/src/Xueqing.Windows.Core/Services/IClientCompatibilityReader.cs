@@ -21,7 +21,7 @@ public sealed record ClientCompatibilityRequest(
 {
     public ClientCompatibilityRequest Validate()
     {
-        if (Platform is not ("android" or "windows"))
+        if (Platform is not ("android" or "windows" or "linux"))
         {
             throw new ArgumentException("Unsupported client platform.", nameof(Platform));
         }

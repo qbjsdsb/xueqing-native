@@ -56,4 +56,5 @@ public sealed record DiagnosticsSnapshot(
     DiagnosticSyncCategory LastSyncCategory,
     DiagnosticCompatibility Compatibility,
     DiagnosticQueueCounts Queues,
-    IReadOnlyList<string> RecentErrorCodes);
+    IReadOnlyList<string> RecentErrorCodes,
+    string PlatformKind = "windows");

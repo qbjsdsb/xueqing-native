@@ -24,6 +24,16 @@ public sealed class SqliteCreateObservationRecoveryStore
             DefaultBusyTimeoutSeconds);
     }
 
+    public SqliteCreateObservationRecoveryStore(
+        string databasePath,
+        ILocalDatabaseKeyStore keyStore)
+    {
+        _connectionFactory = new EncryptedSqliteConnectionFactory(
+            PrepareDatabasePath(databasePath),
+            keyStore,
+            DefaultBusyTimeoutSeconds);
+    }
+
     internal SqliteCreateObservationRecoveryStore(
         string databasePath,
         ReadOnlySpan<byte> testMasterKey)

@@ -24,6 +24,16 @@ public sealed class SqliteOrganizationInvitationRecoveryStore
             DefaultBusyTimeoutSeconds);
     }
 
+    public SqliteOrganizationInvitationRecoveryStore(
+        string databasePath,
+        ILocalDatabaseKeyStore keyStore)
+    {
+        _connectionFactory = new EncryptedSqliteConnectionFactory(
+            PrepareDatabasePath(databasePath),
+            keyStore,
+            DefaultBusyTimeoutSeconds);
+    }
+
     internal SqliteOrganizationInvitationRecoveryStore(
         string databasePath,
         ReadOnlySpan<byte> testMasterKey)

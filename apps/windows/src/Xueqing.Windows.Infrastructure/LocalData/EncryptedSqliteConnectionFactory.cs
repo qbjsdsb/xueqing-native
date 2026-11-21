@@ -24,14 +24,24 @@ internal sealed class EncryptedSqliteConnectionFactory
     public EncryptedSqliteConnectionFactory(
         string databasePath,
         int defaultTimeoutSeconds = DefaultCommandTimeoutSeconds)
+        : this(
+            databasePath,
+            new WindowsDpapiDatabaseKeyStore(databasePath),
+            defaultTimeoutSeconds)
+    {
+    }
+
+    public EncryptedSqliteConnectionFactory(
+        string databasePath,
+        ILocalDatabaseKeyStore keyStore,
+        int defaultTimeoutSeconds = DefaultCommandTimeoutSeconds)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(databasePath);
+        ArgumentNullException.ThrowIfNull(keyStore);
         ValidateDefaultTimeout(defaultTimeoutSeconds);
 
         _databasePath = Path.GetFullPath(databasePath);
         _defaultTimeoutSeconds = defaultTimeoutSeconds;
-
-        var keyStore = new WindowsDpapiDatabaseKeyStore(_databasePath);
         _loadKeyAsync = keyStore.LoadOrCreateAsync;
     }
 
