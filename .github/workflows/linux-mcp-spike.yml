@@ -45,7 +45,7 @@ jobs:
           set -euo pipefail
           dotnet build apps/windows/tests/Xueqing.Windows.Core.Tests/Xueqing.Windows.Core.Tests.csproj -c Release --nologo
           apps/windows/tests/Xueqing.Windows.Core.Tests/bin/Release/net10.0/Xueqing.Windows.Core.Tests \
-            --minimum-expected-tests 240 \
+            --minimum-expected-tests 243 \
             --no-banner \
             --progress off
 
@@ -118,7 +118,7 @@ jobs:
               rpc({"jsonrpc": "2.0", "method": "notifications/initialized"})
 
               tools = rpc({"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}})["result"]["tools"]
-              assert len(tools) == 8, [t["name"] for t in tools]
+              assert len(tools) == 12, [t["name"] for t in tools]
 
               def call_raw(req_id, name, args):
                   return rpc({"jsonrpc": "2.0", "id": req_id, "method": "tools/call", "params": {"name": name, "arguments": args}})
@@ -139,13 +139,26 @@ jobs:
               link_bad = json.loads(call_raw(7, "xueqing_build_deep_link", {"target": "student", "entityId": "bad?x=1"})["result"]["content"][0]["text"])
               assert link_bad["valid"] is False
 
-              # Without DBUS_SESSION_BUS_ADDRESS, opening encrypted draft must fail closed
-              draft_resp = call_raw(8, "xueqing_get_observation_draft", {"studentId": first_id})
+              papers = json.loads(call_raw(8, "xueqing_list_student_papers", {"studentId": first_id})["result"]["content"][0]["text"])
+              assert papers["found"] is True and papers["count"] == 4
+              first_paper_id = papers["papers"][0]["paperSubmissionId"]
+
+              paper_detail = json.loads(call_raw(9, "xueqing_get_paper_detail", {"studentId": first_id, "paperSubmissionId": first_paper_id})["result"]["content"][0]["text"])
+              assert paper_detail["found"] is True and len(paper_detail["paper"]["mistakes"]) > 0
+
+              metrics = json.loads(call_raw(10, "xueqing_get_student_longitudinal_metrics", {"studentId": first_id})["result"]["content"][0]["text"])
+              assert metrics["found"] is True and metrics["summary"]["totalPapers"] == 4 and len(metrics["recurringTopics"]) > 0
+
+              # Without DBUS_SESSION_BUS_ADDRESS, opening encrypted draft or saving study plan draft must fail closed
+              draft_resp = call_raw(11, "xueqing_get_observation_draft", {"studentId": first_id})
               assert draft_resp["result"].get("isError", False) is True, draft_resp
+
+              plan_resp = call_raw(12, "xueqing_save_study_plan_draft", {"studentId": first_id, "title": "CI Test", "briefMarkdown": "Summary"})
+              assert plan_resp["result"].get("isError", False) is True, plan_resp
 
               p.stdin.close()
               p.wait(timeout=5)
-              print("CI Xueqing.Mcp protocol + fail-closed checks PASSED.")
+              print("CI Xueqing.Mcp 12-tool protocol + longitudinal + fail-closed checks PASSED.")
           finally:
               shutil.rmtree(temp_root, ignore_errors=True)
           PY

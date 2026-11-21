@@ -91,6 +91,14 @@ public static class LinuxLocalStatePaths
         return Path.Combine(dir, "observation-draft.db");
     }
 
+    public static string GetPrototypeStudyPlanDraftDatabasePath(string? appDataRoot = null)
+    {
+        var root = ResolveRoot(appDataRoot);
+        var dir = Path.Combine(root, "mcp-prototype");
+        EnsureOwnerDirectory(dir);
+        return Path.Combine(dir, "study-plan-draft.db");
+    }
+
     public static string GetDurableIntentDatabasePath(
         string environmentId,
         string appUserId,
