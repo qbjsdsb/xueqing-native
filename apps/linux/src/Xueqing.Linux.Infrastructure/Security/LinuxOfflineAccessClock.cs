@@ -1,4 +1,5 @@
 using System.Runtime.Versioning;
+using Xueqing.Windows.Core.Security;
 
 namespace Xueqing.Linux.Infrastructure.Security;
 
@@ -46,5 +47,29 @@ public static class LinuxOfflineAccessClock
             parsed.ToString("D"),
             monotonicMs,
             DateTimeOffset.UtcNow);
+    }
+
+    /// <summary>
+    /// Produces a platform-neutral OfflineClockObservation for OfflineAccessLeaseEvaluator.
+    /// If Linux boot_id cannot be read or is malformed, emits a blank BootSessionId so the
+    /// evaluator deterministically fails closed (MalformedLease), matching Android behavior.
+    /// </summary>
+    public static OfflineClockObservation Observe(string? bootIdPath = null)
+    {
+        try
+        {
+            var sample = Sample(bootIdPath);
+            return new OfflineClockObservation(
+                sample.WallClockUtc.ToUnixTimeMilliseconds(),
+                sample.MonotonicElapsedMilliseconds,
+                sample.BootSessionId);
+        }
+        catch
+        {
+            return new OfflineClockObservation(
+                DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+                Math.Max(0L, Environment.TickCount64),
+                string.Empty);
+        }
     }
 }

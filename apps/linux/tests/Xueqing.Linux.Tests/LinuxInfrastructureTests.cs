@@ -11,6 +11,7 @@ using Xueqing.Linux.Infrastructure.LocalData;
 using Xueqing.Linux.Infrastructure.Security;
 using Xueqing.Windows.Core.Agent;
 using Xueqing.Windows.Core.Models;
+using Xueqing.Windows.Core.Security;
 using Xueqing.Windows.Core.Services;
 using Xueqing.Windows.Infrastructure.Auth;
 using Xueqing.Windows.Infrastructure.LocalData;
@@ -310,6 +311,122 @@ public sealed class LinuxInfrastructureTests
             Assert.AreEqual("com.xueqing.app", root.GetProperty("platform").GetProperty("package_identity").GetString());
             Assert.AreEqual("1.0.0-rc.1", root.GetProperty("app").GetProperty("version").GetString());
             Assert.AreEqual("signed_out", root.GetProperty("runtime").GetProperty("session_state").GetString());
+        }
+        finally
+        {
+            CleanupDir(tempDir);
+        }
+    }
+
+    [TestMethod]
+    public void OfflineAccessClockObserve_IntegratesWithDesktopOfflineAccessLeaseEvaluator()
+    {
+        var tempDir = CreateTempDir();
+        try
+        {
+            var observation = LinuxOfflineAccessClock.Observe();
+            Assert.IsFalse(string.IsNullOrWhiteSpace(observation.BootSessionId));
+
+            var scope = new OfflineAccessScope(
+                "staging",
+                Guid.NewGuid().ToString("D"),
+                Guid.NewGuid().ToString("D"),
+                Guid.NewGuid().ToString("D"));
+
+            var lease = new OfflineAccessLease(
+                scope,
+                IssuedAtServerEpochMillis: observation.WallClockEpochMillis,
+                ExpiresAtServerEpochMillis: observation.WallClockEpochMillis + 60L * 60L * 1000L,
+                WallClockAtValidationEpochMillis: observation.WallClockEpochMillis,
+                MonotonicAtValidationMillis: observation.MonotonicMillis,
+                BootSessionId: observation.BootSessionId);
+
+            // Same boot session allows cached projection read
+            var allowed = OfflineAccessLeaseEvaluator.Evaluate(lease, scope, LinuxOfflineAccessClock.Observe());
+            Assert.IsInstanceOfType<OfflineAccessLeaseDecision.Allowed>(allowed);
+
+            // Different boot_id fails closed
+            var rebootedBootIdFile = Path.Combine(tempDir, "other-boot-id");
+            File.WriteAllText(rebootedBootIdFile, Guid.NewGuid().ToString("D") + "\n");
+            var rebootDecision = OfflineAccessLeaseEvaluator.Evaluate(
+                lease,
+                scope,
+                LinuxOfflineAccessClock.Observe(rebootedBootIdFile));
+            Assert.AreEqual(
+                new OfflineAccessLeaseDecision.Denied(OfflineAccessLeaseDenial.BootSessionChanged),
+                rebootDecision);
+
+            // Missing boot_id emits blank BootSessionId -> fails closed as MalformedLease
+            var missingDecision = OfflineAccessLeaseEvaluator.Evaluate(
+                lease,
+                scope,
+                LinuxOfflineAccessClock.Observe(Path.Combine(tempDir, "missing-boot-id")));
+            Assert.AreEqual(
+                new OfflineAccessLeaseDecision.Denied(OfflineAccessLeaseDenial.MalformedLease),
+                missingDecision);
+        }
+        finally
+        {
+            CleanupDir(tempDir);
+        }
+    }
+
+    [TestMethod]
+    public async Task LocalDataPurger_RemovesOnlyTargetScopeDatabasesSidecarsAndKeys()
+    {
+        var tempDir = CreateTempDir();
+        try
+        {
+            var keys = new ConcurrentDictionary<string, byte[]>(StringComparer.Ordinal);
+            Func<string, ILocalDatabaseKeyStore> factory =
+                path => new InMemoryDatabaseKeyStore(Path.GetFullPath(path), keys);
+
+            var context = new LinuxLocalStoreContext("staging", tempDir, factory);
+            var draftStore = new LinuxObservationDraftStore(context);
+
+            var actorId = Guid.NewGuid();
+            var orgA = Guid.NewGuid();
+            var orgB = Guid.NewGuid();
+            var scopeA = new ObservationDraftScope(orgA, Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
+            var scopeB = new ObservationDraftScope(orgB, Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
+
+            var openA = await draftStore.OpenAsync(actorId, scopeA);
+            Assert.IsTrue(await draftStore.SaveAsync(actorId, scopeA, openA.Epoch, "ORG-A-DRAFT"));
+
+            var openB = await draftStore.OpenAsync(actorId, scopeB);
+            Assert.IsTrue(await draftStore.SaveAsync(actorId, scopeB, openB.Epoch, "ORG-B-DRAFT"));
+
+            var dbPathA = context.GetOrgDbPath(actorId, orgA, "observation-draft.db");
+            var dbPathB = context.GetOrgDbPath(actorId, orgB, "observation-draft.db");
+            File.WriteAllBytes(dbPathA + "-wal", [1, 2, 3]);
+            File.WriteAllBytes(dbPathA + "-shm", [4, 5, 6]);
+
+            var purgedKeyPaths = new List<string>();
+            var report = LinuxLocalDataPurger.PurgeOrganizationScope(
+                "staging",
+                actorId.ToString("D"),
+                orgA.ToString("D"),
+                context.InstallationId,
+                tempDir,
+                path =>
+                {
+                    purgedKeyPaths.Add(path);
+                    return keys.TryRemove(path, out _);
+                });
+
+            Assert.AreEqual(1, report.DatabasesPurged);
+            Assert.IsTrue(report.FilesRemoved >= 3);
+            Assert.AreEqual(1, report.KeySlotsPurged);
+            Assert.IsFalse(File.Exists(dbPathA));
+            Assert.IsFalse(File.Exists(dbPathA + "-wal"));
+            Assert.IsFalse(File.Exists(dbPathA + "-shm"));
+            CollectionAssert.Contains(purgedKeyPaths, Path.GetFullPath(dbPathA));
+
+            // Org B must remain completely untouched and readable!
+            Assert.IsTrue(File.Exists(dbPathB));
+            var reopenB = await draftStore.OpenAsync(actorId, scopeB);
+            Assert.IsNotNull(reopenB.Recovered);
+            Assert.AreEqual("ORG-B-DRAFT", reopenB.Recovered.Text);
         }
         finally
         {
