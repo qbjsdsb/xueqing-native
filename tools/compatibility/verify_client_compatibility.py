@@ -22,7 +22,7 @@ DECISION_KEYS = {
     "update_uri",
 }
 STATES = {"supported", "update_recommended", "update_required", "security_blocked"}
-PLATFORMS = {"android", "windows"}
+PLATFORMS = {"android", "windows", "linux"}
 REVISION = re.compile(r"^[a-z0-9][a-z0-9._-]{1,63}$")
 REASON = re.compile(r"^XQ_[A-Z0-9_]{3,64}$")
 

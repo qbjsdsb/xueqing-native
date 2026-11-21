@@ -55,6 +55,16 @@ class ClientCompatibilityVerifierTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             verify(value)
 
+    def test_allows_linux_platform_and_rejects_unknown_platform(self):
+        linux_value = copy.deepcopy(self.value)
+        linux_value["client"]["platform"] = "linux"
+        verify(linux_value)
+
+        unknown_value = copy.deepcopy(self.value)
+        unknown_value["client"]["platform"] = "unknown-os"
+        with self.assertRaises(ValueError):
+            verify(unknown_value)
+
 
 if __name__ == "__main__":
     unittest.main()

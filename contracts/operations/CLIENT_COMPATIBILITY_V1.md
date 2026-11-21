@@ -24,7 +24,7 @@ A transport/configuration failure produces a **local `unknown` state**, not a fa
 
 The compatibility endpoint accepts only:
 
-- platform: `android` or `windows`;
+- platform: `android`, `windows`, or `linux`;
 - exact application version carried by the installed client;
 - positive integer client contract version.
 
