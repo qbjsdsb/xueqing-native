@@ -9,6 +9,8 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -43,6 +45,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.xueqing.app.application.paper.PaperKind
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun QuickCaptureScreen(
     state: QuickCaptureUiState,
@@ -181,14 +184,13 @@ internal fun QuickCaptureScreen(
 
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 
-                // Compact single-row Notes-style toolbar: Add photo · Redact header · Archive as paper
-                Row(
+                // Compact Notes-style wrapping toolbar (zero horizontal clipping on 360dp phones)
+                FlowRow(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState())
-                        .padding(vertical = 10.dp),
+                        .padding(vertical = 8.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
                     OutlinedButton(
                         onClick = {
