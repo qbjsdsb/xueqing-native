@@ -101,7 +101,7 @@ class PaperEvidenceContractTest {
         assertEquals(false, parsed.pages[1].headerRedacted)
 
         assertEquals(
-            "试卷归档：2026-11-22 单元测（共 2 页）",
+            "2026-11-22 单元测 · 2 页",
             PaperCaptureMetadata.buildDefaultObservationText(
                 LocalDate.of(2026, 11, 22),
                 PaperKind.UnitTest,
