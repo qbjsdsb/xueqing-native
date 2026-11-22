@@ -314,9 +314,9 @@ internal fun QuickCaptureScreen(
                             LocalDraftStatus.Loading -> "正在读取草稿…"
                             LocalDraftStatus.Saving -> "保存中…"
                             LocalDraftStatus.SafeOnDevice -> if (state.recoveredFromDisk) {
-                                "已恢复上次草稿"
+                                "已恢复本机草稿"
                             } else {
-                                "已保存在本机"
+                                "草稿已保存在本机"
                             }
                             LocalDraftStatus.PersistenceFailed -> "本机保存失败，当前文字仍保留"
                         },
