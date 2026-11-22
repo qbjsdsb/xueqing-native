@@ -9,10 +9,16 @@ namespace Xueqing.Windows.Infrastructure.Remote;
 public sealed class PostgrestPaperEvidenceClient :
     IStudentPaperLongitudinalReader,
     IStudyPlanDraftWriter,
-    IPaperAttachmentDownloader
+    IPaperAttachmentDownloader,
+    IPaperExtractionTrigger,
+    IPaperExtractionConfirmer,
+    IStudyPlanDraftStatusUpdater
 {
     private const string LongitudinalRpcPath = "rest/v1/rpc/get_student_paper_longitudinal_v1";
     private const string SaveStudyPlanDraftRpcPath = "rest/v1/rpc/save_study_plan_draft_v1";
+    private const string SavePaperExtractionRpcPath = "rest/v1/rpc/save_paper_extraction_v1";
+    private const string UpdateStudyPlanStatusRpcPath = "rest/v1/rpc/update_study_plan_draft_status_v1";
+    private const string ExtractPaperFunctionPath = "functions/v1/extract-paper-v1";
     private const string ExpectedBucketId = "teaching-attachments-v1";
     private const int MaxAttachmentBytes = 6 * 1024 * 1024;
 
@@ -27,22 +33,31 @@ public sealed class PostgrestPaperEvidenceClient :
     private readonly Uri _projectUri;
     private readonly Uri _longitudinalRpcUri;
     private readonly Uri _saveStudyPlanDraftRpcUri;
+    private readonly Uri _savePaperExtractionRpcUri;
+    private readonly Uri _updateStudyPlanStatusRpcUri;
+    private readonly Uri _extractPaperFunctionUri;
     private readonly string _apiKey;
+    private readonly string? _functionRegion;
     private readonly Func<CancellationToken, ValueTask<string?>> _accessTokenProvider;
 
     public PostgrestPaperEvidenceClient(
         HttpClient httpClient,
         Uri projectUri,
         string apiKey,
-        Func<CancellationToken, ValueTask<string?>> accessTokenProvider)
+        Func<CancellationToken, ValueTask<string?>> accessTokenProvider,
+        string? functionRegion = null)
     {
         _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
         _projectUri = projectUri ?? throw new ArgumentNullException(nameof(projectUri));
         _longitudinalRpcUri = LearningReadProviderSupport.BuildRpcUri(projectUri, LongitudinalRpcPath);
         _saveStudyPlanDraftRpcUri = LearningReadProviderSupport.BuildRpcUri(projectUri, SaveStudyPlanDraftRpcPath);
+        _savePaperExtractionRpcUri = LearningReadProviderSupport.BuildRpcUri(projectUri, SavePaperExtractionRpcPath);
+        _updateStudyPlanStatusRpcUri = LearningReadProviderSupport.BuildRpcUri(projectUri, UpdateStudyPlanStatusRpcPath);
+        _extractPaperFunctionUri = LearningReadProviderSupport.BuildRpcUri(projectUri, ExtractPaperFunctionPath);
         _apiKey = string.IsNullOrWhiteSpace(apiKey)
             ? throw new ArgumentException("Reference-provider API key is required.", nameof(apiKey))
             : apiKey;
+        _functionRegion = string.IsNullOrWhiteSpace(functionRegion) ? null : functionRegion.Trim();
         _accessTokenProvider = accessTokenProvider ?? throw new ArgumentNullException(nameof(accessTokenProvider));
     }
 
@@ -311,6 +326,233 @@ public sealed class PostgrestPaperEvidenceClient :
             }
 
             return AttachmentDownloadResult.Success(new DownloadedAttachmentImage(contentType, ms.ToArray()));
+        }
+    }
+
+    public async Task<TriggerPaperExtractionResult> TriggerExtractionAsync(
+        TriggerPaperExtractionRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        var accessToken = await _accessTokenProvider(cancellationToken).ConfigureAwait(false);
+        if (string.IsNullOrWhiteSpace(accessToken))
+        {
+            return TriggerPaperExtractionResult.Failed(LearningReadFailureKind.AuthenticationRequired, "XQ_AUTH_REQUIRED");
+        }
+
+        using var httpRequest = new HttpRequestMessage(HttpMethod.Post, _extractPaperFunctionUri);
+        httpRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+        httpRequest.Headers.TryAddWithoutValidation("apikey", _apiKey);
+        if (!string.IsNullOrWhiteSpace(_functionRegion))
+        {
+            httpRequest.Headers.TryAddWithoutValidation("x-region", _functionRegion);
+        }
+
+        httpRequest.Content = JsonContent.Create(new
+        {
+            operation_id = request.OperationId,
+            organization_id = request.OrganizationId,
+            student_id = request.StudentId,
+            subject_profile_id = request.SubjectProfileId,
+            paper_submission_id = request.PaperSubmissionId,
+            expected_version = request.ExpectedVersion,
+        });
+
+        HttpResponseMessage response;
+        try
+        {
+            response = await _httpClient.SendAsync(
+                httpRequest,
+                HttpCompletionOption.ResponseHeadersRead,
+                cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            return TriggerPaperExtractionResult.Failed(LearningReadFailureKind.Transient, "XQ_NETWORK_TIMEOUT");
+        }
+        catch (HttpRequestException)
+        {
+            return TriggerPaperExtractionResult.Failed(LearningReadFailureKind.Transient, "XQ_NETWORK_UNAVAILABLE");
+        }
+
+        using (response)
+        {
+            var body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+            if (response.IsSuccessStatusCode)
+            {
+                try
+                {
+                    return TriggerPaperExtractionResult.Success(
+                        PaperEvidenceJsonParser.ParseTriggerExtractionReceipt(
+                            body,
+                            request.OperationId,
+                            request.PaperSubmissionId));
+                }
+                catch (Exception ex) when (ex is JsonException or InvalidDataException)
+                {
+                    return TriggerPaperExtractionResult.Failed(
+                        LearningReadFailureKind.InvalidResponse,
+                        "XQ_RECEIPT_CONTRACT_INVALID");
+                }
+            }
+
+            var (kind, code) = LearningReadProviderSupport.MapFailure(response.StatusCode, body);
+            return TriggerPaperExtractionResult.Failed(kind, code);
+        }
+    }
+
+    public async Task<SavePaperExtractionResult> SaveExtractionAsync(
+        SavePaperExtractionRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        var accessToken = await _accessTokenProvider(cancellationToken).ConfigureAwait(false);
+        if (string.IsNullOrWhiteSpace(accessToken))
+        {
+            return SavePaperExtractionResult.Failed(LearningReadFailureKind.AuthenticationRequired, "XQ_AUTH_REQUIRED");
+        }
+
+        var wireMistakes = request.Mistakes.Select(m => new
+        {
+            page_index = m.PageIndex,
+            question_label = m.QuestionLabel,
+            topic_tags = m.TopicTags,
+            error_root_cause = PaperEvidenceWireNames.ToWire(m.ErrorRootCause),
+            paper_section_position = PaperEvidenceWireNames.ToWire(m.PaperSectionPosition),
+            points_lost = m.PointsLost,
+            corrected_on_paper = m.CorrectedOnPaper,
+            summary = m.Summary,
+            linked_case_id = m.LinkedCaseId,
+        }).ToArray();
+
+        using var httpRequest = new HttpRequestMessage(HttpMethod.Post, _savePaperExtractionRpcUri);
+        httpRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+        httpRequest.Headers.TryAddWithoutValidation("apikey", _apiKey);
+        httpRequest.Content = JsonContent.Create(new
+        {
+            p_operation_id = request.OperationId,
+            p_paper_submission_id = request.PaperSubmissionId,
+            p_expected_version = request.ExpectedVersion,
+            p_mode = request.Mode,
+            p_grading_source = PaperEvidenceWireNames.ToWire(request.GradingSource),
+            p_title = request.Title,
+            p_question_count = request.QuestionCount,
+            p_mistake_count = request.MistakeCount,
+            p_score_earned = request.ScoreEarned,
+            p_score_total = request.ScoreTotal,
+            p_duration_minutes = request.DurationMinutes,
+            p_extraction_summary = request.ExtractionSummary,
+            p_mistakes = wireMistakes,
+        });
+
+        HttpResponseMessage response;
+        try
+        {
+            response = await _httpClient.SendAsync(
+                httpRequest,
+                HttpCompletionOption.ResponseHeadersRead,
+                cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            return SavePaperExtractionResult.Failed(LearningReadFailureKind.Transient, "XQ_NETWORK_TIMEOUT");
+        }
+        catch (HttpRequestException)
+        {
+            return SavePaperExtractionResult.Failed(LearningReadFailureKind.Transient, "XQ_NETWORK_UNAVAILABLE");
+        }
+
+        using (response)
+        {
+            var body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+            if (response.IsSuccessStatusCode)
+            {
+                try
+                {
+                    return SavePaperExtractionResult.Success(
+                        PaperEvidenceJsonParser.ParseSaveExtractionReceipt(
+                            body,
+                            request.OperationId,
+                            request.PaperSubmissionId));
+                }
+                catch (Exception ex) when (ex is JsonException or InvalidDataException)
+                {
+                    return SavePaperExtractionResult.Failed(
+                        LearningReadFailureKind.InvalidResponse,
+                        "XQ_RECEIPT_CONTRACT_INVALID");
+                }
+            }
+
+            var (kind, code) = LearningReadProviderSupport.MapFailure(response.StatusCode, body);
+            return SavePaperExtractionResult.Failed(kind, code);
+        }
+    }
+
+    public async Task<UpdateStudyPlanDraftStatusResult> UpdateStatusAsync(
+        UpdateStudyPlanDraftStatusRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        var accessToken = await _accessTokenProvider(cancellationToken).ConfigureAwait(false);
+        if (string.IsNullOrWhiteSpace(accessToken))
+        {
+            return UpdateStudyPlanDraftStatusResult.Failed(LearningReadFailureKind.AuthenticationRequired, "XQ_AUTH_REQUIRED");
+        }
+
+        using var httpRequest = new HttpRequestMessage(HttpMethod.Post, _updateStudyPlanStatusRpcUri);
+        httpRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+        httpRequest.Headers.TryAddWithoutValidation("apikey", _apiKey);
+        httpRequest.Content = JsonContent.Create(new
+        {
+            p_operation_id = request.OperationId,
+            p_draft_id = request.DraftId,
+            p_expected_version = request.ExpectedVersion,
+            p_status = request.NextStatus,
+        });
+
+        HttpResponseMessage response;
+        try
+        {
+            response = await _httpClient.SendAsync(
+                httpRequest,
+                HttpCompletionOption.ResponseHeadersRead,
+                cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            return UpdateStudyPlanDraftStatusResult.Failed(LearningReadFailureKind.Transient, "XQ_NETWORK_TIMEOUT");
+        }
+        catch (HttpRequestException)
+        {
+            return UpdateStudyPlanDraftStatusResult.Failed(LearningReadFailureKind.Transient, "XQ_NETWORK_UNAVAILABLE");
+        }
+
+        using (response)
+        {
+            var body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+            if (response.IsSuccessStatusCode)
+            {
+                try
+                {
+                    return UpdateStudyPlanDraftStatusResult.Success(
+                        PaperEvidenceJsonParser.ParseUpdateStudyPlanDraftStatusReceipt(
+                            body,
+                            request.OperationId,
+                            request.DraftId));
+                }
+                catch (Exception ex) when (ex is JsonException or InvalidDataException)
+                {
+                    return UpdateStudyPlanDraftStatusResult.Failed(
+                        LearningReadFailureKind.InvalidResponse,
+                        "XQ_RECEIPT_CONTRACT_INVALID");
+                }
+            }
+
+            var (kind, code) = LearningReadProviderSupport.MapFailure(response.StatusCode, body);
+            return UpdateStudyPlanDraftStatusResult.Failed(kind, code);
         }
     }
 }

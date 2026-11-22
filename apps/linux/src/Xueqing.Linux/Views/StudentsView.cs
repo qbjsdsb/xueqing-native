@@ -34,6 +34,7 @@ internal sealed class StudentsView
     private readonly Gtk.Button _refreshButton;
 
     // Prototype detail panel + real encrypted MCP-interoperable local draft
+    private readonly Gtk.Box _emptySelectionCard;
     private readonly Gtk.Box _prototypeDetailPanel;
     private readonly Gtk.TextView _protoDraftTextView;
     private readonly Gtk.Label _protoDraftStatusLabel;
@@ -41,6 +42,7 @@ internal sealed class StudentsView
     private readonly Gtk.Button _protoDraftReloadButton;
     private readonly Gtk.Label _protoDeepLinkLabel;
     private readonly PaperLongitudinalPanel _protoPaperPanel;
+    private readonly PaperLongitudinalPanel _authPaperPanel;
     private SqliteObservationDraftStore? _prototypeDraftStore;
     private ObservationDraftScope? _prototypeDraftScope;
     private string? _lastLoadedProtoStudentId;
@@ -119,7 +121,7 @@ internal sealed class StudentsView
 
         _studentIdsModel = Gtk.StringList.New(null);
         _studentSelection = Gtk.SingleSelection.New(_studentIdsModel);
-        _studentSelection.SetAutoselect(true);
+        _studentSelection.SetAutoselect(false);
         _studentSelection.SetCanUnselect(true);
 
         var factory = Gtk.SignalListItemFactory.New();
@@ -247,20 +249,26 @@ internal sealed class StudentsView
         detailHeaderRow.Append(_refreshButton);
         detailBox.Append(detailHeaderRow);
 
-        // Prototype Detail Panel (includes real SQLite3MC + libsecret draft shared with Xueqing.Mcp!)
-        _protoPaperPanel = new PaperLongitudinalPanel(_dialogParent);
+        // Empty selection state card (prevents stale panels showing when SelectedStudent is null)
+        _emptySelectionCard = GtkUiHelpers.CreateCardBox(spacing: 8, cardCss: "xq-empty-card");
+        _emptySelectionCard.Append(GtkUiHelpers.CreateHeading("请选择一位学生", "title-4"));
+        _emptySelectionCard.Append(GtkUiHelpers.CreateDimLabel("从左侧名单中选择学生，或使用顶部搜索框快速定位，即可查看历次试卷纵向趋势、AI 阶段复盘与课堂跟进记录。"));
+        _emptySelectionCard.SetVisible(false);
+        detailBox.Append(_emptySelectionCard);
+
+        // Prototype Detail Panel (Hero: Paper Longitudinal Panel at the top, followed by Focus & Quick Observation)
+        _protoPaperPanel = new PaperLongitudinalPanel(_dialogParent, HandleAdoptProposedActionAsync);
         _prototypeDetailPanel = BuildPrototypeDetailPanel(
+            _protoPaperPanel,
             out _protoDraftTextView,
             out _protoDraftStatusLabel,
             out _protoDraftSaveButton,
             out _protoDraftReloadButton,
             out _protoDeepLinkLabel);
-        _prototypeDetailPanel.Append(Gtk.Separator.New(Gtk.Orientation.Horizontal));
-        _prototypeDetailPanel.Append(_protoPaperPanel.Widget);
         detailBox.Append(_prototypeDetailPanel);
 
-        // Authoritative Detail Panel
-        _authoritativeDetailPanel = Gtk.Box.New(Gtk.Orientation.Vertical, 16);
+        // Authoritative Detail Panel (Production mode with real Paper Longitudinal Panel at primary position!)
+        _authoritativeDetailPanel = Gtk.Box.New(Gtk.Orientation.Vertical, 18);
 
         var contextRow = Gtk.Box.New(Gtk.Orientation.Horizontal, 10);
         contextRow.Append(GtkUiHelpers.CreateHeading("任教学科", "heading"));
@@ -278,6 +286,10 @@ internal sealed class StudentsView
         };
         contextRow.Append(_subjectContextDropDown);
         _authoritativeDetailPanel.Append(contextRow);
+
+        _authPaperPanel = new PaperLongitudinalPanel(_dialogParent, HandleAdoptProposedActionAsync);
+        _authoritativeDetailPanel.Append(_authPaperPanel.Widget);
+        _authoritativeDetailPanel.Append(Gtk.Separator.New(Gtk.Orientation.Horizontal));
 
         // Quick Capture (Durable Encrypted Draft + Explicit Submit)
         _observationCaptureSection = Gtk.Box.New(Gtk.Orientation.Vertical, 8);
@@ -317,7 +329,7 @@ internal sealed class StudentsView
         // Case History (with explicit CaseLifecycle buttons!)
         var caseSection = Gtk.Box.New(Gtk.Orientation.Vertical, 8);
         var caseHeader = Gtk.Box.New(Gtk.Orientation.Horizontal, 12);
-        var caseHeading = GtkUiHelpers.CreateHeading("全部 Case", "title-4");
+        var caseHeading = GtkUiHelpers.CreateHeading("全部跟进课题", "title-4");
         caseHeading.SetHexpand(true);
         _loadCaseHistoryButton = Gtk.Button.NewWithLabel("查看全部");
         GtkUiHelpers.SetAutomationId(_loadCaseHistoryButton, "LoadCaseHistory");
@@ -404,10 +416,14 @@ internal sealed class StudentsView
 
     public void ApplyLayout(WindowLayoutMode mode)
     {
-        var collapsed = mode != WindowLayoutMode.Expanded;
+        var collapsed = mode == WindowLayoutMode.Compact;
         if (_splitView.GetCollapsed() != collapsed)
         {
             _splitView.SetCollapsed(collapsed);
+            if (collapsed && _viewModel.SelectedStudent is not null)
+            {
+                _splitView.SetShowContent(true);
+            }
         }
     }
 
@@ -435,6 +451,7 @@ internal sealed class StudentsView
     }
 
     private Gtk.Box BuildPrototypeDetailPanel(
+        PaperLongitudinalPanel paperPanel,
         out Gtk.TextView draftTextView,
         out Gtk.Label draftStatusLabel,
         out Gtk.Button saveBtn,
@@ -443,10 +460,32 @@ internal sealed class StudentsView
     {
         var panel = Gtk.Box.New(Gtk.Orientation.Vertical, 18);
 
-        // Encrypted local draft box interoperable with Xueqing.Mcp --prototype
-        var draftSection = Gtk.Box.New(Gtk.Orientation.Vertical, 8);
-        draftSection.Append(GtkUiHelpers.CreateHeading("课堂观察草稿（本机加密 · 与 Xueqing.Mcp 互通）", "title-4"));
-        draftSection.Append(GtkUiHelpers.CreateMultilineTextFrame(out draftTextView, minHeight: 100));
+        // Hero section: Longitudinal Exam Paper Timeline & AI Stage Review at the top!
+        panel.Append(paperPanel.Widget);
+        panel.Append(Gtk.Separator.New(Gtk.Orientation.Horizontal));
+
+        // Focus & Next Action Cards (crisp non-wrapping pill badges!)
+        var focusBox = Gtk.Box.New(Gtk.Orientation.Vertical, 10);
+        focusBox.Append(GtkUiHelpers.CreateHeading("当前重点跟进", "title-4"));
+        focusBox.Append(CreateProtoRow("阅读材料的信息关系组织仍需验证", "最近观察中，限制条件能够定位，但因果关系仍需要提示。", "待验证", "xq-pill-draft"));
+        focusBox.Append(CreateProtoRow("相同策略在短文本中能够独立使用", "迁移到更长的陌生材料时仍需继续观察。", "跟进中", "xq-pill-ai"));
+        panel.Append(focusBox);
+
+        var nextBox = Gtk.Box.New(Gtk.Orientation.Vertical, 8);
+        nextBox.Append(GtkUiHelpers.CreateHeading("下一步行动", "title-4"));
+        nextBox.Append(CreateProtoRow("使用新的陌生材料验证迁移", "验证是否能够在新的阅读材料中独立组织信息关系。", "待安排", "xq-pill-neutral"));
+        panel.Append(nextBox);
+
+        // Calm Quick Observation Draft Card (de-jargonized title!)
+        var draftSection = GtkUiHelpers.CreateCardBox(spacing: 8);
+        var draftHeader = Gtk.Box.New(Gtk.Orientation.Horizontal, 8);
+        var draftHeading = GtkUiHelpers.CreateHeading("随手课堂观察", "title-4");
+        draftHeading.SetHexpand(true);
+        draftHeader.Append(draftHeading);
+        draftHeader.Append(GtkUiHelpers.CreateBadge("本机安全保存", "xq-pill-confirmed"));
+        draftSection.Append(draftHeader);
+
+        draftSection.Append(GtkUiHelpers.CreateMultilineTextFrame(out draftTextView, minHeight: 88));
         GtkUiHelpers.SetAutomationId(draftTextView, "ObservationDraftText");
 
         var textViewRef = draftTextView;
@@ -456,14 +495,14 @@ internal sealed class StudentsView
         };
 
         var draftFooter = Gtk.Box.New(Gtk.Orientation.Horizontal, 8);
-        draftStatusLabel = GtkUiHelpers.CreateDimLabel("正在检查本机加密草稿…");
+        draftStatusLabel = GtkUiHelpers.CreateDimLabel("正在读取本机草稿…", caption: true);
         draftStatusLabel.SetHexpand(true);
         GtkUiHelpers.SetAutomationId(draftStatusLabel, "ObservationDraftStatus");
 
         reloadBtn = Gtk.Button.NewWithLabel("重新读取");
         reloadBtn.OnClicked += async (_, _) => await LoadPrototypeDraftForSelectedStudentAsync(forceReload: true);
 
-        saveBtn = Gtk.Button.NewWithLabel("保存加密草稿");
+        saveBtn = Gtk.Button.NewWithLabel("保存草稿");
         saveBtn.AddCssClass("suggested-action");
         saveBtn.OnClicked += async (_, _) => await SavePrototypeDraftAsync(GtkUiHelpers.GetText(textViewRef));
 
@@ -474,48 +513,34 @@ internal sealed class StudentsView
 
         deepLinkLabel = GtkUiHelpers.CreateDimLabel(string.Empty, caption: true);
         draftSection.Append(deepLinkLabel);
-        draftSection.Append(Gtk.Separator.New(Gtk.Orientation.Horizontal));
         panel.Append(draftSection);
 
-        // Static prototype preview sections matching Windows StudentsView
-        var focusBox = Gtk.Box.New(Gtk.Orientation.Vertical, 8);
-        focusBox.Append(GtkUiHelpers.CreateHeading("正在关注", "title-4"));
-        focusBox.Append(CreateProtoRow("阅读材料的信息关系组织仍需验证", "最近观察中，限制条件能够定位，但因果关系仍需要提示。", "待验证"));
-        focusBox.Append(Gtk.Separator.New(Gtk.Orientation.Horizontal));
-        focusBox.Append(CreateProtoRow("相同策略在短文本中能够独立使用", "迁移到更长的陌生材料时仍需继续观察。", "跟进中"));
-        panel.Append(focusBox);
-
-        var nextBox = Gtk.Box.New(Gtk.Orientation.Vertical, 6);
-        nextBox.Append(GtkUiHelpers.CreateHeading("下一步", "title-4"));
-        nextBox.Append(CreateProtoRow("○ 使用新的陌生材料验证迁移", "验证是否能够在新的阅读材料中独立组织信息关系。", "待安排"));
-        panel.Append(nextBox);
-
         var timelineBox = Gtk.Box.New(Gtk.Orientation.Vertical, 8);
-        timelineBox.Append(GtkUiHelpers.CreateHeading("教学脉络（测试数据）", "title-4"));
-        timelineBox.Append(CreateProtoRow("9 月 17 日 · 课堂观察", "能主动定位限制条件，但因果关系组织仍需要提示。", string.Empty));
-        timelineBox.Append(CreateProtoRow("9 月 14 日 · 干预", "重新示范信息之间的因果连接方式，并使用短文本练习。", string.Empty));
-        timelineBox.Append(CreateProtoRow("9 月 10 日 · 验证", "相同策略在短文本中已经能够独立使用。", string.Empty));
+        timelineBox.Append(GtkUiHelpers.CreateHeading("近期教学脉络", "title-4"));
+        timelineBox.Append(CreateProtoRow("9 月 17 日 · 课堂观察", "能主动定位限制条件，但因果关系组织仍需要提示。", string.Empty, "xq-pill-neutral"));
+        timelineBox.Append(CreateProtoRow("9 月 14 日 · 干预", "重新示范信息之间的因果连接方式，并使用短文本练习。", string.Empty, "xq-pill-neutral"));
+        timelineBox.Append(CreateProtoRow("9 月 10 日 · 验证", "相同策略在短文本中已经能够独立使用。", string.Empty, "xq-pill-neutral"));
         panel.Append(timelineBox);
 
         return panel;
     }
 
-    private static Gtk.Widget CreateProtoRow(string heading, string body, string badge)
+    private static Gtk.Widget CreateProtoRow(string heading, string body, string badge, string badgeCss)
     {
+        var card = GtkUiHelpers.CreateCardBox(spacing: 4);
         var row = Gtk.Box.New(Gtk.Orientation.Horizontal, 14);
-        var left = Gtk.Box.New(Gtk.Orientation.Vertical, 2);
+        var left = Gtk.Box.New(Gtk.Orientation.Vertical, 3);
         left.SetHexpand(true);
         left.Append(GtkUiHelpers.CreateHeading(heading, "heading"));
         left.Append(GtkUiHelpers.CreateDimLabel(body));
         row.Append(left);
         if (!string.IsNullOrEmpty(badge))
         {
-            var badgeLabel = GtkUiHelpers.CreateDimLabel(badge);
-            badgeLabel.SetValign(Gtk.Align.Start);
-            row.Append(badgeLabel);
+            row.Append(GtkUiHelpers.CreateBadge(badge, badgeCss));
         }
 
-        return row;
+        card.Append(row);
+        return card;
     }
 
     private void WireAuthoritativeObservationDraftEvents()
@@ -577,6 +602,11 @@ internal sealed class StudentsView
 
             case nameof(MainWindowViewModel.SelectedTeachingContext):
                 SyncSelectedContextFromViewModel();
+                if (_viewModel.IsAuthoritativeStudentWorkspace)
+                {
+                    _ = LoadAuthoritativePaperPanelAsync();
+                }
+
                 break;
 
             case nameof(MainWindowViewModel.ObservationDraftText):
@@ -780,9 +810,6 @@ internal sealed class StudentsView
         _unavailableLabel.SetText(_viewModel.StartupStatusText);
 
         _refreshButton.SetVisible(_viewModel.IsAuthoritativeStudentWorkspace);
-        _prototypeDetailPanel.SetVisible(_viewModel.IsPrototypeMode);
-        _authoritativeDetailPanel.SetVisible(_viewModel.IsAuthoritativeStudentWorkspace);
-
         RefreshDetailHeader();
         RefreshObservationCaptureControls();
         SyncObservationDraftTextFromViewModel();
@@ -793,6 +820,7 @@ internal sealed class StudentsView
 
     private void RefreshDetailHeader()
     {
+        var hasSelection = _viewModel.SelectedStudent is not null;
         if (_viewModel.SelectedStudent is { } student)
         {
             _detailNameLabel.SetText(student.DisplayName);
@@ -803,6 +831,72 @@ internal sealed class StudentsView
             _detailNameLabel.SetText(_viewModel.IsStartupUnavailable ? "教学工作区暂不可用" : "未选择学生");
             _detailSubjectLabel.SetText(_viewModel.IsStartupUnavailable ? _viewModel.StartupStatusText : "请在左侧选择或搜索学生。");
         }
+
+        _emptySelectionCard.SetVisible(!hasSelection && !_viewModel.IsStartupUnavailable);
+        _prototypeDetailPanel.SetVisible(hasSelection && _viewModel.IsPrototypeMode);
+        _authoritativeDetailPanel.SetVisible(hasSelection && _viewModel.IsAuthoritativeStudentWorkspace);
+    }
+
+    private async Task LoadAuthoritativePaperPanelAsync()
+    {
+        if (!_viewModel.IsAuthoritativeStudentWorkspace ||
+            _viewModel.SelectedTeachingContext is not { } ctx ||
+            _viewModel.CurrentActorAppUserId is not { } actorId)
+        {
+            _authPaperPanel.RenderEmpty("选择学科后可查看历次试卷纵向分析与阶段复盘。");
+            return;
+        }
+
+        await _authPaperPanel.LoadAuthoritativeAsync(
+            new StudentLearningScope(
+                ctx.Context.OrganizationId,
+                ctx.Context.StudentId,
+                ctx.Context.SubjectProfileId),
+            actorId,
+            _viewModel.PaperLongitudinalReader,
+            _viewModel.PaperAttachmentDownloader,
+            _viewModel.PaperExtractionTrigger,
+            _viewModel.PaperExtractionConfirmer,
+            _viewModel.StudyPlanDraftStatusUpdater);
+    }
+
+    private async Task<bool> HandleAdoptProposedActionAsync(StudyPlanProposedAction action)
+    {
+        if (_viewModel.IsPrototypeMode)
+        {
+            return await GtkUiHelpers.ShowConfirmDialogAsync(
+                _dialogParent,
+                "采纳为正式跟进课题",
+                $"确定采纳建议「{action.Title}」？\n\n下一步行动：{action.NextAction}",
+                "确认采纳",
+                "取消");
+        }
+
+        var latestObs = _viewModel.RecentObservations.FirstOrDefault();
+        if (latestObs is not null)
+        {
+            await CreateLearningCaseDialogFlow.ShowFromObservationAsync(
+                _dialogParent,
+                _viewModel,
+                latestObs,
+                prefillTitle: action.Title,
+                prefillAction: action.NextAction);
+            return true;
+        }
+
+        if (_viewModel.SupportsObservationCapture)
+        {
+            var draftText = $"[阶段复盘采纳] {action.Title}：{action.NextAction}";
+            await _viewModel.UpdateObservationDraftAsync(draftText);
+            SyncObservationDraftTextFromViewModel();
+            await GtkUiHelpers.ShowMessageDialogAsync(
+                _dialogParent,
+                "已填入课堂观察草稿",
+                "该学科下暂无已提交观察记录，已将建议内容预填至「课堂观察」草稿区，提交后即可直接转为正式跟进课题。");
+            return true;
+        }
+
+        return false;
     }
 
     private void RefreshObservationCaptureControls()
@@ -853,11 +947,11 @@ internal sealed class StudentsView
 
             var right = Gtk.Box.New(Gtk.Orientation.Vertical, 4);
             right.SetHalign(Gtk.Align.End);
-            var state = GtkUiHelpers.CreateDimLabel(item.StateLabel);
-            state.SetHalign(Gtk.Align.End);
+            right.Append(GtkUiHelpers.CreateBadge(item.StateLabel, "xq-pill-draft"));
             var due = GtkUiHelpers.CreateDimLabel(item.DueLabel, caption: true);
+            due.SetWrap(false);
+            due.SetSingleLineMode(true);
             due.SetHalign(Gtk.Align.End);
-            right.Append(state);
             right.Append(due);
 
             if (_viewModel.SupportsActionProgression)
@@ -917,15 +1011,19 @@ internal sealed class StudentsView
             left.Append(GtkUiHelpers.CreateHeading(item.Title, "heading"));
             left.Append(GtkUiHelpers.CreateDimLabel(item.NextAction));
 
-            var right = Gtk.Box.New(Gtk.Orientation.Vertical, 3);
+            var right = Gtk.Box.New(Gtk.Orientation.Vertical, 4);
             right.SetHalign(Gtk.Align.End);
-            var state = GtkUiHelpers.CreateDimLabel(item.StateLabel);
-            state.SetHalign(Gtk.Align.End);
+            right.Append(GtkUiHelpers.CreateBadge(
+                item.StateLabel,
+                item.IsClosed ? "xq-pill-neutral" : "xq-pill-ai"));
             var resp = GtkUiHelpers.CreateDimLabel(item.ResponsibilityLabel, caption: true);
+            resp.SetWrap(false);
+            resp.SetSingleLineMode(true);
             resp.SetHalign(Gtk.Align.End);
             var due = GtkUiHelpers.CreateDimLabel(item.DueLabel, caption: true);
+            due.SetWrap(false);
+            due.SetSingleLineMode(true);
             due.SetHalign(Gtk.Align.End);
-            right.Append(state);
             right.Append(resp);
             right.Append(due);
 

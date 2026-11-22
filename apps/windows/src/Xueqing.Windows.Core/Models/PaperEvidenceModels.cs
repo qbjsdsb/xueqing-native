@@ -1,3 +1,5 @@
+using System.Text.Json;
+
 namespace Xueqing.Windows.Core.Models;
 
 public enum PaperKind
@@ -212,6 +214,89 @@ public sealed record DownloadedAttachmentImage(
     string ContentType,
     byte[] Bytes);
 
+public sealed record TriggerPaperExtractionRequest(
+    Guid OperationId,
+    Guid OrganizationId,
+    Guid StudentId,
+    Guid SubjectProfileId,
+    Guid PaperSubmissionId,
+    long? ExpectedVersion = null);
+
+public sealed record TriggerPaperExtractionReceipt(
+    Guid OperationId,
+    Guid PaperSubmissionId,
+    string Model,
+    int PagesAnalyzed,
+    string ConfirmationState,
+    string GradingSource,
+    long Version,
+    int MistakeItemsSaved,
+    DateTimeOffset? ServerCommittedAt);
+
+public sealed record PaperMistakeDraftInput(
+    int PageIndex,
+    string QuestionLabel,
+    IReadOnlyList<string> TopicTags,
+    PaperErrorRootCause ErrorRootCause,
+    PaperSectionPosition PaperSectionPosition,
+    decimal? PointsLost,
+    bool? CorrectedOnPaper,
+    string Summary,
+    Guid? LinkedCaseId = null);
+
+public sealed record SavePaperExtractionRequest(
+    Guid OperationId,
+    Guid PaperSubmissionId,
+    long ExpectedVersion,
+    string Mode,
+    PaperGradingSource GradingSource,
+    string? Title,
+    int? QuestionCount,
+    int? MistakeCount,
+    decimal? ScoreEarned,
+    decimal? ScoreTotal,
+    int? DurationMinutes,
+    string? ExtractionSummary,
+    IReadOnlyList<PaperMistakeDraftInput> Mistakes);
+
+public sealed record SavePaperExtractionReceipt(
+    Guid OperationId,
+    Guid PaperSubmissionId,
+    string ConfirmationState,
+    string GradingSource,
+    long Version,
+    int MistakeItemsSaved,
+    DateTimeOffset ServerCommittedAt);
+
+public sealed record UpdateStudyPlanDraftStatusRequest(
+    Guid OperationId,
+    Guid DraftId,
+    long ExpectedVersion,
+    string NextStatus);
+
+public sealed record UpdateStudyPlanDraftStatusReceipt(
+    Guid OperationId,
+    Guid DraftId,
+    string Status,
+    long Version,
+    DateTimeOffset ServerCommittedAt);
+
+public sealed record StudyPlanProposedAction(
+    string Kind,
+    string Title,
+    string NextAction,
+    string? TargetDate,
+    string? Rationale)
+{
+    public string KindLabel => Kind switch
+    {
+        "create_learning_case" => "新建跟进课题",
+        "next_action" or "add_action" => "新增下一步行动",
+        "review_practice" => "专项复练",
+        _ => "教学行动建议",
+    };
+}
+
 public static class PaperEvidenceWireNames
 {
     public static string ToWire(PaperKind kind) => kind switch
@@ -223,6 +308,14 @@ public static class PaperEvidenceWireNames
         _ => throw new ArgumentOutOfRangeException(nameof(kind)),
     };
 
+    public static string ToWire(PaperGradingSource source) => source switch
+    {
+        PaperGradingSource.TeacherMarked => "teacher_marked",
+        PaperGradingSource.AiTentativeUnmarked => "ai_tentative_unmarked",
+        PaperGradingSource.HumanVerified => "human_verified",
+        _ => "teacher_marked",
+    };
+
     public static string ToWire(PaperErrorRootCause cause) => cause switch
     {
         PaperErrorRootCause.ConceptGap => "concept_gap",
@@ -232,6 +325,14 @@ public static class PaperEvidenceWireNames
         PaperErrorRootCause.TimePressure => "time_pressure",
         PaperErrorRootCause.Unclassified => "unclassified",
         _ => "unclassified",
+    };
+
+    public static string ToWire(PaperSectionPosition pos) => pos switch
+    {
+        PaperSectionPosition.Early => "early",
+        PaperSectionPosition.Middle => "middle",
+        PaperSectionPosition.Late => "late",
+        _ => "unknown",
     };
 
     public static string ToChineseLabel(PaperErrorRootCause cause) => cause switch
@@ -251,4 +352,88 @@ public static class PaperEvidenceWireNames
         PaperSectionPosition.Late => "卷尾综合/大题",
         _ => "位置未知",
     };
+
+    public static string ToChineseGradingSource(PaperGradingSource source) => source switch
+    {
+        PaperGradingSource.TeacherMarked => "老师已批改",
+        PaperGradingSource.HumanVerified => "人工复核确认",
+        PaperGradingSource.AiTentativeUnmarked => "未批改（AI 试判）",
+        _ => "未知来源",
+    };
+
+    public static string ToChineseProvenance(string? provenance) => provenance?.Trim().ToLowerInvariant() switch
+    {
+        "human_confirmed" => "已人工确认",
+        "ai_draft" => "AI 识别草稿",
+        _ => "待确认",
+    };
+
+    public static string ToChineseStudyPlanStatus(string? status) => status?.Trim().ToLowerInvariant() switch
+    {
+        "draft" => "待审阅草案",
+        "partially_adopted" => "已部分采纳",
+        "fully_adopted" => "已全部采纳",
+        "dismissed" => "已忽略",
+        _ => "待审阅",
+    };
+
+    public static IReadOnlyList<StudyPlanProposedAction> ParseProposedActions(string? proposedActionsJson)
+    {
+        if (string.IsNullOrWhiteSpace(proposedActionsJson))
+        {
+            return Array.Empty<StudyPlanProposedAction>();
+        }
+
+        try
+        {
+            using var doc = JsonDocument.Parse(proposedActionsJson);
+            if (doc.RootElement.ValueKind != JsonValueKind.Array)
+            {
+                return Array.Empty<StudyPlanProposedAction>();
+            }
+
+            var results = new List<StudyPlanProposedAction>();
+            foreach (var item in doc.RootElement.EnumerateArray())
+            {
+                if (item.ValueKind != JsonValueKind.Object)
+                {
+                    continue;
+                }
+
+                var kind = ReadOptionalString(item, "kind") ?? "next_action";
+                var title = ReadOptionalString(item, "title")
+                    ?? ReadOptionalString(item, "case_title")
+                    ?? ReadOptionalString(item, "topic")
+                    ?? "阶段跟进建议";
+                var nextAction = ReadOptionalString(item, "next_action")
+                    ?? ReadOptionalString(item, "action")
+                    ?? ReadOptionalString(item, "description")
+                    ?? title;
+                var targetDate = ReadOptionalString(item, "due_on")
+                    ?? ReadOptionalString(item, "target_date");
+                var rationale = ReadOptionalString(item, "rationale")
+                    ?? ReadOptionalString(item, "reason")
+                    ?? ReadOptionalString(item, "evidence");
+
+                results.Add(new StudyPlanProposedAction(kind, title, nextAction, targetDate, rationale));
+            }
+
+            return results;
+        }
+        catch (JsonException)
+        {
+            return Array.Empty<StudyPlanProposedAction>();
+        }
+    }
+
+    private static string? ReadOptionalString(JsonElement obj, string property)
+    {
+        if (!obj.TryGetProperty(property, out var value) || value.ValueKind != JsonValueKind.String)
+        {
+            return null;
+        }
+
+        var text = value.GetString()?.Trim();
+        return string.IsNullOrEmpty(text) ? null : text;
+    }
 }
