@@ -50,13 +50,7 @@ internal fun StudentsScreen(
             Text(
                 text = "学生",
                 style = MaterialTheme.typography.headlineSmall,
-                modifier = Modifier.padding(bottom = 8.dp),
-            )
-            Text(
-                text = "按当前个人教学范围查看学生与学科档案。",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(bottom = 20.dp),
+                modifier = Modifier.padding(bottom = 16.dp),
             )
         }
 
@@ -144,18 +138,11 @@ internal fun StudentDetailScreen(
                         .padding(vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = subjectLabelForKey(context.subjectKey),
-                            style = MaterialTheme.typography.titleMedium,
-                        )
-                        Text(
-                            text = "当前关注与课堂记录",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(top = 4.dp),
-                        )
-                    }
+                    Text(
+                        text = subjectLabelForKey(context.subjectKey),
+                        style = MaterialTheme.typography.titleMedium,
+                        modifier = Modifier.weight(1f),
+                    )
                     TextButton(
                         enabled = actorAppUserId != null,
                         onClick = {
@@ -187,15 +174,6 @@ internal fun StudentDetailScreen(
 
                 HorizontalDivider()
             }
-        }
-
-        item {
-            Text(
-                text = "记录提交与当前关注读取都会由服务端重新检查当前任课关系。",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 20.dp),
-            )
         }
     }
 }

@@ -73,8 +73,9 @@ internal fun LearningScreen(
         } else {
             item {
                 Text(
-                    text = "从学生进入具体学科，查看服务器确认的当前关注与下一步行动。",
+                    text = "选择一位学生查看近况。",
                     style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 24.dp),
                 )
                 TextButton(
