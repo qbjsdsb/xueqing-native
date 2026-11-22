@@ -11,6 +11,11 @@ import com.xueqing.app.application.bootstrap.PersonalBootstrapResult
 import com.xueqing.app.application.compatibility.ClientCompatibilityState
 import com.xueqing.app.application.compatibility.ConsequentialWriteAuthorization
 import com.xueqing.app.application.compatibility.ConsequentialWriteGate
+import com.xueqing.app.application.paper.PaperCaptureMetadata
+import com.xueqing.app.application.paper.PaperExtractionRemote
+import com.xueqing.app.application.paper.PaperSubmissionRemote
+import com.xueqing.app.application.paper.PaperSubmissionResult
+import com.xueqing.app.application.paper.TriggerPaperExtractionRequest
 import java.io.ByteArrayOutputStream
 import java.util.UUID
 
@@ -25,6 +30,9 @@ class AttachmentOutboxDrainer(
     private val onCleanupNeeded: () -> Unit,
     private val clock: () -> Long = System::currentTimeMillis,
     private val retryDelayMillis: Long = DEFAULT_RETRY_MILLIS,
+    private val durableIntentDao: DurableIntentDao? = null,
+    private val paperSubmissionRemote: PaperSubmissionRemote? = null,
+    private val paperExtractionRemote: PaperExtractionRemote? = null,
 ) {
     data class Result(
         val processedCount: Int,
@@ -124,7 +132,7 @@ class AttachmentOutboxDrainer(
                 AttachmentStagingState.CommitResultUnknown,
                 -> stopForRetry = !processCommit(row, appUserId)
 
-                AttachmentStagingState.Committed -> cleanupCommitted(row)
+                AttachmentStagingState.Committed -> stopForRetry = !finalizeAndCleanupCommitted(row)
 
                 else -> Unit
             }
@@ -284,7 +292,7 @@ class AttachmentOutboxDrainer(
                         updatedAtEpochMillis = clock(),
                     ) == 1
                 ) {
-                    cleanupCommitted(row.copy(state = AttachmentStagingState.Committed))
+                    return finalizeAndCleanupCommitted(row.copy(state = AttachmentStagingState.Committed))
                 }
                 true
             }
@@ -334,6 +342,79 @@ class AttachmentOutboxDrainer(
             lastErrorClass = errorClass,
             updatedAtEpochMillis = clock(),
         )
+    }
+
+    private suspend fun finalizeAndCleanupCommitted(row: AttachmentStagingEntity): Boolean {
+        if (!tryFinalizePaperSubmissionIfLastPage(row)) {
+            return false
+        }
+        cleanupCommitted(row)
+        return true
+    }
+
+    private suspend fun tryFinalizePaperSubmissionIfLastPage(row: AttachmentStagingEntity): Boolean {
+        val intentDao = durableIntentDao ?: return true
+        val submissionRemote = paperSubmissionRemote ?: return true
+        val parentOpIdText = row.parentObservationOperationId ?: return true
+        val authObsIdText = row.authoritativeObservationId ?: return true
+
+        val remainingSiblings = dao.countUncommittedSiblingsForObservation(
+            parentObservationOperationId = parentOpIdText,
+            excludeAttachmentId = row.attachmentId,
+        )
+        if (remainingSiblings > 0) {
+            return true
+        }
+
+        val outbox = intentDao.readByOperationId(parentOpIdText) ?: return true
+        val obsRequest = runCatching {
+            ObservationOutboxCodec.decodeRequest(outbox.payloadJson)
+        }.getOrNull() ?: return true
+
+        val parentOpId = runCatching { UUID.fromString(parentOpIdText) }.getOrNull() ?: return true
+        val authObsId = runCatching { UUID.fromString(authObsIdText) }.getOrNull() ?: return true
+        val paperRequest = PaperCaptureMetadata.parsePaperSubmissionRequest(
+            metadata = obsRequest.clientCaptureMetadata,
+            parentObservationOperationId = parentOpId,
+            authoritativeObservationId = authObsId,
+            organizationId = obsRequest.organizationId,
+            studentId = obsRequest.studentId,
+            subjectProfileId = obsRequest.subjectProfileId,
+            assignmentId = obsRequest.assignmentId,
+        ) ?: return true
+
+        return when (val result = submissionRemote.create(paperRequest)) {
+            is PaperSubmissionResult.Accepted -> {
+                // Best-effort single-paper vision extraction trigger; failures are non-fatal
+                // because original pages and paper_submission are already durably committed.
+                paperExtractionRemote?.let { extractor ->
+                    runCatching {
+                        val extractOpId = UUID.nameUUIDFromBytes(
+                            "paper-extract:${result.receipt.paperSubmissionId}".toByteArray(Charsets.UTF_8),
+                        )
+                        extractor.trigger(
+                            TriggerPaperExtractionRequest(
+                                operationId = extractOpId,
+                                organizationId = result.receipt.organizationId,
+                                studentId = result.receipt.studentId,
+                                subjectProfileId = result.receipt.subjectProfileId,
+                                paperSubmissionId = result.receipt.paperSubmissionId,
+                                expectedVersion = result.receipt.version,
+                            ),
+                        )
+                    }
+                }
+                true
+            }
+
+            is PaperSubmissionResult.AuthenticationRequired,
+            is PaperSubmissionResult.UnknownResult,
+            -> false
+
+            is PaperSubmissionResult.Rejected,
+            is PaperSubmissionResult.ProtocolFailure,
+            -> true
+        }
     }
 
     private suspend fun cleanupCommitted(row: AttachmentStagingEntity) {

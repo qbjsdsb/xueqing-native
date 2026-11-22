@@ -118,4 +118,36 @@ class QuickCaptureAttachmentUiInstrumentedTest {
         composeRule.onNodeWithTag("quick-capture-paper-date").assertTextContains("2026-11-22")
         composeRule.onNodeWithText("已安全保存 2 页照片（2 页已遮挡卷头姓名区）").assertExists()
     }
+
+    @Test
+    fun paperCaptureModeAllowsSubmittingWithoutTypingWhenPagesStaged() {
+        composeRule.setContent {
+            XueqingTheme {
+                QuickCaptureScreen(
+                    state = QuickCaptureUiState(
+                        text = "",
+                        teachingContextStatus = TeachingContextStatus.Ready,
+                        studentDisplayName = "虚构学生甲",
+                        subjectLabel = "数学",
+                        draftStatus = LocalDraftStatus.SafeOnDevice,
+                        attachmentStatus = AttachmentDraftStatus.SafeOnDevice,
+                        attachmentCount = 2,
+                        redactedAttachmentCount = 2,
+                        paperCaptureMode = true,
+                        paperKind = PaperKind.UnitTest,
+                        paperDate = "2026-11-22",
+                    ),
+                    onTextChanged = {},
+                    onClose = {},
+                    onChooseStudent = {},
+                    onPhotoSelected = {},
+                    onRemovePhoto = {},
+                    onDiscard = {},
+                    onSubmit = {},
+                )
+            }
+        }
+
+        composeRule.onNodeWithTag("quick-capture-submit").assertIsEnabled()
+    }
 }

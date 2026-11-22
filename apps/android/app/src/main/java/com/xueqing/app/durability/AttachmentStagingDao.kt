@@ -136,6 +136,20 @@ interface AttachmentStagingDao {
 
     @Query(
         """
+        SELECT COUNT(*) FROM attachment_staging
+        WHERE parent_observation_operation_id = :parentObservationOperationId
+          AND attachment_id != :excludeAttachmentId
+          AND state != :committedState
+        """,
+    )
+    suspend fun countUncommittedSiblingsForObservation(
+        parentObservationOperationId: String,
+        excludeAttachmentId: String,
+        committedState: String = AttachmentStagingState.Committed,
+    ): Int
+
+    @Query(
+        """
         DELETE FROM attachment_staging
         WHERE scope_key = :scopeKey
           AND draft_epoch = :draftEpoch

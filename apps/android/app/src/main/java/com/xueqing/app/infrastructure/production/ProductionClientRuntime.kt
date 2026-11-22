@@ -38,6 +38,7 @@ import com.xueqing.app.infrastructure.auth.SessionStartupBootstrapRemote
 import com.xueqing.app.infrastructure.auth.SupabaseAuthTransport
 import com.xueqing.app.infrastructure.deployment.DeploymentProfile
 import com.xueqing.app.infrastructure.deployment.DeploymentProfileParser
+import com.xueqing.app.infrastructure.remote.HttpEdgeFunctionTransport
 import com.xueqing.app.infrastructure.remote.HttpRpcTransport
 import com.xueqing.app.infrastructure.remote.HttpStorageTransport
 import com.xueqing.app.infrastructure.remote.ProviderSessionTokenSource
@@ -46,6 +47,8 @@ import com.xueqing.app.infrastructure.remote.SupabaseCommitObservationAttachment
 import com.xueqing.app.infrastructure.remote.SupabaseCreateObservationAdapter
 import com.xueqing.app.infrastructure.remote.SupabaseObservationAttachmentStorageAdapter
 import com.xueqing.app.infrastructure.remote.SupabaseObservationAttachmentReadAdapter
+import com.xueqing.app.infrastructure.remote.SupabasePaperExtractionAdapter
+import com.xueqing.app.infrastructure.remote.SupabasePaperSubmissionAdapter
 import com.xueqing.app.infrastructure.remote.SupabasePersonalBootstrapAdapter
 import com.xueqing.app.infrastructure.remote.SupabasePersonalTodayActionsAdapter
 import com.xueqing.app.infrastructure.remote.SupabaseStudentLearningFocusAdapter
@@ -74,6 +77,8 @@ class ProductionClientRuntime private constructor(
     private val attachmentStorageRemote: SupabaseObservationAttachmentStorageAdapter,
     val attachmentReadRemote: SupabaseObservationAttachmentReadAdapter,
     private val attachmentCommandRemote: SupabaseCommitObservationAttachmentAdapter,
+    private val paperSubmissionRemote: SupabasePaperSubmissionAdapter,
+    private val paperExtractionRemote: SupabasePaperExtractionAdapter,
 ) : ClientSessionController {
     private val processScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val restoreStarted = AtomicBoolean(false)
@@ -290,6 +295,9 @@ class ProductionClientRuntime private constructor(
                 onCleanupNeeded = {
                     AttachmentStagingRecoveryScheduler.scheduleAfterGrace(context)
                 },
+                durableIntentDao = database.durableIntentDao(),
+                paperSubmissionRemote = paperSubmissionRemote,
+                paperExtractionRemote = paperExtractionRemote,
             )
         }
     }
@@ -361,6 +369,11 @@ class ProductionClientRuntime private constructor(
                 baseUrl = profile.projectOrigin,
                 publishableKey = profile.publishableKey,
             )
+            val edgeFunctionTransport = HttpEdgeFunctionTransport(
+                baseUrl = profile.projectOrigin,
+                publishableKey = profile.publishableKey,
+                functionRegion = profile.requiredEdgeRegion,
+            )
             val compatibilityGate = ServerClientCompatibilityWriteGate(
                 remote = SupabaseClientCompatibilityAdapter(
                     sessionTokenSource = tokenSource,
@@ -406,6 +419,14 @@ class ProductionClientRuntime private constructor(
                 attachmentCommandRemote = SupabaseCommitObservationAttachmentAdapter(
                     sessionTokenSource = tokenSource,
                     transport = rpcTransport,
+                ),
+                paperSubmissionRemote = SupabasePaperSubmissionAdapter(
+                    sessionTokenSource = tokenSource,
+                    transport = rpcTransport,
+                ),
+                paperExtractionRemote = SupabasePaperExtractionAdapter(
+                    sessionTokenSource = tokenSource,
+                    transport = edgeFunctionTransport,
                 ),
             )
         }

@@ -468,10 +468,12 @@ class QuickCaptureViewModel(
                 val currentActor = actorAppUserId ?: return@saveLock
                 val finalText = currentState.text
 
+                val canSubmitWithoutTyping =
+                    currentState.paperCaptureMode && currentState.attachmentCount > 0
                 if (
                     currentState.teachingContextStatus != TeachingContextStatus.Ready ||
                     currentState.draftStatus == LocalDraftStatus.PersistenceFailed ||
-                    finalText.isBlank()
+                    (finalText.isBlank() && !canSubmitWithoutTyping)
                 ) {
                     return@saveLock
                 }
@@ -483,6 +485,33 @@ class QuickCaptureViewModel(
                 val resolvedPaperDate = runCatching {
                     LocalDate.parse(currentState.paperDate.trim())
                 }.getOrElse { LocalDate.now() }
+                val stagedAttachments = withContext(Dispatchers.IO) {
+                    attachmentStagingStore
+                        .readForDraft(currentScope, currentSession.epoch)
+                        .filter {
+                            it.state == AttachmentStagingState.Staged &&
+                                it.parentObservationOperationId == null
+                        }
+                }
+                val orderedAttachmentIds = stagedAttachments.mapNotNull { row ->
+                    runCatching { UUID.fromString(row.attachmentId) }.getOrNull()
+                }
+                val effectivePageCount = maxOf(currentState.attachmentCount, orderedAttachmentIds.size)
+                val effectiveText = if (finalText.isNotBlank()) {
+                    finalText
+                } else {
+                    PaperCaptureMetadata.buildDefaultObservationText(
+                        paperDate = resolvedPaperDate,
+                        paperKind = currentState.paperKind,
+                        pageCount = effectivePageCount,
+                        title = currentState.paperTitle,
+                    )
+                }
+                val paperSubmissionOperationId = if (currentState.paperCaptureMode && orderedAttachmentIds.isNotEmpty()) {
+                    operationIdFactory()
+                } else {
+                    null
+                }
                 val captureMetadata = PaperCaptureMetadata(
                     enabled = currentState.paperCaptureMode,
                     paperDate = resolvedPaperDate,
@@ -490,8 +519,10 @@ class QuickCaptureViewModel(
                     title = currentState.paperTitle,
                     headerRedactionEnabled = currentState.headerRedactionEnabled,
                 ).toClientCaptureMetadata(
-                    pageCount = currentState.attachmentCount,
+                    pageCount = effectivePageCount,
                     redactedPageIndices = stagedRedactedPageIndices.toList(),
+                    orderedAttachmentIds = orderedAttachmentIds,
+                    paperSubmissionOperationId = paperSubmissionOperationId,
                 )
                 val request = CreateObservationRequest(
                     operationId = operationId,
@@ -499,7 +530,7 @@ class QuickCaptureViewModel(
                     studentId = currentContext.studentId,
                     subjectProfileId = currentContext.subjectProfileId,
                     assignmentId = currentContext.assignmentId,
-                    rawText = finalText,
+                    rawText = effectiveText,
                     clientCapturedAt = Instant.ofEpochMilli(capturedAtEpochMillis),
                     clientCaptureMetadata = captureMetadata,
                 )
@@ -527,7 +558,7 @@ class QuickCaptureViewModel(
                         durableIntentDao.submitObservation(
                             scopeKey = currentScope.storageKey,
                             expectedEpoch = currentSession.epoch,
-                            finalText = finalText,
+                            finalText = effectiveText,
                             updatedAtEpochMillis = capturedAtEpochMillis,
                             outbox = outbox,
                         )

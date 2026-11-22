@@ -57,6 +57,60 @@ class PaperEvidenceContractTest {
     }
 
     @Test
+    fun parsePaperSubmissionRequest_reconstructsOrderedPagesAndDefaultText() {
+        val opId = UUID.fromString("11111111-0000-0000-0000-000000000001")
+        val subOpId = UUID.fromString("11111111-0000-0000-0000-000000000002")
+        val obsId = UUID.fromString("22222222-0000-0000-0000-000000000001")
+        val orgId = UUID.fromString("33333333-0000-0000-0000-000000000001")
+        val studentId = UUID.fromString("44444444-0000-0000-0000-000000000001")
+        val profileId = UUID.fromString("55555555-0000-0000-0000-000000000001")
+        val assignId = UUID.fromString("66666666-0000-0000-0000-000000000001")
+        val att1 = UUID.fromString("77777777-0000-0000-0000-000000000001")
+        val att2 = UUID.fromString("77777777-0000-0000-0000-000000000002")
+
+        val metadata = PaperCaptureMetadata(
+            enabled = true,
+            paperDate = LocalDate.of(2026, 11, 22),
+            paperKind = PaperKind.UnitTest,
+            title = "小数除法单元测",
+            headerRedactionEnabled = true,
+        ).toClientCaptureMetadata(
+            pageCount = 2,
+            redactedPageIndices = listOf(1),
+            orderedAttachmentIds = listOf(att1, att2),
+            paperSubmissionOperationId = subOpId,
+        )
+
+        val parsed = PaperCaptureMetadata.parsePaperSubmissionRequest(
+            metadata = metadata,
+            parentObservationOperationId = opId,
+            authoritativeObservationId = obsId,
+            organizationId = orgId,
+            studentId = studentId,
+            subjectProfileId = profileId,
+            assignmentId = assignId,
+        )!!
+
+        assertEquals(subOpId, parsed.operationId)
+        assertEquals(obsId, parsed.sourceObservationId)
+        assertEquals(PaperKind.UnitTest, parsed.paperKind)
+        assertEquals(2, parsed.pages.size)
+        assertEquals(att1, parsed.pages[0].attachmentId)
+        assertEquals(true, parsed.pages[0].headerRedacted)
+        assertEquals(att2, parsed.pages[1].attachmentId)
+        assertEquals(false, parsed.pages[1].headerRedacted)
+
+        assertEquals(
+            "试卷归档：2026-11-22 单元测（共 2 页）",
+            PaperCaptureMetadata.buildDefaultObservationText(
+                LocalDate.of(2026, 11, 22),
+                PaperKind.UnitTest,
+                2,
+            ),
+        )
+    }
+
+    @Test
     fun createPaperSubmissionRequest_rejectsEmptyOrDuplicatePages() {
         val id = UUID(0, 1)
         val att1 = UUID(0, 11)
