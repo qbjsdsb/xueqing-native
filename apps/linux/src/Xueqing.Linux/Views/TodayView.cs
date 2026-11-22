@@ -14,7 +14,6 @@ internal sealed class TodayView
     private readonly Gtk.Widget _root;
 
     private readonly Gtk.Label _statusLabel;
-    private readonly Gtk.Box _kpiStrip;
     private readonly Gtk.Box _filterRow;
     private readonly Gtk.Box _recoverySection;
     private readonly Gtk.Label _learningCaseRecoveryStatus;
@@ -32,43 +31,45 @@ internal sealed class TodayView
         _viewModel = viewModel ?? throw new ArgumentNullException(nameof(viewModel));
         _dialogParent = dialogParent ?? throw new ArgumentNullException(nameof(dialogParent));
 
-        var container = Gtk.Box.New(Gtk.Orientation.Vertical, 16);
-        container.SetMarginStart(28);
-        container.SetMarginEnd(28);
-        container.SetMarginTop(20);
-        container.SetMarginBottom(24);
+        var container = Gtk.Box.New(Gtk.Orientation.Vertical, 14);
+        container.SetMarginStart(32);
+        container.SetMarginEnd(32);
+        container.SetMarginTop(26);
+        container.SetMarginBottom(32);
 
-        var headerBox = Gtk.Box.New(Gtk.Orientation.Vertical, 4);
-        var heading = GtkUiHelpers.CreateHeading("今日教学跟进", "title-1");
+        // Editorial header: Title on left, quiet inline filter tabs on right (Things 3 / Linear rhythm)
+        var topBar = Gtk.Box.New(Gtk.Orientation.Horizontal, 16);
+        var heading = GtkUiHelpers.CreateHeading("今日", "title-1");
+        heading.SetHexpand(true);
         GtkUiHelpers.SetAutomationId(heading, "TodaySurface");
-        _statusLabel = GtkUiHelpers.CreateDimLabel(string.Empty);
-        headerBox.Append(heading);
-        headerBox.Append(_statusLabel);
-        container.Append(headerBox);
+        topBar.Append(heading);
 
-        _kpiStrip = Gtk.Box.New(Gtk.Orientation.Horizontal, 10);
-        _kpiStrip.SetHomogeneous(true);
-        container.Append(_kpiStrip);
+        _filterRow = Gtk.Box.New(Gtk.Orientation.Horizontal, 4);
+        _filterRow.SetValign(Gtk.Align.End);
+        topBar.Append(_filterRow);
+        container.Append(topBar);
 
-        _filterRow = Gtk.Box.New(Gtk.Orientation.Horizontal, 8);
-        container.Append(_filterRow);
+        _statusLabel = GtkUiHelpers.CreateDimLabel(string.Empty, caption: true);
+        container.Append(_statusLabel);
+
+        container.Append(Gtk.Separator.New(Gtk.Orientation.Horizontal));
 
         _recoverySection = Gtk.Box.New(Gtk.Orientation.Vertical, 8);
-        _recoverySection.Append(GtkUiHelpers.CreateHeading("需要确认的操作", "title-4"));
+        _recoverySection.Append(GtkUiHelpers.CreateSectionKicker("待确认"));
 
-        _learningCaseRecoveryStatus = GtkUiHelpers.CreateDimLabel(string.Empty);
+        _learningCaseRecoveryStatus = GtkUiHelpers.CreateDimLabel(string.Empty, caption: true);
         GtkUiHelpers.SetAutomationId(_learningCaseRecoveryStatus, "PendingLearningCaseRecoveryStatus");
         _learningCaseRecoveryList = Gtk.Box.New(Gtk.Orientation.Vertical, 6);
         _recoverySection.Append(_learningCaseRecoveryStatus);
         _recoverySection.Append(_learningCaseRecoveryList);
 
-        _actionRecoveryStatus = GtkUiHelpers.CreateDimLabel(string.Empty);
+        _actionRecoveryStatus = GtkUiHelpers.CreateDimLabel(string.Empty, caption: true);
         GtkUiHelpers.SetAutomationId(_actionRecoveryStatus, "PendingActionProgressionRecoveryStatus");
         _actionRecoveryList = Gtk.Box.New(Gtk.Orientation.Vertical, 6);
         _recoverySection.Append(_actionRecoveryStatus);
         _recoverySection.Append(_actionRecoveryList);
 
-        _caseLifecycleRecoveryStatus = GtkUiHelpers.CreateDimLabel(string.Empty);
+        _caseLifecycleRecoveryStatus = GtkUiHelpers.CreateDimLabel(string.Empty, caption: true);
         GtkUiHelpers.SetAutomationId(_caseLifecycleRecoveryStatus, "PendingCaseLifecycleRecoveryStatus");
         _caseLifecycleRecoveryList = Gtk.Box.New(Gtk.Orientation.Vertical, 6);
         _recoverySection.Append(_caseLifecycleRecoveryStatus);
@@ -77,12 +78,12 @@ internal sealed class TodayView
         _recoverySection.Append(Gtk.Separator.New(Gtk.Orientation.Horizontal));
         container.Append(_recoverySection);
 
-        _actionsList = Gtk.Box.New(Gtk.Orientation.Vertical, 8);
+        _actionsList = Gtk.Box.New(Gtk.Orientation.Vertical, 0);
         GtkUiHelpers.SetAutomationId(_actionsList, "TodayActionList");
         container.Append(_actionsList);
 
         var clamp = Adw.Clamp.New();
-        clamp.SetMaximumSize(960);
+        clamp.SetMaximumSize(860);
         clamp.SetChild(container);
         _root = GtkUiHelpers.WrapInScroll(clamp);
 
@@ -205,17 +206,8 @@ internal sealed class TodayView
         string? automationId,
         Func<Task> onRetry)
     {
-        var card = Gtk.Box.New(Gtk.Orientation.Horizontal, 14);
-        card.AddCssClass("card");
-        card.SetMarginTop(2);
-        card.SetMarginBottom(2);
-
-        var inner = Gtk.Box.New(Gtk.Orientation.Horizontal, 14);
-        inner.SetMarginStart(14);
-        inner.SetMarginEnd(14);
-        inner.SetMarginTop(10);
-        inner.SetMarginBottom(10);
-        inner.SetHexpand(true);
+        var row = Gtk.Box.New(Gtk.Orientation.Horizontal, 16);
+        row.AddCssClass("xq-callout");
 
         var left = Gtk.Box.New(Gtk.Orientation.Vertical, 3);
         left.SetHexpand(true);
@@ -227,7 +219,7 @@ internal sealed class TodayView
 
         left.Append(GtkUiHelpers.CreateDimLabel(metaText, caption: true));
 
-        var retryBtn = Gtk.Button.NewWithLabel("重新确认");
+        var retryBtn = Gtk.Button.NewWithLabel("重试");
         retryBtn.SetValign(Gtk.Align.Center);
         retryBtn.AddCssClass("suggested-action");
         if (!string.IsNullOrWhiteSpace(automationId))
@@ -237,10 +229,9 @@ internal sealed class TodayView
 
         retryBtn.OnClicked += async (_, _) => await onRetry();
 
-        inner.Append(left);
-        inner.Append(retryBtn);
-        card.Append(inner);
-        return card;
+        row.Append(left);
+        row.Append(retryBtn);
+        return row;
     }
 
     private void RebuildTodayActions()
@@ -250,29 +241,19 @@ internal sealed class TodayView
         var todayCount = allItems.Count(a => a.Bucket == TodayActionBucket.Today);
         var undatedCount = allItems.Count(a => a.Bucket == TodayActionBucket.Undated);
 
-        // 3-tile KPI Summary Strip
-        GtkUiHelpers.ClearBoxChildren(_kpiStrip);
-        _kpiStrip.Append(GtkUiHelpers.CreateKpiTile(
-            $"{todayCount}",
-            "今日待跟进",
-            "按计划今日需完成",
-            todayCount > 0 ? "xq-kpi-value-accent" : null));
-        _kpiStrip.Append(GtkUiHelpers.CreateKpiTile(
-            $"{overdueCount}",
-            "已逾期优先处理",
-            overdueCount > 0 ? "建议先核查最近一次干预" : "当前无逾期积压",
-            overdueCount > 0 ? "xq-kpi-value-overdue" : null));
-        _kpiStrip.Append(GtkUiHelpers.CreateKpiTile(
-            $"{undatedCount}",
-            "待安排日期",
-            $"全部共 {allItems.Count} 项行动"));
-
-        // Filter pills
+        // Quiet flat underline filter tabs
         GtkUiHelpers.ClearBoxChildren(_filterRow);
-        AddFilterButton($"全部 ({allItems.Count})", null);
-        AddFilterButton($"已逾期 ({overdueCount})", TodayActionBucket.Overdue);
-        AddFilterButton($"今日 ({todayCount})", TodayActionBucket.Today);
-        AddFilterButton($"待安排 ({undatedCount})", TodayActionBucket.Undated);
+        AddFilterTab($"全部 {allItems.Count}", null);
+        if (overdueCount > 0)
+        {
+            AddFilterTab($"逾期 {overdueCount}", TodayActionBucket.Overdue);
+        }
+
+        AddFilterTab($"今日 {todayCount}", TodayActionBucket.Today);
+        if (undatedCount > 0)
+        {
+            AddFilterTab($"待定 {undatedCount}", TodayActionBucket.Undated);
+        }
 
         GtkUiHelpers.ClearBoxChildren(_actionsList);
 
@@ -282,60 +263,71 @@ internal sealed class TodayView
 
         if (visibleItems.Length == 0 && string.IsNullOrWhiteSpace(_viewModel.TodayStatusText))
         {
-            var emptyCard = GtkUiHelpers.CreateCardBox(spacing: 4, cardCss: "xq-empty-card");
-            emptyCard.Append(GtkUiHelpers.CreateHeading(
-                _bucketFilter is null ? "今日暂无待处理的教学行动" : "当前筛选下暂无待办行动",
-                "heading"));
-            emptyCard.Append(GtkUiHelpers.CreateDimLabel("可以在「学生」页查看试卷趋势、生成阶段复盘并采纳新的跟进课题。"));
-            _actionsList.Append(emptyCard);
+            var empty = Gtk.Label.New(_bucketFilter is null ? "今日暂无待办" : "该分类下暂无待办");
+            empty.SetHalign(Gtk.Align.Start);
+            empty.AddCssClass("xq-empty-note");
+            _actionsList.Append(empty);
             return;
         }
 
         foreach (var item in visibleItems)
         {
-            var card = GtkUiHelpers.CreateCardBox(spacing: 6);
-            var row = Gtk.Box.New(Gtk.Orientation.Horizontal, 16);
+            var row = Gtk.Box.New(Gtk.Orientation.Horizontal, 18);
+            row.AddCssClass("xq-list-row");
 
-            var bucketCol = Gtk.Box.New(Gtk.Orientation.Vertical, 5);
-            bucketCol.SetSizeRequest(88, -1);
-            var pillCss = item.Bucket switch
+            // Left date & bucket column (plain typography, zero noisy pills)
+            var leftCol = Gtk.Box.New(Gtk.Orientation.Vertical, 2);
+            leftCol.SetSizeRequest(72, -1);
+            leftCol.SetValign(Gtk.Align.Start);
+
+            var statusCss = item.Bucket switch
             {
-                TodayActionBucket.Overdue => "xq-pill-overdue",
-                TodayActionBucket.Today => "xq-pill-ai",
-                TodayActionBucket.Undated => "xq-pill-draft",
-                _ => "xq-pill-neutral",
+                TodayActionBucket.Overdue => "xq-status-overdue",
+                TodayActionBucket.Today => "xq-status-today",
+                _ => "xq-status-muted",
             };
-            var bucketPill = GtkUiHelpers.CreateBadge(item.BucketLabel, pillCss);
-            bucketPill.SetHalign(Gtk.Align.Start);
-            bucketCol.Append(bucketPill);
+            var statusText = item.Bucket switch
+            {
+                TodayActionBucket.Overdue => "逾期",
+                TodayActionBucket.Today => "今日",
+                TodayActionBucket.Undated => "待定",
+                _ => item.BucketLabel,
+            };
+            leftCol.Append(GtkUiHelpers.CreateStatusText(statusText, statusCss, Gtk.Align.Start));
 
-            var dueLabel = GtkUiHelpers.CreateDimLabel(item.DueLabel, caption: true);
-            dueLabel.SetWrap(false);
-            dueLabel.SetSingleLineMode(true);
-            bucketCol.Append(dueLabel);
+            var dateText = item.DueDate is { } d ? d.ToString("MM/dd") : string.Empty;
+            if (!string.IsNullOrEmpty(dateText))
+            {
+                var dateLabel = Gtk.Label.New(dateText);
+                dateLabel.SetHalign(Gtk.Align.Start);
+                dateLabel.AddCssClass("xq-date-col");
+                leftCol.Append(dateLabel);
+            }
 
-            var bodyCol = Gtk.Box.New(Gtk.Orientation.Vertical, 3);
+            // Center title + quiet student/subject subtitle
+            var bodyCol = Gtk.Box.New(Gtk.Orientation.Vertical, 4);
             bodyCol.SetHexpand(true);
             bodyCol.Append(GtkUiHelpers.CreateHeading(item.Title, "heading"));
 
-            var metaLine = string.IsNullOrWhiteSpace(item.InteractionStateLabel)
-                ? item.StudentDisplayName
-                : $"{item.StudentDisplayName}  ·  {item.InteractionStateLabel}";
-            bodyCol.Append(GtkUiHelpers.CreateDimLabel(metaLine, caption: true));
+            var subtitleParts = new List<string> { item.StudentDisplayName, item.Subject };
+            if (!string.IsNullOrWhiteSpace(item.InteractionStateLabel))
+            {
+                subtitleParts.Add(item.InteractionStateLabel);
+            }
 
-            var rightCol = Gtk.Box.New(Gtk.Orientation.Vertical, 6);
-            rightCol.SetHalign(Gtk.Align.End);
-            rightCol.SetValign(Gtk.Align.Center);
-            rightCol.Append(GtkUiHelpers.CreateBadge(item.Subject, "xq-pill-neutral"));
+            bodyCol.Append(GtkUiHelpers.CreateDimLabel(string.Join(" · ", subtitleParts), caption: true));
+
+            row.Append(leftCol);
+            row.Append(bodyCol);
 
             if (_viewModel.SupportsActionProgression)
             {
                 var actionButtons = Gtk.Box.New(Gtk.Orientation.Horizontal, 6);
-                actionButtons.SetHalign(Gtk.Align.End);
+                actionButtons.SetValign(Gtk.Align.Center);
 
                 var rescheduleBtn = Gtk.Button.NewWithLabel("改期");
+                rescheduleBtn.AddCssClass("flat");
                 var verifyBtn = Gtk.Button.NewWithLabel("验证");
-                verifyBtn.AddCssClass("suggested-action");
 
                 if (Guid.TryParse(item.Id, out var actionId) && actionId != Guid.Empty)
                 {
@@ -357,29 +349,21 @@ internal sealed class TodayView
 
                 actionButtons.Append(rescheduleBtn);
                 actionButtons.Append(verifyBtn);
-                rightCol.Append(actionButtons);
+                row.Append(actionButtons);
             }
 
-            row.Append(bucketCol);
-            row.Append(bodyCol);
-            row.Append(rightCol);
-            card.Append(row);
-
-            _actionsList.Append(card);
+            _actionsList.Append(row);
         }
     }
 
-    private void AddFilterButton(string label, TodayActionBucket? bucket)
+    private void AddFilterTab(string label, TodayActionBucket? bucket)
     {
         var btn = Gtk.Button.NewWithLabel(label);
-        btn.AddCssClass("pill");
+        btn.AddCssClass("flat");
+        btn.AddCssClass("xq-tab");
         if (_bucketFilter == bucket)
         {
-            btn.AddCssClass("xq-filter-active");
-        }
-        else
-        {
-            btn.AddCssClass("flat");
+            btn.AddCssClass("xq-tab-active");
         }
 
         btn.OnClicked += (_, _) =>

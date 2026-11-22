@@ -5,127 +5,147 @@ using System.Runtime.Versioning;
 namespace Xueqing.Linux.UI;
 
 /// <summary>
-/// Unified "青墨书卷" (Teal-Ink &amp; Paper) native GTK4 + libadwaita styling.
-/// Works gracefully across both Light and Dark system color schemes while
-/// enforcing single-line semantic pills, calm card hierarchy, tabular KPI
-/// numerals, and restrained educational teal accents.
+/// Quiet Ink Editorial ("安静手记") native GTK4 + libadwaita styling.
+/// Dynamically aligns Light warm alabaster paper (#FAF9F7) and Dark neutral
+/// graphite (#141517) with the Android Material 3 palette, paired with a single
+/// restrained studio slate-blue accent (#2C5E8A / #88B4DC).
 /// </summary>
 internal static class XueqingLinuxTheme
 {
     private static bool _installed;
+    private static Gtk.CssProvider? _paletteProvider;
 
-    private const string Stylesheet = """
-        @define-color accent_bg_color #0F766E;
+    private const string LightPaletteCss = """
+        @define-color window_bg_color #FAF9F7;
+        @define-color view_bg_color #FAF9F7;
+        @define-color headerbar_bg_color #FAF9F7;
+        @define-color sidebar_bg_color #F3F1EC;
+        @define-color secondary_sidebar_bg_color #F3F1EC;
+        @define-color dialog_bg_color #FAF9F7;
+        @define-color popover_bg_color #FFFFFF;
+        @define-color card_bg_color #FFFFFF;
+        @define-color window_fg_color #1C1D1F;
+        @define-color view_fg_color #1C1D1F;
+        @define-color accent_bg_color #2C5E8A;
         @define-color accent_fg_color #FFFFFF;
-        @define-color accent_color #149187;
+        @define-color accent_color #2C5E8A;
+        """;
 
-        .xq-card {
-            background-color: @card_bg_color;
-            border: 1px solid alpha(@window_fg_color, 0.10);
-            border-radius: 12px;
+    private const string DarkPaletteCss = """
+        @define-color window_bg_color #141517;
+        @define-color view_bg_color #141517;
+        @define-color headerbar_bg_color #141517;
+        @define-color sidebar_bg_color #191B1E;
+        @define-color secondary_sidebar_bg_color #191B1E;
+        @define-color dialog_bg_color #181A1D;
+        @define-color popover_bg_color #1F2125;
+        @define-color card_bg_color #1C1E22;
+        @define-color window_fg_color #EAECEF;
+        @define-color view_fg_color #EAECEF;
+        @define-color accent_bg_color #2C5E8A;
+        @define-color accent_fg_color #FFFFFF;
+        @define-color accent_color #88B4DC;
+        """;
+
+    private const string SharedStylesheet = """
+        .xq-surface {
+            background-color: alpha(@window_fg_color, 0.032);
+            border-radius: 10px;
             padding: 14px 16px;
         }
 
-        .xq-hero-card {
-            background-color: alpha(#0F766E, 0.10);
-            border: 1px solid alpha(#149187, 0.32);
-            border-radius: 12px;
-            padding: 14px 16px;
+        .xq-paper-canvas {
+            background-color: alpha(@window_fg_color, 0.035);
+            border-right: 1px solid alpha(@window_fg_color, 0.08);
         }
 
-        .xq-kpi-card {
-            background-color: @card_bg_color;
-            border: 1px solid alpha(@window_fg_color, 0.09);
-            border-radius: 12px;
-            padding: 12px 14px;
+        .xq-callout {
+            background-color: alpha(@window_fg_color, 0.032);
+            border-left: 3px solid @accent_color;
+            border-radius: 2px 10px 10px 2px;
+            padding: 12px 16px;
         }
 
-        .xq-kpi-value {
-            font-size: 21px;
-            font-weight: 700;
+        .xq-list-row {
+            padding: 13px 2px;
+            border-bottom: 1px solid alpha(@window_fg_color, 0.075);
+        }
+
+        .xq-takeaway {
+            font-size: 14px;
+            line-height: 1.32;
+            opacity: 0.88;
+        }
+
+        .xq-section-kicker {
+            font-size: 12px;
+            font-weight: 600;
+            opacity: 0.54;
+            letter-spacing: 0.4px;
+        }
+
+        .xq-status-overdue {
+            color: #C84B4B;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .xq-status-today {
+            color: @accent_color;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .xq-status-pending {
+            color: #B87A14;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .xq-status-muted {
+            font-size: 12px;
+            opacity: 0.54;
+        }
+
+        .xq-tag {
+            background-color: alpha(@window_fg_color, 0.055);
+            border-radius: 6px;
+            padding: 3px 9px;
+            font-size: 12px;
+        }
+
+        .xq-empty-note {
+            padding: 36px 12px;
+            opacity: 0.56;
+        }
+
+        button.xq-tab {
+            padding: 6px 10px;
+            border-radius: 0;
+            font-size: 13px;
+            opacity: 0.60;
+        }
+
+        button.xq-tab:hover {
+            opacity: 0.90;
+        }
+
+        button.xq-tab-active {
+            opacity: 1.0;
+            color: @accent_color;
+            font-weight: 600;
+            box-shadow: inset 0 -2px 0 @accent_color;
+        }
+
+        .xq-score-num {
             font-feature-settings: "tnum";
-        }
-
-        .xq-kpi-value-accent {
-            color: #149187;
-        }
-
-        .xq-kpi-value-warn {
-            color: #D97706;
-        }
-
-        .xq-kpi-value-overdue {
-            color: #D9534F;
-        }
-
-        .xq-kpi-label {
-            font-size: 12px;
-            opacity: 0.72;
-        }
-
-        .xq-pill {
-            border-radius: 999px;
-            padding: 3px 10px;
-            font-size: 12px;
             font-weight: 600;
         }
 
-        .xq-pill-confirmed {
-            background-color: alpha(#10B981, 0.18);
-            color: #10B981;
-        }
-
-        .xq-pill-draft {
-            background-color: alpha(#F59E0B, 0.18);
-            color: #D97706;
-        }
-
-        .xq-pill-overdue {
-            background-color: alpha(#E05D56, 0.18);
-            color: #E05D56;
-        }
-
-        .xq-pill-ai {
-            background-color: alpha(#149187, 0.18);
-            color: #149187;
-        }
-
-        .xq-pill-neutral {
-            background-color: alpha(@window_fg_color, 0.09);
-            color: alpha(@window_fg_color, 0.78);
-        }
-
-        .xq-empty-card {
-            background-color: @card_bg_color;
-            border: 1px dashed alpha(@window_fg_color, 0.18);
-            border-radius: 14px;
-            padding: 32px 24px;
-        }
-
-        progressbar.xq-bar trough {
-            min-height: 7px;
-            border-radius: 999px;
-            background-color: alpha(@window_fg_color, 0.10);
-        }
-
-        progressbar.xq-bar progress {
-            min-height: 7px;
-            border-radius: 999px;
-            background-color: #149187;
-        }
-
-        progressbar.xq-bar-warn progress {
-            background-color: #D97706;
-        }
-
-        progressbar.xq-bar-coral progress {
-            background-color: #E05D56;
-        }
-
-        button.xq-filter-active {
-            background-color: alpha(#0F766E, 0.18);
-            color: #149187;
-            font-weight: 600;
+        .xq-date-col {
+            font-feature-settings: "tnum";
+            font-size: 12px;
+            opacity: 0.56;
         }
         """;
 
@@ -142,12 +162,35 @@ internal static class XueqingLinuxTheme
             return;
         }
 
-        var provider = Gtk.CssProvider.New();
-        provider.LoadFromString(Stylesheet);
+        var styleManager = Adw.StyleManager.GetDefault();
+
+        _paletteProvider = Gtk.CssProvider.New();
+        ApplyPalette(styleManager.GetDark());
         Gtk.StyleContext.AddProviderForDisplay(
             display,
-            provider,
+            _paletteProvider,
             Gtk.Constants.STYLE_PROVIDER_PRIORITY_APPLICATION);
+
+        var sharedProvider = Gtk.CssProvider.New();
+        sharedProvider.LoadFromString(SharedStylesheet);
+        Gtk.StyleContext.AddProviderForDisplay(
+            display,
+            sharedProvider,
+            Gtk.Constants.STYLE_PROVIDER_PRIORITY_APPLICATION + 1);
+
+        styleManager.OnNotify += (_, args) =>
+        {
+            if (args.Pspec.GetName() == "dark")
+            {
+                ApplyPalette(styleManager.GetDark());
+            }
+        };
+
         _installed = true;
+    }
+
+    private static void ApplyPalette(bool isDark)
+    {
+        _paletteProvider?.LoadFromString(isDark ? DarkPaletteCss : LightPaletteCss);
     }
 }

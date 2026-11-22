@@ -102,7 +102,6 @@ internal sealed class LearningView
         var box = Gtk.Box.New(Gtk.Orientation.Vertical, 12);
         var lc = _viewModel.LearningCase;
 
-        box.Append(GtkUiHelpers.CreateDimLabel("测试案例", caption: true));
         box.Append(GtkUiHelpers.CreateHeading(lc.Title, "title-2"));
         box.Append(GtkUiHelpers.CreateBodyLabel($"{lc.StudentDisplayName} · {lc.Subject} · {lc.StateLabel}"));
         box.Append(GtkUiHelpers.CreateDimLabel(lc.ResponsibleTeacher));

@@ -94,7 +94,7 @@ data class PaperCaptureMetadata(
         ): String {
             val trimmed = title.trim()
             val label = if (trimmed.isNotEmpty()) trimmed else "${paperDate} ${paperKind.displayLabel}"
-            return "试卷归档：$label（共 $pageCount 页）"
+            return "$label · $pageCount 页"
         }
 
         fun parsePaperSubmissionRequest(

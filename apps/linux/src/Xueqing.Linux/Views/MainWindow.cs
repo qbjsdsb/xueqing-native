@@ -55,7 +55,7 @@ internal sealed class MainWindow
         XueqingLinuxTheme.Install();
 
         _window = Adw.ApplicationWindow.New(application);
-        _window.SetTitle(ViewModel.IsPrototypeMode ? "学情（测试原型模式）" : "学情");
+        _window.SetTitle("学情");
         _window.SetDefaultSize(1320, 840);
 
         _todayView = new TodayView(ViewModel, _window);
@@ -120,7 +120,7 @@ internal sealed class MainWindow
         appMenuBox.SetMarginTop(6);
         appMenuBox.SetMarginBottom(6);
 
-        var themeMenuItem = CreateMenuButton("切换浅色 / 深色主题", "ThemeToggleMenuItem");
+        var themeMenuItem = CreateMenuButton("切换深浅色", "ThemeToggleMenuItem");
         themeMenuItem.OnClicked += (_, _) =>
         {
             appPopover.Popdown();
@@ -128,7 +128,7 @@ internal sealed class MainWindow
         };
         appMenuBox.Append(themeMenuItem);
 
-        var securityCheckMenuItem = CreateMenuButton("验证本机加密安全链", "SecurityCheckMenuItem");
+        var securityCheckMenuItem = CreateMenuButton("安全检查", "SecurityCheckMenuItem");
         securityCheckMenuItem.OnClicked += async (_, _) =>
         {
             appPopover.Popdown();
@@ -258,7 +258,6 @@ internal sealed class MainWindow
                         ViewModel.SelectedStudent = protoStudent;
                         _viewStack.SetVisibleChildName("students");
                         _studentsView.SyncSelectedStudentHighlight(revealDetailIfCollapsed: true);
-                        ShowToast($"已通过 xueqing:// 打开学生：{protoStudent.DisplayName}");
                         return;
                     }
                 }
