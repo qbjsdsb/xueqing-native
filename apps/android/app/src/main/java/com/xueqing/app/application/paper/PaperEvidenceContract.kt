@@ -50,6 +50,8 @@ data class PaperCaptureMetadata(
     fun toClientCaptureMetadata(
         pageCount: Int,
         redactedPageIndices: List<Int>,
+        orderedAttachmentIds: List<UUID> = emptyList(),
+        paperSubmissionOperationId: UUID? = null,
     ): Map<String, String> {
         val result = linkedMapOf(
             "surface" to "quick_capture",
@@ -62,20 +64,102 @@ data class PaperCaptureMetadata(
             result["header_redacted_pages"] = redactedPageIndices.sorted().distinct().joinToString(",")
         }
         if (enabled) {
-            result["capture_mode"] = "paper_evidence"
+            result["capture_mode"] = CAPTURE_MODE_PAPER_EVIDENCE
             result["paper_date"] = paperDate.toString()
             result["paper_kind"] = paperKind.wireValue
             val trimmedTitle = title.trim()
             if (trimmedTitle.isNotEmpty()) {
                 result["paper_title"] = trimmedTitle.take(MAX_TITLE_LENGTH)
             }
+            if (orderedAttachmentIds.isNotEmpty()) {
+                result["paper_attachment_ids"] = orderedAttachmentIds.joinToString(",")
+            }
+            if (paperSubmissionOperationId != null) {
+                result["paper_submission_operation_id"] = paperSubmissionOperationId.toString()
+            }
         }
         return result
     }
 
     companion object {
+        const val CAPTURE_MODE_PAPER_EVIDENCE = "paper_evidence"
         const val MAX_PAGES = 6
         const val MAX_TITLE_LENGTH = 200
+
+        fun buildDefaultObservationText(
+            paperDate: LocalDate,
+            paperKind: PaperKind,
+            pageCount: Int,
+            title: String = "",
+        ): String {
+            val trimmed = title.trim()
+            val label = if (trimmed.isNotEmpty()) trimmed else "${paperDate} ${paperKind.displayLabel}"
+            return "试卷归档：$label（共 $pageCount 页）"
+        }
+
+        fun parsePaperSubmissionRequest(
+            metadata: Map<String, String>,
+            parentObservationOperationId: UUID,
+            authoritativeObservationId: UUID,
+            organizationId: UUID,
+            studentId: UUID,
+            subjectProfileId: UUID,
+            assignmentId: UUID,
+        ): CreatePaperSubmissionRequest? {
+            if (metadata["capture_mode"] != CAPTURE_MODE_PAPER_EVIDENCE) {
+                return null
+            }
+
+            val paperDate = metadata["paper_date"]?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
+                ?: return null
+            val paperKind = metadata["paper_kind"]?.let(PaperKind::fromWireValue)
+                ?: return null
+            val attachmentIds = metadata["paper_attachment_ids"]
+                ?.split(",")
+                ?.map(String::trim)
+                ?.filter(String::isNotEmpty)
+                ?.mapNotNull { runCatching { UUID.fromString(it) }.getOrNull() }
+                .orEmpty()
+            if (attachmentIds.isEmpty()) {
+                return null
+            }
+
+            val redactedSet = metadata["header_redacted_pages"]
+                ?.split(",")
+                ?.mapNotNull { it.trim().toIntOrNull() }
+                ?.toSet()
+                .orEmpty()
+
+            val pages = attachmentIds.mapIndexed { index, attachmentId ->
+                val pageIndex = index + 1
+                PaperPageInput(
+                    pageIndex = pageIndex,
+                    attachmentId = attachmentId,
+                    headerRedacted = pageIndex in redactedSet,
+                )
+            }
+
+            val submissionOpId = metadata["paper_submission_operation_id"]
+                ?.let { runCatching { UUID.fromString(it) }.getOrNull() }
+                ?: UUID.nameUUIDFromBytes("paper-submission:$parentObservationOperationId".toByteArray(Charsets.UTF_8))
+
+            val title = metadata["paper_title"]?.trim()?.takeIf(String::isNotEmpty)?.take(MAX_TITLE_LENGTH)
+
+            return runCatching {
+                CreatePaperSubmissionRequest(
+                    operationId = submissionOpId,
+                    organizationId = organizationId,
+                    studentId = studentId,
+                    subjectProfileId = subjectProfileId,
+                    assignmentId = assignmentId,
+                    paperDate = paperDate,
+                    paperKind = paperKind,
+                    title = title,
+                    sourceObservationId = authoritativeObservationId,
+                    pages = pages,
+                )
+            }.getOrNull()
+        }
     }
 }
 
@@ -214,4 +298,29 @@ sealed interface PaperSubmissionResult {
 
 fun interface PaperSubmissionRemote {
     fun create(request: CreatePaperSubmissionRequest): PaperSubmissionResult
+}
+
+data class TriggerPaperExtractionRequest(
+    val operationId: UUID,
+    val organizationId: UUID,
+    val studentId: UUID,
+    val subjectProfileId: UUID,
+    val paperSubmissionId: UUID,
+    val expectedVersion: Long? = null,
+)
+
+sealed interface PaperExtractionTriggerResult {
+    data class Triggered(
+        val paperSubmissionId: UUID,
+        val confirmationState: String,
+        val mistakeItemsSaved: Int,
+    ) : PaperExtractionTriggerResult
+
+    data object AuthenticationRequired : PaperExtractionTriggerResult
+
+    data class Unavailable(val errorCode: String) : PaperExtractionTriggerResult
+}
+
+fun interface PaperExtractionRemote {
+    fun trigger(request: TriggerPaperExtractionRequest): PaperExtractionTriggerResult
 }

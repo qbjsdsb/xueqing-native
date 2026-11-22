@@ -33,6 +33,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.xueqing.app.application.session.ClientSessionController
 import com.xueqing.app.application.session.ClientSessionStage
+import com.xueqing.app.presentation.design.PrimaryDestinationIcon
 import com.xueqing.app.presentation.design.XueqingTheme
 import com.xueqing.app.presentation.learning.LearningScreen
 import com.xueqing.app.presentation.shell.AppNavigationState
@@ -182,10 +183,7 @@ private fun AuthenticatedWorkspace(
                             selected = navigation.destination == destination,
                             onClick = { navigation.selectDestination(destination) },
                             icon = {
-                                Text(
-                                    text = destination.bootstrapGlyph,
-                                    style = MaterialTheme.typography.labelMedium,
-                                )
+                                PrimaryDestinationIcon(destination = destination)
                             },
                             label = { Text(destination.label) },
                         )

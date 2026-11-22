@@ -7,6 +7,7 @@ import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -17,12 +18,15 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -65,306 +69,338 @@ internal fun QuickCaptureScreen(
     val draftLoaded = state.draftStatus != LocalDraftStatus.Loading
     val draftWritable = state.draftStatus != LocalDraftStatus.PersistenceFailed
     val attachmentBusy = state.attachmentStatus == AttachmentDraftStatus.Protecting
+    val canSubmit = draftLoaded &&
+        draftWritable &&
+        !attachmentBusy &&
+        (state.text.isNotBlank() || (state.paperCaptureMode && state.attachmentCount > 0))
 
-    Column(
+    Box(
         modifier = Modifier
             .fillMaxSize()
             .safeDrawingPadding()
-            .imePadding()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 20.dp, vertical = 16.dp),
+            .imePadding(),
+        contentAlignment = Alignment.TopCenter,
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            TextButton(onClick = onClose) {
-                Text("返回")
-            }
-            TextButton(
-                enabled = contextReady && draftLoaded && !attachmentBusy,
-                onClick = onDiscard,
-            ) {
-                Text("丢弃草稿")
-            }
-        }
-
-        Spacer(Modifier.height(16.dp))
-        Text(
-            text = "快速记录",
-            style = MaterialTheme.typography.headlineSmall,
-        )
-        Text(
-            text = when (state.teachingContextStatus) {
-                TeachingContextStatus.Loading -> "正在读取教学上下文…"
-                TeachingContextStatus.Ready -> "${state.studentDisplayName} · ${state.subjectLabel}"
-                TeachingContextStatus.AuthenticationRequired -> "需要登录后才能记录"
-                TeachingContextStatus.Unavailable -> "当前没有可用的任课关系"
-                TeachingContextStatus.SelectionRequired -> "请先选择明确的学生和学科后再记录"
-            },
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        Column(
             modifier = Modifier
-                .padding(top = 4.dp)
-                .testTag("quick-capture-teaching-context"),
-        )
-
-        if (state.teachingContextStatus == TeachingContextStatus.SelectionRequired) {
-            Text(
-                text = "为了避免把课堂记录写到错误的学生名下，这次记录需要先从学生列表进入。",
-                style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier.padding(top = 28.dp),
-            )
-            TextButton(
-                onClick = onChooseStudent,
-                modifier = Modifier.padding(top = 8.dp),
+                .widthIn(max = 680.dp)
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp, vertical = 12.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text("去选择学生")
+                TextButton(onClick = onClose) {
+                    Text("返回")
+                }
+                TextButton(
+                    enabled = contextReady && draftLoaded && !attachmentBusy,
+                    onClick = onDiscard,
+                ) {
+                    Text("丢弃草稿")
+                }
             }
-        } else if (!contextReady) {
+
+            Spacer(Modifier.height(6.dp))
             Text(
-                text = "当前输入框会在教学上下文准备好后开放。",
+                text = if (state.paperCaptureMode) "拍卷子归档" else "快速记录",
+                style = MaterialTheme.typography.headlineSmall,
+            )
+            Text(
+                text = when (state.teachingContextStatus) {
+                    TeachingContextStatus.Loading -> "正在读取教学上下文…"
+                    TeachingContextStatus.Ready -> "${state.studentDisplayName} · ${state.subjectLabel}"
+                    TeachingContextStatus.AuthenticationRequired -> "需要登录后才能记录"
+                    TeachingContextStatus.Unavailable -> "当前没有可用的任课关系"
+                    TeachingContextStatus.SelectionRequired -> "请先选择明确的学生和学科后再记录"
+                },
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 28.dp),
-            )
-        } else {
-            Spacer(Modifier.height(24.dp))
-            Text(
-                text = "你刚才观察到了什么？",
-                style = MaterialTheme.typography.titleMedium,
-            )
-            OutlinedTextField(
-                value = state.text,
-                onValueChange = onTextChanged,
-                enabled = draftLoaded,
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(min = 220.dp)
-                    .padding(top = 10.dp)
-                    .testTag("quick-capture-input"),
-                label = { Text("课堂观察") },
-                placeholder = { Text("例如：概括题仍然容易照抄原句，不能主动压缩信息。") },
+                    .padding(top = 2.dp)
+                    .testTag("quick-capture-teaching-context"),
             )
 
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                OutlinedButton(
-                    onClick = {
-                        photoPicker.launch(
-                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
+            if (state.teachingContextStatus == TeachingContextStatus.SelectionRequired) {
+                Text(
+                    text = "为了避免把课堂记录写到错误的学生名下，这次记录需要先从学生列表进入。",
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.padding(top = 24.dp),
+                )
+                TextButton(
+                    onClick = onChooseStudent,
+                    modifier = Modifier.padding(top = 8.dp),
+                ) {
+                    Text("去选择学生")
+                }
+            } else if (!contextReady) {
+                Text(
+                    text = "当前输入框会在教学上下文准备好后开放。",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 24.dp),
+                )
+            } else {
+                Spacer(Modifier.height(14.dp))
+
+                // Compact observation input (sized cleanly so the submit CTA fits above the fold on 360x800 phones)
+                OutlinedTextField(
+                    value = state.text,
+                    onValueChange = onTextChanged,
+                    enabled = draftLoaded,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = if (state.paperCaptureMode) 96.dp else 136.dp)
+                        .testTag("quick-capture-input"),
+                    label = {
+                        Text(if (state.paperCaptureMode) "补充备注（可留空，提交自动生成摘要）" else "课堂观察")
+                    },
+                    placeholder = {
+                        Text(
+                            if (state.paperCaptureMode) {
+                                "可选：如“后半段大题时间紧”"
+                            } else {
+                                "例如：概括题仍然容易照抄原句，不能主动压缩信息。"
+                            },
                         )
                     },
-                    enabled = draftLoaded &&
-                        draftWritable &&
-                        !attachmentBusy &&
-                        state.attachmentCount < state.maxAttachmentCount,
-                    modifier = Modifier.testTag("quick-capture-add-photo"),
-                ) {
-                    Text(
-                        if (state.attachmentCount == 0) {
-                            "添加照片"
-                        } else {
-                            "继续加页 (${state.attachmentCount}/${state.maxAttachmentCount})"
-                        },
-                    )
-                }
-
-                if (state.attachmentCount > 0) {
-                    TextButton(
-                        onClick = onRemovePhoto,
-                        enabled = !attachmentBusy,
-                        modifier = Modifier.testTag("quick-capture-remove-photo"),
-                    ) {
-                        Text("移除照片")
-                    }
-                }
-            }
-
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 12.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
-                    Text(
-                        text = "自动遮挡卷头姓名区",
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                    Text(
-                        text = "选图时抹黑顶部姓名/学校区并清除 EXIF 定位",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                Switch(
-                    checked = state.headerRedactionEnabled,
-                    onCheckedChange = onHeaderRedactionToggled,
-                    enabled = !attachmentBusy,
-                    modifier = Modifier
-                        .semantics { contentDescription = "自动遮挡卷头姓名区" }
-                        .testTag("quick-capture-header-redaction-toggle"),
                 )
-            }
 
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 8.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
-                    Text(
-                        text = "按试卷/作业归档",
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                    Text(
-                        text = "记录日期与类型，便于后续纵向趋势分析",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                Switch(
-                    checked = state.paperCaptureMode,
-                    onCheckedChange = onPaperCaptureModeToggled,
-                    enabled = draftLoaded && !attachmentBusy,
-                    modifier = Modifier
-                        .semantics { contentDescription = "按试卷或作业归档" }
-                        .testTag("quick-capture-paper-mode-toggle"),
-                )
-            }
-
-            if (state.paperCaptureMode) {
-                Column(
+                // Photo capture + Privacy & Paper Archive Controls grouped in a calm card
+                Surface(
+                    color = MaterialTheme.colorScheme.surfaceContainerLow,
+                    shape = RoundedCornerShape(14.dp),
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(top = 12.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
-                    Text(
-                        text = "试卷类型",
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    Column(
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        PaperKind.entries.forEach { kind ->
-                            val selected = state.paperKind == kind
-                            if (selected) {
-                                Button(
-                                    onClick = { onPaperKindSelected(kind) },
-                                    modifier = Modifier.testTag("quick-capture-paper-kind-${kind.wireValue}"),
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            OutlinedButton(
+                                onClick = {
+                                    photoPicker.launch(
+                                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
+                                    )
+                                },
+                                enabled = draftLoaded &&
+                                    draftWritable &&
+                                    !attachmentBusy &&
+                                    state.attachmentCount < state.maxAttachmentCount,
+                                modifier = Modifier.testTag("quick-capture-add-photo"),
+                            ) {
+                                Text(
+                                    if (state.attachmentCount == 0) {
+                                        "添加照片"
+                                    } else {
+                                        "继续加页 (${state.attachmentCount}/${state.maxAttachmentCount})"
+                                    },
+                                )
+                            }
+
+                            if (state.attachmentCount > 0) {
+                                TextButton(
+                                    onClick = onRemovePhoto,
+                                    enabled = !attachmentBusy,
+                                    modifier = Modifier.testTag("quick-capture-remove-photo"),
                                 ) {
-                                    Text(kind.displayLabel)
-                                }
-                            } else {
-                                OutlinedButton(
-                                    onClick = { onPaperKindSelected(kind) },
-                                    modifier = Modifier.testTag("quick-capture-paper-kind-${kind.wireValue}"),
-                                ) {
-                                    Text(kind.displayLabel)
+                                    Text("移除照片")
                                 }
                             }
                         }
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
+                                Text(
+                                    text = "自动遮挡卷头姓名区",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                )
+                                Text(
+                                    text = "抹黑顶部姓名区并去 EXIF",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                            Switch(
+                                checked = state.headerRedactionEnabled,
+                                onCheckedChange = onHeaderRedactionToggled,
+                                enabled = !attachmentBusy,
+                                modifier = Modifier
+                                    .semantics { contentDescription = "自动遮挡卷头姓名区" }
+                                    .testTag("quick-capture-header-redaction-toggle"),
+                            )
+                        }
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
+                                Text(
+                                    text = "按试卷/作业归档",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                )
+                                Text(
+                                    text = "自动建卷并触发 AI 错题草稿",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                            Switch(
+                                checked = state.paperCaptureMode,
+                                onCheckedChange = onPaperCaptureModeToggled,
+                                enabled = draftLoaded && !attachmentBusy,
+                                modifier = Modifier
+                                    .semantics { contentDescription = "按试卷或作业归档" }
+                                    .testTag("quick-capture-paper-mode-toggle"),
+                            )
+                        }
+
+                        if (state.paperCaptureMode) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(top = 4.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                Text(
+                                    text = "试卷类型",
+                                    style = MaterialTheme.typography.labelLarge,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .horizontalScroll(rememberScrollState()),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                ) {
+                                    PaperKind.entries.forEach { kind ->
+                                        val selected = state.paperKind == kind
+                                        if (selected) {
+                                            Button(
+                                                onClick = { onPaperKindSelected(kind) },
+                                                modifier = Modifier.testTag("quick-capture-paper-kind-${kind.wireValue}"),
+                                            ) {
+                                                Text(kind.displayLabel)
+                                            }
+                                        } else {
+                                            OutlinedButton(
+                                                onClick = { onPaperKindSelected(kind) },
+                                                modifier = Modifier.testTag("quick-capture-paper-kind-${kind.wireValue}"),
+                                            ) {
+                                                Text(kind.displayLabel)
+                                            }
+                                        }
+                                    }
+                                }
+
+                                OutlinedTextField(
+                                    value = state.paperDate,
+                                    onValueChange = onPaperDateChanged,
+                                    enabled = draftLoaded,
+                                    singleLine = true,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .testTag("quick-capture-paper-date"),
+                                    label = { Text("试卷日期 (YYYY-MM-DD)") },
+                                    placeholder = { Text("默认今天") },
+                                )
+
+                                OutlinedTextField(
+                                    value = state.paperTitle,
+                                    onValueChange = onPaperTitleChanged,
+                                    enabled = draftLoaded,
+                                    singleLine = true,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .testTag("quick-capture-paper-title"),
+                                    label = { Text("匿名标题（可选）") },
+                                    placeholder = { Text("例如：第3单元小数除法周测") },
+                                )
+                            }
+                        }
                     }
+                }
 
-                    OutlinedTextField(
-                        value = state.paperDate,
-                        onValueChange = onPaperDateChanged,
-                        enabled = draftLoaded,
-                        singleLine = true,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("quick-capture-paper-date"),
-                        label = { Text("试卷日期 (YYYY-MM-DD)") },
-                        placeholder = { Text("默认今天") },
-                    )
+                // Unified calm status strip
+                Surface(
+                    color = MaterialTheme.colorScheme.surfaceContainer,
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 10.dp),
+                ) {
+                    Column(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        attachmentMessage(state)?.let { message ->
+                            Text(
+                                text = message,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier
+                                    .semantics { liveRegion = LiveRegionMode.Polite }
+                                    .testTag("quick-capture-attachment-status"),
+                            )
+                        }
 
-                    OutlinedTextField(
-                        value = state.paperTitle,
-                        onValueChange = onPaperTitleChanged,
-                        enabled = draftLoaded,
-                        singleLine = true,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("quick-capture-paper-title"),
-                        label = { Text("匿名标题（可选）") },
-                        placeholder = { Text("例如：第3单元小数除法周测") },
-                    )
+                        Text(
+                            text = when (state.draftStatus) {
+                                LocalDraftStatus.Loading -> "正在读取本机草稿…"
+                                LocalDraftStatus.Saving -> "正在保护草稿…"
+                                LocalDraftStatus.SafeOnDevice -> if (state.recoveredFromDisk) {
+                                    "已恢复本机草稿"
+                                } else {
+                                    "草稿已保存在本机"
+                                }
+                                LocalDraftStatus.PersistenceFailed -> "本机草稿保存失败，当前文字仍保留在界面中"
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier
+                                .semantics { liveRegion = LiveRegionMode.Polite }
+                                .testTag("quick-capture-draft-status"),
+                        )
+
+                        submissionMessage(state)?.let { message ->
+                            Text(
+                                text = message,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier
+                                    .semantics { liveRegion = LiveRegionMode.Polite }
+                                    .testTag("quick-capture-submission-status"),
+                            )
+                        }
+                    }
+                }
+
+                Button(
+                    onClick = onSubmit,
+                    enabled = canSubmit,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 14.dp, bottom = 12.dp)
+                        .testTag("quick-capture-submit"),
+                ) {
+                    Text("提交记录")
                 }
             }
-
-            attachmentMessage(state)?.let { message ->
-                Text(
-                    text = message,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier
-                        .padding(top = 8.dp)
-                        .semantics { liveRegion = LiveRegionMode.Polite }
-                        .testTag("quick-capture-attachment-status"),
-                )
-            }
-
-            Text(
-                text = when (state.draftStatus) {
-                    LocalDraftStatus.Loading -> "正在读取本机草稿…"
-                    LocalDraftStatus.Saving -> "正在保护草稿…"
-                    LocalDraftStatus.SafeOnDevice -> if (state.recoveredFromDisk) {
-                        "已恢复本机草稿"
-                    } else {
-                        "草稿已保存在本机"
-                    }
-                    LocalDraftStatus.PersistenceFailed -> "本机草稿保存失败，当前文字仍保留在界面中"
-                },
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier
-                    .padding(top = 12.dp)
-                    .semantics { liveRegion = LiveRegionMode.Polite }
-                    .testTag("quick-capture-draft-status"),
-            )
-
-            submissionMessage(state)?.let { message ->
-                Text(
-                    text = message,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier
-                        .padding(top = 8.dp)
-                        .semantics { liveRegion = LiveRegionMode.Polite }
-                        .testTag("quick-capture-submission-status"),
-                )
-            }
-
-            Button(
-                onClick = onSubmit,
-                enabled = draftLoaded && draftWritable && !attachmentBusy && state.text.isNotBlank(),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 28.dp)
-                    .testTag("quick-capture-submit"),
-            ) {
-                Text("提交记录")
-            }
-            Text(
-                text = "提交后会先安全写入本机队列；服务端仍会重新检查当前任课权限。",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 8.dp, bottom = 16.dp),
-            )
         }
     }
 }
@@ -381,7 +417,6 @@ private fun submissionMessage(state: QuickCaptureUiState): String? = when (state
         else -> "服务器拒绝 · 原记录仍保存在本机"
     }
 }
-
 
 private fun attachmentMessage(state: QuickCaptureUiState): String? = when (state.attachmentStatus) {
     AttachmentDraftStatus.None -> null
