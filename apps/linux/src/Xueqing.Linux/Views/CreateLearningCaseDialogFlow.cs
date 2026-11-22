@@ -9,7 +9,9 @@ internal static class CreateLearningCaseDialogFlow
     public static async Task ShowFromObservationAsync(
         Gtk.Widget parent,
         MainWindowViewModel viewModel,
-        StudentRecentObservation observation)
+        StudentRecentObservation observation,
+        string? prefillTitle = null,
+        string? prefillAction = null)
     {
         ArgumentNullException.ThrowIfNull(parent);
         ArgumentNullException.ThrowIfNull(viewModel);
@@ -48,6 +50,10 @@ internal static class CreateLearningCaseDialogFlow
         {
             titleEntry.SetText(pendingRequest.Title);
         }
+        else if (!string.IsNullOrWhiteSpace(prefillTitle))
+        {
+            titleEntry.SetText(prefillTitle.Trim());
+        }
 
         content.Append(titleEntry);
 
@@ -55,7 +61,7 @@ internal static class CreateLearningCaseDialogFlow
         content.Append(GtkUiHelpers.CreateMultilineTextFrame(
             out var actionView,
             minHeight: 88,
-            initialText: pendingRequest?.PrimaryActionText));
+            initialText: pendingRequest?.PrimaryActionText ?? prefillAction));
 
         var dueRow = GtkUiHelpers.CreateDateEntryRow(
             "行动日期",

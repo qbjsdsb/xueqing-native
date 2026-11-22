@@ -194,4 +194,71 @@ public sealed class PaperEvidenceParserTests
         Assert.ThrowsExactly<InvalidDataException>(() =>
             PaperEvidenceJsonParser.ParseLongitudinal(mismatchedJson, scope, actorId));
     }
+
+    [TestMethod]
+    public void ParseClosedLoopReceipts_AndProposedActions_Succeed()
+    {
+        var opId = Guid.NewGuid();
+        var paperId = Guid.NewGuid();
+        var draftId = Guid.NewGuid();
+
+        var extractJson = $$"""
+        {
+          "ok": true,
+          "contract": "extract_paper_v1",
+          "operation_id": "{{opId:D}}",
+          "paper_submission_id": "{{paperId:D}}",
+          "model": "gemini-4-hydrogen",
+          "pages_analyzed": 2,
+          "confirmation_state": "draft_ready",
+          "grading_source": "teacher_marked",
+          "version": 2,
+          "mistake_items_saved": 3,
+          "server_committed_at": "2026-11-22T05:00:00Z"
+        }
+        """;
+        var extractReceipt = PaperEvidenceJsonParser.ParseTriggerExtractionReceipt(extractJson, opId, paperId);
+        Assert.AreEqual("gemini-4-hydrogen", extractReceipt.Model);
+        Assert.AreEqual(2, extractReceipt.PagesAnalyzed);
+        Assert.AreEqual(3, extractReceipt.MistakeItemsSaved);
+
+        var confirmJson = $$"""
+        {
+          "contract": "save_paper_extraction_v1",
+          "operation_id": "{{opId:D}}",
+          "paper_submission_id": "{{paperId:D}}",
+          "confirmation_state": "human_confirmed",
+          "grading_source": "human_verified",
+          "version": 3,
+          "mistake_items_saved": 2,
+          "server_committed_at": "2026-11-22T05:05:00Z"
+        }
+        """;
+        var confirmReceipt = PaperEvidenceJsonParser.ParseSaveExtractionReceipt(confirmJson, opId, paperId);
+        Assert.AreEqual("human_confirmed", confirmReceipt.ConfirmationState);
+        Assert.AreEqual(3L, confirmReceipt.Version);
+
+        var statusJson = $$"""
+        {
+          "contract": "update_study_plan_draft_status_v1",
+          "operation_id": "{{opId:D}}",
+          "draft_id": "{{draftId:D}}",
+          "status": "partially_adopted",
+          "version": 2,
+          "server_committed_at": "2026-11-22T05:10:00Z"
+        }
+        """;
+        var statusReceipt = PaperEvidenceJsonParser.ParseUpdateStudyPlanDraftStatusReceipt(statusJson, opId, draftId);
+        Assert.AreEqual("partially_adopted", statusReceipt.Status);
+        Assert.AreEqual(2L, statusReceipt.Version);
+
+        var actions = PaperEvidenceWireNames.ParseProposedActions(
+            """[{"kind":"create_learning_case","title":"后半段大题时间分配","next_action":"限时 15 分钟完成 2 道综合题","due_on":"2026-11-28"}]""");
+        Assert.AreEqual(1, actions.Count);
+        Assert.AreEqual("新建跟进课题", actions[0].KindLabel);
+        Assert.AreEqual("后半段大题时间分配", actions[0].Title);
+        Assert.AreEqual("限时 15 分钟完成 2 道综合题", actions[0].NextAction);
+        Assert.AreEqual("待审阅草案", PaperEvidenceWireNames.ToChineseStudyPlanStatus("draft"));
+        Assert.AreEqual("AI 识别草稿", PaperEvidenceWireNames.ToChineseProvenance("ai_draft"));
+    }
 }

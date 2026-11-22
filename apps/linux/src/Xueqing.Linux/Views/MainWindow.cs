@@ -52,6 +52,8 @@ internal sealed class MainWindow
         _initialAgentNavigation = initialAgentNavigation;
         _createDiagnosticsArchive = createDiagnosticsArchive;
 
+        XueqingLinuxTheme.Install();
+
         _window = Adw.ApplicationWindow.New(application);
         _window.SetTitle(ViewModel.IsPrototypeMode ? "学情（测试原型模式）" : "学情");
         _window.SetDefaultSize(1320, 840);

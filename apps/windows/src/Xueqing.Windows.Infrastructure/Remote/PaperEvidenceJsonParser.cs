@@ -95,6 +95,132 @@ public static class PaperEvidenceJsonParser
             RequireDateTimeOffset(root, "server_committed_at"));
     }
 
+    public static TriggerPaperExtractionReceipt ParseTriggerExtractionReceipt(
+        string json,
+        Guid expectedOperationId,
+        Guid expectedPaperSubmissionId)
+    {
+        using var document = JsonDocument.Parse(json);
+        var root = document.RootElement;
+        if (root.ValueKind != JsonValueKind.Object)
+        {
+            throw new InvalidDataException("Expected JSON object.");
+        }
+
+        var ok = RequireBool(root, "ok");
+        if (!ok)
+        {
+            throw new InvalidDataException("Expected ok=true in extract-paper-v1 receipt.");
+        }
+
+        var contract = RequireString(root, "contract");
+        if (!string.Equals(contract, "extract_paper_v1", StringComparison.Ordinal))
+        {
+            throw new InvalidDataException($"Unexpected extract_paper contract: {contract}");
+        }
+
+        var operationId = RequireGuid(root, "operation_id");
+        if (operationId != expectedOperationId)
+        {
+            throw new InvalidDataException("extract-paper-v1 operation_id mismatch.");
+        }
+
+        var paperSubmissionId = RequireGuid(root, "paper_submission_id");
+        if (paperSubmissionId != expectedPaperSubmissionId)
+        {
+            throw new InvalidDataException("extract-paper-v1 paper_submission_id mismatch.");
+        }
+
+        return new TriggerPaperExtractionReceipt(
+            operationId,
+            paperSubmissionId,
+            RequireString(root, "model"),
+            RequireInt(root, "pages_analyzed"),
+            RequireString(root, "confirmation_state"),
+            RequireString(root, "grading_source"),
+            RequireLong(root, "version"),
+            RequireInt(root, "mistake_items_saved"),
+            OptionalDateTimeOffset(root, "server_committed_at"));
+    }
+
+    public static SavePaperExtractionReceipt ParseSaveExtractionReceipt(
+        string json,
+        Guid expectedOperationId,
+        Guid expectedPaperSubmissionId)
+    {
+        using var document = JsonDocument.Parse(json);
+        var root = document.RootElement;
+        if (root.ValueKind != JsonValueKind.Object)
+        {
+            throw new InvalidDataException("Expected JSON object.");
+        }
+
+        var contract = RequireString(root, "contract");
+        if (!string.Equals(contract, "save_paper_extraction_v1", StringComparison.Ordinal))
+        {
+            throw new InvalidDataException($"Unexpected save_paper_extraction contract: {contract}");
+        }
+
+        var operationId = RequireGuid(root, "operation_id");
+        if (operationId != expectedOperationId)
+        {
+            throw new InvalidDataException("save_paper_extraction operation_id mismatch.");
+        }
+
+        var paperSubmissionId = RequireGuid(root, "paper_submission_id");
+        if (paperSubmissionId != expectedPaperSubmissionId)
+        {
+            throw new InvalidDataException("save_paper_extraction paper_submission_id mismatch.");
+        }
+
+        return new SavePaperExtractionReceipt(
+            operationId,
+            paperSubmissionId,
+            RequireString(root, "confirmation_state"),
+            RequireString(root, "grading_source"),
+            RequireLong(root, "version"),
+            RequireInt(root, "mistake_items_saved"),
+            RequireDateTimeOffset(root, "server_committed_at"));
+    }
+
+    public static UpdateStudyPlanDraftStatusReceipt ParseUpdateStudyPlanDraftStatusReceipt(
+        string json,
+        Guid expectedOperationId,
+        Guid expectedDraftId)
+    {
+        using var document = JsonDocument.Parse(json);
+        var root = document.RootElement;
+        if (root.ValueKind != JsonValueKind.Object)
+        {
+            throw new InvalidDataException("Expected JSON object.");
+        }
+
+        var contract = RequireString(root, "contract");
+        if (!string.Equals(contract, "update_study_plan_draft_status_v1", StringComparison.Ordinal))
+        {
+            throw new InvalidDataException($"Unexpected update_study_plan_draft_status contract: {contract}");
+        }
+
+        var operationId = RequireGuid(root, "operation_id");
+        if (operationId != expectedOperationId)
+        {
+            throw new InvalidDataException("update_study_plan_draft_status operation_id mismatch.");
+        }
+
+        var draftId = RequireGuid(root, "draft_id");
+        if (draftId != expectedDraftId)
+        {
+            throw new InvalidDataException("update_study_plan_draft_status draft_id mismatch.");
+        }
+
+        return new UpdateStudyPlanDraftStatusReceipt(
+            operationId,
+            draftId,
+            RequireString(root, "status"),
+            RequireLong(root, "version"),
+            RequireDateTimeOffset(root, "server_committed_at"));
+    }
+
     private static PaperLongitudinalSummary ParseSummary(JsonElement el) =>
         new(
             TotalPapers: RequireInt(el, "total_papers"),

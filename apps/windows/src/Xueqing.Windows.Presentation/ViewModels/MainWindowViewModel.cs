@@ -113,6 +113,11 @@ public sealed class MainWindowViewModel : ObservableObject
     private readonly ICaseLifecycleRecoveryStore? _caseLifecycleRecovery;
     private readonly IOrganizationManagementReader? _organizationManagement;
     private readonly OrganizationInvitationWorkflowCoordinator? _organizationInvitationWorkflow;
+    private readonly IStudentPaperLongitudinalReader? _paperLongitudinalReader;
+    private readonly IPaperAttachmentDownloader? _paperAttachmentDownloader;
+    private readonly IPaperExtractionTrigger? _paperExtractionTrigger;
+    private readonly IPaperExtractionConfirmer? _paperExtractionConfirmer;
+    private readonly IStudyPlanDraftStatusUpdater? _studyPlanDraftStatusUpdater;
     private readonly MainWindowStartupMode _startupMode;
     private readonly bool _isPrototypeMode;
     private readonly List<StudentSummary> _allStudents;
@@ -192,6 +197,11 @@ public sealed class MainWindowViewModel : ObservableObject
         _caseLifecycle = teachingWorkspace?.CaseLifecycle;
         _caseLifecycleRecovery = teachingWorkspace?.CaseLifecycleRecovery;
         _organizationManagement = teachingWorkspace?.OrganizationManagement;
+        _paperLongitudinalReader = teachingWorkspace?.PaperLongitudinal;
+        _paperAttachmentDownloader = teachingWorkspace?.PaperAttachmentDownloader;
+        _paperExtractionTrigger = teachingWorkspace?.PaperExtractionTrigger;
+        _paperExtractionConfirmer = teachingWorkspace?.PaperExtractionConfirmer;
+        _studyPlanDraftStatusUpdater = teachingWorkspace?.StudyPlanDraftStatusUpdater;
         _organizationInvitationWorkflow =
             teachingWorkspace?.OrganizationInvitations is not null &&
             teachingWorkspace.OrganizationInvitationDelivery is not null &&
@@ -286,6 +296,21 @@ public sealed class MainWindowViewModel : ObservableObject
     public ObservableCollection<PendingCaseLifecycleRecoveryItem> PendingCaseLifecycleRecoveries { get; }
 
     public bool IsAuthoritativeStudentWorkspace => _personalWorkspace is not null;
+
+    public Guid? CurrentActorAppUserId =>
+        _personalWorkspace?.Current.Status == PersonalStudentWorkspaceStatus.Ready
+            ? _personalWorkspace.Current.Bootstrap?.ActorAppUserId
+            : null;
+
+    public IStudentPaperLongitudinalReader? PaperLongitudinalReader => _paperLongitudinalReader;
+
+    public IPaperAttachmentDownloader? PaperAttachmentDownloader => _paperAttachmentDownloader;
+
+    public IPaperExtractionTrigger? PaperExtractionTrigger => _paperExtractionTrigger;
+
+    public IPaperExtractionConfirmer? PaperExtractionConfirmer => _paperExtractionConfirmer;
+
+    public IStudyPlanDraftStatusUpdater? StudyPlanDraftStatusUpdater => _studyPlanDraftStatusUpdater;
 
     public bool IsOrganizationManagementAuthoritative =>
         IsAuthoritativeStudentWorkspace && _organizationManagement is not null;

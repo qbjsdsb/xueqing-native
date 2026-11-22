@@ -90,6 +90,99 @@ internal static class GtkUiHelpers
         return label;
     }
 
+    public static Gtk.Label CreateBadge(string text, string variantCss = "xq-pill-neutral")
+    {
+        var label = Gtk.Label.New(text);
+        label.SetWrap(false);
+        label.SetSingleLineMode(true);
+        label.SetHalign(Gtk.Align.End);
+        label.SetValign(Gtk.Align.Center);
+        label.AddCssClass("xq-pill");
+        label.AddCssClass(variantCss);
+        return label;
+    }
+
+    public static Gtk.Box CreateKpiTile(
+        string valueText,
+        string labelText,
+        string? sublabelText = null,
+        string? valueAccentCss = null)
+    {
+        var card = Gtk.Box.New(Gtk.Orientation.Vertical, 3);
+        card.AddCssClass("xq-kpi-card");
+        card.SetHexpand(true);
+
+        var title = Gtk.Label.New(labelText);
+        title.SetHalign(Gtk.Align.Start);
+        title.SetXalign(0f);
+        title.SetWrap(false);
+        title.SetSingleLineMode(true);
+        title.AddCssClass("xq-kpi-label");
+        card.Append(title);
+
+        var value = Gtk.Label.New(valueText);
+        value.SetHalign(Gtk.Align.Start);
+        value.SetXalign(0f);
+        value.SetWrap(false);
+        value.SetSingleLineMode(true);
+        value.SetEllipsize(Pango.EllipsizeMode.End);
+        value.AddCssClass("xq-kpi-value");
+        if (!string.IsNullOrWhiteSpace(valueAccentCss))
+        {
+            value.AddCssClass(valueAccentCss);
+        }
+
+        card.Append(value);
+
+        if (!string.IsNullOrWhiteSpace(sublabelText))
+        {
+            var sub = CreateDimLabel(sublabelText, caption: true);
+            card.Append(sub);
+        }
+
+        return card;
+    }
+
+    public static Gtk.Box CreateProgressBarRow(
+        string labelText,
+        string valueText,
+        double fraction,
+        string? barExtraCss = null)
+    {
+        var row = Gtk.Box.New(Gtk.Orientation.Vertical, 4);
+
+        var top = Gtk.Box.New(Gtk.Orientation.Horizontal, 8);
+        var left = CreateBodyLabel(labelText);
+        left.SetHexpand(true);
+        var right = Gtk.Label.New(valueText);
+        right.SetWrap(false);
+        right.SetSingleLineMode(true);
+        right.SetHalign(Gtk.Align.End);
+        right.AddCssClass("dim-label");
+        right.AddCssClass("caption");
+        top.Append(left);
+        top.Append(right);
+        row.Append(top);
+
+        var bar = Gtk.ProgressBar.New();
+        bar.SetFraction(Math.Clamp(fraction, 0.0, 1.0));
+        bar.AddCssClass("xq-bar");
+        if (!string.IsNullOrWhiteSpace(barExtraCss))
+        {
+            bar.AddCssClass(barExtraCss);
+        }
+
+        row.Append(bar);
+        return row;
+    }
+
+    public static Gtk.Box CreateCardBox(int spacing = 10, string cardCss = "xq-card")
+    {
+        var box = Gtk.Box.New(Gtk.Orientation.Vertical, spacing);
+        box.AddCssClass(cardCss);
+        return box;
+    }
+
     public static Gtk.ScrolledWindow WrapInScroll(Gtk.Widget child, int? minHeight = null)
     {
         var scroll = Gtk.ScrolledWindow.New();

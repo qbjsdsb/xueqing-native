@@ -83,6 +83,13 @@ public static class LinuxTeachingWorkspaceBuilder
                 compatibilityGate),
             caseLifecycleRecovery);
 
+        var paperEvidenceClient = new PostgrestPaperEvidenceClient(
+            httpClient,
+            projectUri,
+            apiKey,
+            accessTokenProvider,
+            functionRegion);
+
         return new PersonalTeachingWorkspaceServices(
             new PersonalStudentWorkspaceCoordinator(
                 bootstrapReader,
@@ -101,6 +108,11 @@ public static class LinuxTeachingWorkspaceBuilder
             organizationInvitationAcceptance,
             organizationInvitationDelivery,
             organizationInvitationRecovery,
-            observationCapture);
+            observationCapture,
+            paperEvidenceClient,
+            paperEvidenceClient,
+            paperEvidenceClient,
+            paperEvidenceClient,
+            paperEvidenceClient);
     }
 }

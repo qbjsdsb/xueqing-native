@@ -16,4 +16,9 @@ public sealed record PersonalTeachingWorkspaceServices(
     IAcceptOrganizationInvitationCommand? OrganizationInvitationAcceptance = null,
     IOrganizationInvitationDeliveryCommand? OrganizationInvitationDelivery = null,
     IOrganizationInvitationRecoveryStore? OrganizationInvitationRecovery = null,
-    ObservationQuickCaptureCoordinator? ObservationCapture = null);
+    ObservationQuickCaptureCoordinator? ObservationCapture = null,
+    IStudentPaperLongitudinalReader? PaperLongitudinal = null,
+    IPaperAttachmentDownloader? PaperAttachmentDownloader = null,
+    IPaperExtractionTrigger? PaperExtractionTrigger = null,
+    IPaperExtractionConfirmer? PaperExtractionConfirmer = null,
+    IStudyPlanDraftStatusUpdater? StudyPlanDraftStatusUpdater = null);

@@ -38,6 +38,42 @@ public sealed record AttachmentDownloadResult(
         new(false, null, new LearningReadFailure(kind, code));
 }
 
+public sealed record TriggerPaperExtractionResult(
+    bool IsSuccess,
+    TriggerPaperExtractionReceipt? Receipt,
+    LearningReadFailure? Failure)
+{
+    public static TriggerPaperExtractionResult Success(TriggerPaperExtractionReceipt receipt) =>
+        new(true, receipt ?? throw new ArgumentNullException(nameof(receipt)), null);
+
+    public static TriggerPaperExtractionResult Failed(LearningReadFailureKind kind, string code) =>
+        new(false, null, new LearningReadFailure(kind, code));
+}
+
+public sealed record SavePaperExtractionResult(
+    bool IsSuccess,
+    SavePaperExtractionReceipt? Receipt,
+    LearningReadFailure? Failure)
+{
+    public static SavePaperExtractionResult Success(SavePaperExtractionReceipt receipt) =>
+        new(true, receipt ?? throw new ArgumentNullException(nameof(receipt)), null);
+
+    public static SavePaperExtractionResult Failed(LearningReadFailureKind kind, string code) =>
+        new(false, null, new LearningReadFailure(kind, code));
+}
+
+public sealed record UpdateStudyPlanDraftStatusResult(
+    bool IsSuccess,
+    UpdateStudyPlanDraftStatusReceipt? Receipt,
+    LearningReadFailure? Failure)
+{
+    public static UpdateStudyPlanDraftStatusResult Success(UpdateStudyPlanDraftStatusReceipt receipt) =>
+        new(true, receipt ?? throw new ArgumentNullException(nameof(receipt)), null);
+
+    public static UpdateStudyPlanDraftStatusResult Failed(LearningReadFailureKind kind, string code) =>
+        new(false, null, new LearningReadFailure(kind, code));
+}
+
 public interface IStudentPaperLongitudinalReader
 {
     Task<StudentPaperLongitudinalReadResult> ReadAsync(
@@ -60,5 +96,26 @@ public interface IPaperAttachmentDownloader
     Task<AttachmentDownloadResult> DownloadImageAsync(
         string bucketId,
         string objectName,
+        CancellationToken cancellationToken = default);
+}
+
+public interface IPaperExtractionTrigger
+{
+    Task<TriggerPaperExtractionResult> TriggerExtractionAsync(
+        TriggerPaperExtractionRequest request,
+        CancellationToken cancellationToken = default);
+}
+
+public interface IPaperExtractionConfirmer
+{
+    Task<SavePaperExtractionResult> SaveExtractionAsync(
+        SavePaperExtractionRequest request,
+        CancellationToken cancellationToken = default);
+}
+
+public interface IStudyPlanDraftStatusUpdater
+{
+    Task<UpdateStudyPlanDraftStatusResult> UpdateStatusAsync(
+        UpdateStudyPlanDraftStatusRequest request,
         CancellationToken cancellationToken = default);
 }
