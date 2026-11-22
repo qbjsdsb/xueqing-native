@@ -22,16 +22,19 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
@@ -103,18 +106,18 @@ internal fun QuickCaptureScreen(
                 }
             }
 
-            Spacer(Modifier.height(6.dp))
+            Spacer(Modifier.height(4.dp))
             Text(
-                text = if (state.paperCaptureMode) "拍卷子归档" else "快速记录",
+                text = if (state.paperCaptureMode) "拍卷子" else "快速记录",
                 style = MaterialTheme.typography.headlineSmall,
             )
             Text(
                 text = when (state.teachingContextStatus) {
-                    TeachingContextStatus.Loading -> "正在读取教学上下文…"
+                    TeachingContextStatus.Loading -> "正在读取…"
                     TeachingContextStatus.Ready -> "${state.studentDisplayName} · ${state.subjectLabel}"
-                    TeachingContextStatus.AuthenticationRequired -> "需要登录后才能记录"
+                    TeachingContextStatus.AuthenticationRequired -> "请先登录"
                     TeachingContextStatus.Unavailable -> "当前没有可用的任课关系"
-                    TeachingContextStatus.SelectionRequired -> "请先选择明确的学生和学科后再记录"
+                    TeachingContextStatus.SelectionRequired -> "请先选择学生和学科"
                 },
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -125,7 +128,7 @@ internal fun QuickCaptureScreen(
 
             if (state.teachingContextStatus == TeachingContextStatus.SelectionRequired) {
                 Text(
-                    text = "为了避免把课堂记录写到错误的学生名下，这次记录需要先从学生列表进入。",
+                    text = "请先从学生列表进入对应学科后再记录。",
                     style = MaterialTheme.typography.bodyMedium,
                     modifier = Modifier.padding(top = 24.dp),
                 )
@@ -137,42 +140,53 @@ internal fun QuickCaptureScreen(
                 }
             } else if (!contextReady) {
                 Text(
-                    text = "当前输入框会在教学上下文准备好后开放。",
+                    text = "请等待上下文准备完成。",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 24.dp),
                 )
             } else {
-                Spacer(Modifier.height(14.dp))
+                Spacer(Modifier.height(10.dp))
 
-                // Compact observation input (sized cleanly so the submit CTA fits above the fold on 360x800 phones)
-                OutlinedTextField(
+                // Apple Notes-style borderless paper writing canvas
+                TextField(
                     value = state.text,
                     onValueChange = onTextChanged,
                     enabled = draftLoaded,
+                    textStyle = MaterialTheme.typography.bodyLarge,
+                    colors = TextFieldDefaults.colors(
+                        focusedContainerColor = Color.Transparent,
+                        unfocusedContainerColor = Color.Transparent,
+                        disabledContainerColor = Color.Transparent,
+                        focusedIndicatorColor = Color.Transparent,
+                        unfocusedIndicatorColor = Color.Transparent,
+                        disabledIndicatorColor = Color.Transparent,
+                    ),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .heightIn(min = if (state.paperCaptureMode) 96.dp else 132.dp)
+                        .heightIn(min = if (state.paperCaptureMode) 96.dp else 148.dp)
                         .testTag("quick-capture-input"),
-                    label = {
-                        Text(if (state.paperCaptureMode) "备注（可选）" else "课堂观察")
-                    },
                     placeholder = {
                         Text(
-                            if (state.paperCaptureMode) {
-                                "可选，如“后半段大题时间紧”"
+                            text = if (state.paperCaptureMode) {
+                                "补充备注（可选，如“后半段大题时间紧”）…"
                             } else {
                                 "记下刚才的观察…"
                             },
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f),
                         )
                     },
                 )
 
-                // Editorial hairline-separated photo & paper options (zero heavy cards or industrial jargon)
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+
+                // Compact single-row Notes-style toolbar: Add photo · Redact header · Archive as paper
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(top = 14.dp),
+                        .horizontalScroll(rememberScrollState())
+                        .padding(vertical = 10.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
@@ -192,7 +206,7 @@ internal fun QuickCaptureScreen(
                             if (state.attachmentCount == 0) {
                                 "添加照片"
                             } else {
-                                "继续加页 (${state.attachmentCount}/${state.maxAttachmentCount})"
+                                "加页 (${state.attachmentCount}/${state.maxAttachmentCount})"
                             },
                         )
                     }
@@ -203,56 +217,25 @@ internal fun QuickCaptureScreen(
                             enabled = !attachmentBusy,
                             modifier = Modifier.testTag("quick-capture-remove-photo"),
                         ) {
-                            Text("移除照片")
+                            Text("移除")
                         }
                     }
-                }
 
-                HorizontalDivider(
-                    modifier = Modifier.padding(top = 14.dp),
-                    color = MaterialTheme.colorScheme.outlineVariant,
-                )
-
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 8.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        text = "遮挡卷头姓名",
-                        style = MaterialTheme.typography.bodyMedium,
-                        modifier = Modifier.weight(1f).padding(end = 12.dp),
-                    )
-                    Switch(
-                        checked = state.headerRedactionEnabled,
-                        onCheckedChange = onHeaderRedactionToggled,
+                    FilterChip(
+                        selected = state.headerRedactionEnabled,
+                        onClick = { onHeaderRedactionToggled(!state.headerRedactionEnabled) },
                         enabled = !attachmentBusy,
+                        label = { Text("遮挡姓名") },
                         modifier = Modifier
                             .semantics { contentDescription = "自动遮挡卷头姓名区" }
                             .testTag("quick-capture-header-redaction-toggle"),
                     )
-                }
 
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 8.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        text = "按试卷归档",
-                        style = MaterialTheme.typography.bodyMedium,
-                        modifier = Modifier.weight(1f).padding(end = 12.dp),
-                    )
-                    Switch(
-                        checked = state.paperCaptureMode,
-                        onCheckedChange = onPaperCaptureModeToggled,
+                    FilterChip(
+                        selected = state.paperCaptureMode,
+                        onClick = { onPaperCaptureModeToggled(!state.paperCaptureMode) },
                         enabled = draftLoaded && !attachmentBusy,
+                        label = { Text("按卷归档") },
                         modifier = Modifier
                             .semantics { contentDescription = "按试卷或作业归档" }
                             .testTag("quick-capture-paper-mode-toggle"),
@@ -263,7 +246,7 @@ internal fun QuickCaptureScreen(
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(top = 8.dp, bottom = 4.dp),
+                            .padding(bottom = 10.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         Row(
@@ -273,22 +256,12 @@ internal fun QuickCaptureScreen(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
                             PaperKind.entries.forEach { kind ->
-                                val selected = state.paperKind == kind
-                                if (selected) {
-                                    Button(
-                                        onClick = { onPaperKindSelected(kind) },
-                                        modifier = Modifier.testTag("quick-capture-paper-kind-${kind.wireValue}"),
-                                    ) {
-                                        Text(kind.displayLabel)
-                                    }
-                                } else {
-                                    OutlinedButton(
-                                        onClick = { onPaperKindSelected(kind) },
-                                        modifier = Modifier.testTag("quick-capture-paper-kind-${kind.wireValue}"),
-                                    ) {
-                                        Text(kind.displayLabel)
-                                    }
-                                }
+                                FilterChip(
+                                    selected = state.paperKind == kind,
+                                    onClick = { onPaperKindSelected(kind) },
+                                    label = { Text(kind.displayLabel) },
+                                    modifier = Modifier.testTag("quick-capture-paper-kind-${kind.wireValue}"),
+                                )
                             }
                         }
 
@@ -318,13 +291,11 @@ internal fun QuickCaptureScreen(
                     }
                 }
 
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-
-                // Quiet typographic status lines (no boxed gray container)
+                // Quiet status lines (no heavy box)
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(top = 10.dp),
+                        .padding(top = 4.dp),
                     verticalArrangement = Arrangement.spacedBy(3.dp),
                 ) {
                     attachmentMessage(state)?.let { message ->
@@ -386,13 +357,13 @@ internal fun QuickCaptureScreen(
 private fun submissionMessage(state: QuickCaptureUiState): String? = when (state.submissionStatus) {
     ObservationSubmissionStatus.None -> null
     ObservationSubmissionStatus.WaitingToSync -> "待同步"
-    ObservationSubmissionStatus.Syncing -> "正在同步"
-    ObservationSubmissionStatus.WaitingToRetry -> "待重试 · 记录已安全保存在本机"
+    ObservationSubmissionStatus.Syncing -> "同步中…"
+    ObservationSubmissionStatus.WaitingToRetry -> "待重试 · 已保存在本机"
     ObservationSubmissionStatus.AuthenticationRequired -> "登录状态已失效 · 记录仍保存在本机"
-    ObservationSubmissionStatus.Accepted -> "服务端已接受"
+    ObservationSubmissionStatus.Accepted -> "已提交"
     ObservationSubmissionStatus.Rejected -> when (state.submissionErrorCode) {
-        "XQ_TEACHER_ASSIGNMENT_REQUIRED" -> "服务器拒绝 · 当前任课关系已变化，原记录仍保存在本机"
-        else -> "服务器拒绝 · 原记录仍保存在本机"
+        "XQ_TEACHER_ASSIGNMENT_REQUIRED" -> "当前任课关系已变化，原记录仍保存在本机"
+        else -> "提交被拒绝，原记录仍保存在本机"
     }
 }
 
@@ -401,14 +372,14 @@ private fun attachmentMessage(state: QuickCaptureUiState): String? = when (state
     AttachmentDraftStatus.Protecting -> "正在保护照片…"
     AttachmentDraftStatus.SafeOnDevice -> when {
         state.attachmentCount <= 1 && state.redactedAttachmentCount == 0 ->
-            "照片已安全保存在本机"
+            "已添加 1 张照片"
         state.redactedAttachmentCount > 0 ->
             "已安全保存 ${state.attachmentCount} 页照片（${state.redactedAttachmentCount} 页已遮挡卷头姓名区）"
         else ->
-            "已安全保存 ${state.attachmentCount} 页照片（已去除 EXIF）"
+            "已添加 ${state.attachmentCount} 页照片"
     }
     AttachmentDraftStatus.Failed -> when (state.attachmentErrorCode) {
-        "too_large" -> "照片处理失败 · 文件过大，请换一张"
+        "too_large" -> "照片文件过大，请换一张"
         "local_key_unavailable" -> "照片保护不可用 · 文字草稿不受影响"
         "source_unavailable" -> "照片读取失败 · 文字草稿不受影响"
         else -> "照片处理失败 · 文字草稿不受影响"

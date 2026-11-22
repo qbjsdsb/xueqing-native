@@ -12,26 +12,31 @@ namespace Xueqing.Linux.Views;
 
 /// <summary>
 /// Quiet Ink Editorial exam-paper workspace:
-/// - Borderless 4-column metric strip
-/// - Subtle left-accent study-plan note callout
-/// - Slim 3px hairline cadence and root-cause bars
-/// - Hairline-separated paper timeline with inline extraction, confirmation, and preview dialogs.
+/// - Overview snippet widget (Stage Suggestion callout + latest 2 papers) for the "概览" tab
+/// - Full Papers tab widget (1-sentence human takeaway + minimalist Cairo sparkline + full hairline paper list)
+/// - Immersive side-by-side desk-grading sheet (Original Paper Left · Mistakes &amp; Quick Confirm Right).
 /// </summary>
 internal sealed class PaperLongitudinalPanel
 {
     private readonly Gtk.Widget _dialogParent;
     private readonly Func<StudyPlanProposedAction, Task<bool>>? _onAdoptProposedAction;
+    private readonly Action? _onOpenFullPapersTab;
+
+    // Full "试卷" tab root
     private readonly Gtk.Box _root;
-    private readonly Gtk.Label _windowLabel;
-    private readonly Gtk.Box _metricStrip;
-    private readonly Gtk.Box _studyPlanCallout;
-    private readonly Gtk.Label _studyPlanKickerLabel;
-    private readonly Gtk.Label _studyPlanTitleLabel;
-    private readonly Gtk.Button _viewPlanButton;
-    private readonly Gtk.Box _trendsRow;
+    private readonly Gtk.Label _takeawayLabel;
+    private readonly Gtk.Box _sparklineHost;
     private readonly Gtk.Box _topicsRow;
     private readonly Gtk.Box _topicsWrapBox;
     private readonly Gtk.Box _papersList;
+
+    // Compact "概览" tab snippet
+    private readonly Gtk.Box _overviewSnippet;
+    private readonly Gtk.Box _studyPlanCallout;
+    private readonly Gtk.Label _studyPlanKickerLabel;
+    private readonly Gtk.Label _studyPlanTitleLabel;
+    private readonly Gtk.Box _overviewRecentSection;
+    private readonly Gtk.Box _overviewRecentList;
 
     private SqliteObservationDraftStore? _prototypePlanStore;
     private StudentPaperLongitudinalSnapshot? _currentSnapshot;
@@ -47,29 +52,36 @@ internal sealed class PaperLongitudinalPanel
 
     public PaperLongitudinalPanel(
         Gtk.Widget dialogParent,
-        Func<StudyPlanProposedAction, Task<bool>>? onAdoptProposedAction = null)
+        Func<StudyPlanProposedAction, Task<bool>>? onAdoptProposedAction = null,
+        Action? onOpenFullPapersTab = null)
     {
         _dialogParent = dialogParent ?? throw new ArgumentNullException(nameof(dialogParent));
         _onAdoptProposedAction = onAdoptProposedAction;
+        _onOpenFullPapersTab = onOpenFullPapersTab;
 
+        // --- 1. Full "试卷" tab workspace ---
         _root = Gtk.Box.New(Gtk.Orientation.Vertical, 18);
         GtkUiHelpers.SetAutomationId(_root, "PaperLongitudinalSection");
 
-        // Quiet header
-        var headerRow = Gtk.Box.New(Gtk.Orientation.Horizontal, 10);
-        var title = GtkUiHelpers.CreateHeading("试卷", "title-4");
-        title.SetHexpand(true);
-        headerRow.Append(title);
-        _windowLabel = GtkUiHelpers.CreateStatusText(string.Empty, "xq-status-muted");
-        headerRow.Append(_windowLabel);
-        _root.Append(headerRow);
+        _takeawayLabel = GtkUiHelpers.CreateBodyLabel(string.Empty);
+        _takeawayLabel.AddCssClass("xq-takeaway");
+        _root.Append(_takeawayLabel);
 
-        // Borderless editorial 4-column metric strip
-        _metricStrip = Gtk.Box.New(Gtk.Orientation.Horizontal, 18);
-        _metricStrip.AddCssClass("xq-metric-strip");
-        _root.Append(_metricStrip);
+        _sparklineHost = Gtk.Box.New(Gtk.Orientation.Vertical, 0);
+        _root.Append(_sparklineHost);
 
-        // Editorial left-accent callout for latest study plan suggestion
+        _topicsRow = Gtk.Box.New(Gtk.Orientation.Horizontal, 6);
+        _topicsRow.SetVisible(false);
+        _topicsWrapBox = Gtk.Box.New(Gtk.Orientation.Horizontal, 6);
+        _topicsRow.Append(_topicsWrapBox);
+        _root.Append(_topicsRow);
+
+        _papersList = Gtk.Box.New(Gtk.Orientation.Vertical, 0);
+        _root.Append(_papersList);
+
+        // --- 2. Compact "概览" tab snippet ---
+        _overviewSnippet = Gtk.Box.New(Gtk.Orientation.Vertical, 18);
+
         _studyPlanCallout = Gtk.Box.New(Gtk.Orientation.Horizontal, 14);
         _studyPlanCallout.AddCssClass("xq-callout");
         _studyPlanCallout.SetVisible(false);
@@ -81,10 +93,10 @@ internal sealed class PaperLongitudinalPanel
         planTextBox.Append(_studyPlanKickerLabel);
         planTextBox.Append(_studyPlanTitleLabel);
 
-        _viewPlanButton = Gtk.Button.NewWithLabel("查看");
-        _viewPlanButton.AddCssClass("flat");
-        _viewPlanButton.SetValign(Gtk.Align.Center);
-        _viewPlanButton.OnClicked += async (_, _) =>
+        var viewPlanButton = Gtk.Button.NewWithLabel("查看");
+        viewPlanButton.AddCssClass("flat");
+        viewPlanButton.SetValign(Gtk.Align.Center);
+        viewPlanButton.OnClicked += async (_, _) =>
         {
             if (_latestDraft is { } draft)
             {
@@ -93,29 +105,32 @@ internal sealed class PaperLongitudinalPanel
         };
 
         _studyPlanCallout.Append(planTextBox);
-        _studyPlanCallout.Append(_viewPlanButton);
-        _root.Append(_studyPlanCallout);
+        _studyPlanCallout.Append(viewPlanButton);
+        _overviewSnippet.Append(_studyPlanCallout);
 
-        // Borderless 2-column slim trend bars
-        _trendsRow = Gtk.Box.New(Gtk.Orientation.Horizontal, 28);
-        _trendsRow.SetHomogeneous(true);
-        _trendsRow.SetVisible(false);
-        _root.Append(_trendsRow);
+        _overviewRecentSection = Gtk.Box.New(Gtk.Orientation.Vertical, 4);
+        _overviewRecentSection.SetVisible(false);
+        var recentHeader = Gtk.Box.New(Gtk.Orientation.Horizontal, 8);
+        var recentKicker = GtkUiHelpers.CreateSectionKicker("最近试卷");
+        recentKicker.SetHexpand(true);
+        recentHeader.Append(recentKicker);
+        if (_onOpenFullPapersTab is not null)
+        {
+            var allPapersBtn = Gtk.Button.NewWithLabel("全部试卷 →");
+            allPapersBtn.AddCssClass("flat");
+            allPapersBtn.OnClicked += (_, _) => _onOpenFullPapersTab();
+            recentHeader.Append(allPapersBtn);
+        }
 
-        // Quiet inline recurring topics row (no box)
-        _topicsRow = Gtk.Box.New(Gtk.Orientation.Vertical, 6);
-        _topicsRow.SetVisible(false);
-        _topicsRow.Append(GtkUiHelpers.CreateSectionKicker("反复失分"));
-        _topicsWrapBox = Gtk.Box.New(Gtk.Orientation.Horizontal, 6);
-        _topicsRow.Append(_topicsWrapBox);
-        _root.Append(_topicsRow);
-
-        // Hairline-separated paper timeline
-        _papersList = Gtk.Box.New(Gtk.Orientation.Vertical, 0);
-        _root.Append(_papersList);
+        _overviewRecentSection.Append(recentHeader);
+        _overviewRecentList = Gtk.Box.New(Gtk.Orientation.Vertical, 0);
+        _overviewRecentSection.Append(_overviewRecentList);
+        _overviewSnippet.Append(_overviewRecentSection);
     }
 
     public Gtk.Widget Widget => _root;
+
+    public Gtk.Widget OverviewSnippetWidget => _overviewSnippet;
 
     public async Task LoadPrototypeAsync(StudentSummary? student)
     {
@@ -223,7 +238,7 @@ internal sealed class PaperLongitudinalPanel
             return;
         }
 
-        _windowLabel.SetText("同步中…");
+        _takeawayLabel.SetText("正在读取试卷…");
         var result = await reader.ReadAsync(scope, actorAppUserId, windowDays: 90, limit: 30);
         if (!result.IsSuccess || result.Snapshot is null)
         {
@@ -245,27 +260,56 @@ internal sealed class PaperLongitudinalPanel
             _attachmentDownloader = attachmentDownloader;
         }
 
-        var s = snapshot.Summary;
-        _windowLabel.SetText($"近 {snapshot.WindowDays} 天");
+        // 1. One-sentence human takeaway
+        _takeawayLabel.SetText(PaperTrendSparkline.BuildNaturalTakeaway(snapshot));
 
-        // 1. Borderless 4-column editorial metric strip
-        GtkUiHelpers.ClearBoxChildren(_metricStrip);
-        _metricStrip.Append(GtkUiHelpers.CreateMetricColumn($"{s.TotalPapers} 份", "试卷"));
-        _metricStrip.Append(Gtk.Separator.New(Gtk.Orientation.Vertical));
+        // 2. Minimalist Cairo sparkline (zero progress bars!)
+        GtkUiHelpers.ClearBoxChildren(_sparklineHost);
+        if (snapshot.Papers.Count > 0)
+        {
+            _sparklineHost.Append(PaperTrendSparkline.Create(snapshot));
+            _sparklineHost.SetVisible(true);
+        }
+        else
+        {
+            _sparklineHost.SetVisible(false);
+        }
 
-        var avgValue = s.TeacherMarkedAvgScoreRatio is { } avg ? $"{avg * 100m:0}%" : "—";
-        _metricStrip.Append(GtkUiHelpers.CreateMetricColumn(avgValue, "均分"));
-        _metricStrip.Append(Gtk.Separator.New(Gtk.Orientation.Vertical));
+        // 3. Quiet monochrome recurring-topic chips
+        GtkUiHelpers.ClearBoxChildren(_topicsWrapBox);
+        if (snapshot.RecurringTopics.Count > 0)
+        {
+            foreach (var topic in snapshot.RecurringTopics.Take(5))
+            {
+                _topicsWrapBox.Append(GtkUiHelpers.CreateTag($"{topic.TopicTag} {topic.OccurrenceCount}"));
+            }
 
-        var fatigueValue = s.LateSectionMistakeRatio is { } fatigue ? $"{fatigue * 100m:0}%" : "—";
-        var fatigueCss = s.LateSectionMistakeRatio is >= 0.45m ? "xq-metric-value-warn" : null;
-        _metricStrip.Append(GtkUiHelpers.CreateMetricColumn(fatigueValue, "卷尾失分", fatigueCss));
-        _metricStrip.Append(Gtk.Separator.New(Gtk.Orientation.Vertical));
+            _topicsRow.SetVisible(true);
+        }
+        else
+        {
+            _topicsRow.SetVisible(false);
+        }
 
-        var topTopic = snapshot.RecurringTopics.FirstOrDefault();
-        _metricStrip.Append(GtkUiHelpers.CreateMetricColumn(topTopic?.TopicTag ?? "—", "高频薄弱"));
+        // 4. Full hairline paper list
+        GtkUiHelpers.ClearBoxChildren(_papersList);
+        if (snapshot.Papers.Count == 0)
+        {
+            var empty = Gtk.Label.New("暂无试卷记录");
+            empty.SetHalign(Gtk.Align.Start);
+            empty.AddCssClass("xq-empty-note");
+            _papersList.Append(empty);
+        }
+        else
+        {
+            _papersList.Append(Gtk.Separator.New(Gtk.Orientation.Horizontal));
+            foreach (var paper in snapshot.Papers)
+            {
+                _papersList.Append(BuildPaperRow(paper));
+            }
+        }
 
-        // 2. Study Plan Callout (calm left accent strip)
+        // 5. Overview snippet: Stage Suggestion callout + latest 2 papers
         _latestDraft = snapshot.RecentStudyPlanDrafts.FirstOrDefault();
         if (_latestDraft is { } draft)
         {
@@ -284,173 +328,103 @@ internal sealed class PaperLongitudinalPanel
             _studyPlanCallout.SetVisible(false);
         }
 
-        // 3. Borderless 2-column slim 3px trend bars
-        GtkUiHelpers.ClearBoxChildren(_trendsRow);
-        var hasTrends = snapshot.WeeklyCadence.Count > 0 || snapshot.RootCauseBreakdown.Count > 0;
-        _trendsRow.SetVisible(hasTrends);
-        if (hasTrends)
+        GtkUiHelpers.ClearBoxChildren(_overviewRecentList);
+        var recentTwo = snapshot.Papers.Take(2).ToArray();
+        if (recentTwo.Length > 0)
         {
-            var cadenceCol = Gtk.Box.New(Gtk.Orientation.Vertical, 10);
-            cadenceCol.SetHexpand(true);
-            cadenceCol.Append(GtkUiHelpers.CreateSectionKicker("近期频次"));
-            if (snapshot.WeeklyCadence.Count == 0)
+            foreach (var paper in recentTwo)
             {
-                cadenceCol.Append(GtkUiHelpers.CreateDimLabel("暂无记录", caption: true));
-            }
-            else
-            {
-                var recentWeeks = snapshot.WeeklyCadence.TakeLast(4).ToArray();
-                var maxPapers = Math.Max(1, recentWeeks.Max(w => w.PaperCount));
-                foreach (var week in recentWeeks)
-                {
-                    var label = $"{week.WeekStart:MM/dd} 周";
-                    var detail = $"{week.PaperCount} 卷 · 错 {week.MistakeCount}";
-                    cadenceCol.Append(GtkUiHelpers.CreateThinBarRow(
-                        label,
-                        detail,
-                        (double)week.PaperCount / maxPapers,
-                        "xq-thin-bar-accent"));
-                }
+                _overviewRecentList.Append(BuildPaperRow(paper));
             }
 
-            var rootCauseCol = Gtk.Box.New(Gtk.Orientation.Vertical, 10);
-            rootCauseCol.SetHexpand(true);
-            rootCauseCol.Append(GtkUiHelpers.CreateSectionKicker("主要错因"));
-            if (snapshot.RootCauseBreakdown.Count == 0)
-            {
-                rootCauseCol.Append(GtkUiHelpers.CreateDimLabel("暂无记录", caption: true));
-            }
-            else
-            {
-                var topCauses = snapshot.RootCauseBreakdown.Take(4).ToArray();
-                var maxTotal = Math.Max(1, topCauses.Max(c => c.TotalCount));
-                foreach (var cause in topCauses)
-                {
-                    var detail = $"近30天 {cause.Recent30dCount} / 更早 {cause.PriorWindowCount}";
-                    var barCss = cause.Recent30dCount > cause.PriorWindowCount ? "xq-thin-bar-warn" : null;
-                    rootCauseCol.Append(GtkUiHelpers.CreateThinBarRow(
-                        cause.Label,
-                        detail,
-                        (double)cause.TotalCount / maxTotal,
-                        barCss));
-                }
-            }
-
-            _trendsRow.Append(cadenceCol);
-            _trendsRow.Append(rootCauseCol);
-        }
-
-        // 4. Quiet monochrome recurring topics
-        GtkUiHelpers.ClearBoxChildren(_topicsWrapBox);
-        if (snapshot.RecurringTopics.Count > 0)
-        {
-            foreach (var topic in snapshot.RecurringTopics.Take(5))
-            {
-                _topicsWrapBox.Append(GtkUiHelpers.CreateTag($"{topic.TopicTag} {topic.OccurrenceCount}"));
-            }
-
-            _topicsRow.SetVisible(true);
+            _overviewRecentSection.SetVisible(true);
         }
         else
         {
-            _topicsRow.SetVisible(false);
-        }
-
-        // 5. Hairline-separated editorial paper list
-        GtkUiHelpers.ClearBoxChildren(_papersList);
-        if (snapshot.Papers.Count == 0)
-        {
-            var empty = Gtk.Label.New("暂无试卷记录");
-            empty.SetHalign(Gtk.Align.Start);
-            empty.AddCssClass("xq-empty-note");
-            _papersList.Append(empty);
-            return;
-        }
-
-        _papersList.Append(Gtk.Separator.New(Gtk.Orientation.Horizontal));
-        foreach (var paper in snapshot.Papers)
-        {
-            var row = Gtk.Box.New(Gtk.Orientation.Horizontal, 16);
-            row.AddCssClass("xq-list-row");
-
-            // Left date
-            var dateCol = Gtk.Label.New($"{paper.PaperDate:MM/dd}");
-            dateCol.SetSizeRequest(48, -1);
-            dateCol.SetHalign(Gtk.Align.Start);
-            dateCol.SetValign(Gtk.Align.Start);
-            dateCol.AddCssClass("xq-date-col");
-
-            // Center title + concise one-line subtitle
-            var middleCol = Gtk.Box.New(Gtk.Orientation.Vertical, 3);
-            middleCol.SetHexpand(true);
-
-            var titleText = string.IsNullOrWhiteSpace(paper.Title) ? paper.KindLabel : paper.Title;
-            middleCol.Append(GtkUiHelpers.CreateHeading(titleText, "heading"));
-
-            var subtitleText = !string.IsNullOrWhiteSpace(paper.ExtractionSummary)
-                ? $"{paper.KindLabel} · {paper.ExtractionSummary}"
-                : $"{paper.KindLabel} · {paper.Pages.Count} 页";
-            middleCol.Append(GtkUiHelpers.CreateDimLabel(subtitleText, caption: true));
-
-            // Right score, quiet status (only if unconfirmed), and flat action
-            var rightCol = Gtk.Box.New(Gtk.Orientation.Horizontal, 12);
-            rightCol.SetValign(Gtk.Align.Center);
-
-            var scoreText = paper.ScoreEarned is { } earned && paper.ScoreTotal is { } total
-                ? $"{earned:0.##}/{total:0.##}"
-                : $"错 {paper.MistakeCount ?? paper.Mistakes.Count} 题";
-            var scoreLabel = Gtk.Label.New(scoreText);
-            scoreLabel.AddCssClass("xq-score-num");
-            rightCol.Append(scoreLabel);
-
-            if (paper.ConfirmationState == PaperConfirmationState.DraftReady)
-            {
-                rightCol.Append(GtkUiHelpers.CreateStatusText("待核对", "xq-status-pending"));
-            }
-            else if (paper.ConfirmationState == PaperConfirmationState.AwaitingExtraction)
-            {
-                rightCol.Append(GtkUiHelpers.CreateStatusText("待解析", "xq-status-muted"));
-            }
-            else if (paper.ConfirmationState == PaperConfirmationState.ExtractionFailed)
-            {
-                rightCol.Append(GtkUiHelpers.CreateStatusText("解析失败", "xq-status-overdue"));
-            }
-
-            var capturedPaper = paper;
-            if (paper.ConfirmationState is PaperConfirmationState.AwaitingExtraction or PaperConfirmationState.ExtractionFailed)
-            {
-                var extractBtn = Gtk.Button.NewWithLabel("解析");
-                extractBtn.AddCssClass("suggested-action");
-                extractBtn.OnClicked += async (_, _) => await TriggerExtractionForPaperAsync(capturedPaper, extractBtn);
-                rightCol.Append(extractBtn);
-            }
-
-            var detailBtn = Gtk.Button.NewWithLabel(
-                paper.ConfirmationState == PaperConfirmationState.HumanConfirmed ? "详情" : "核对");
-            detailBtn.AddCssClass("flat");
-            detailBtn.OnClicked += async (_, _) => await ShowPaperDetailDialogAsync(capturedPaper);
-            rightCol.Append(detailBtn);
-
-            row.Append(dateCol);
-            row.Append(middleCol);
-            row.Append(rightCol);
-            _papersList.Append(row);
+            _overviewRecentSection.SetVisible(false);
         }
     }
 
     public void RenderEmpty(string statusText)
     {
-        _windowLabel.SetText(string.Empty);
-        GtkUiHelpers.ClearBoxChildren(_metricStrip);
-        _studyPlanCallout.SetVisible(false);
-        _trendsRow.SetVisible(false);
+        _takeawayLabel.SetText(string.Empty);
+        GtkUiHelpers.ClearBoxChildren(_sparklineHost);
+        _sparklineHost.SetVisible(false);
         _topicsRow.SetVisible(false);
+        _studyPlanCallout.SetVisible(false);
+        _overviewRecentSection.SetVisible(false);
         GtkUiHelpers.ClearBoxChildren(_papersList);
 
         var empty = Gtk.Label.New(statusText);
         empty.SetHalign(Gtk.Align.Start);
         empty.AddCssClass("xq-empty-note");
         _papersList.Append(empty);
+    }
+
+    private Gtk.Box BuildPaperRow(PaperSubmissionSummary paper)
+    {
+        var row = Gtk.Box.New(Gtk.Orientation.Horizontal, 16);
+        row.AddCssClass("xq-list-row");
+
+        var dateCol = Gtk.Label.New($"{paper.PaperDate:MM/dd}");
+        dateCol.SetSizeRequest(48, -1);
+        dateCol.SetHalign(Gtk.Align.Start);
+        dateCol.SetValign(Gtk.Align.Start);
+        dateCol.AddCssClass("xq-date-col");
+
+        var middleCol = Gtk.Box.New(Gtk.Orientation.Vertical, 3);
+        middleCol.SetHexpand(true);
+
+        var titleText = string.IsNullOrWhiteSpace(paper.Title) ? paper.KindLabel : paper.Title;
+        middleCol.Append(GtkUiHelpers.CreateHeading(titleText, "heading"));
+
+        var subtitleText = !string.IsNullOrWhiteSpace(paper.ExtractionSummary)
+            ? $"{paper.KindLabel} · {paper.ExtractionSummary}"
+            : $"{paper.KindLabel} · {paper.Pages.Count} 页";
+        middleCol.Append(GtkUiHelpers.CreateDimLabel(subtitleText, caption: true));
+
+        var rightCol = Gtk.Box.New(Gtk.Orientation.Horizontal, 12);
+        rightCol.SetValign(Gtk.Align.Center);
+
+        var scoreText = paper.ScoreEarned is { } earned && paper.ScoreTotal is { } total
+            ? $"{earned:0.##}/{total:0.##}"
+            : $"错 {paper.MistakeCount ?? paper.Mistakes.Count} 题";
+        var scoreLabel = Gtk.Label.New(scoreText);
+        scoreLabel.AddCssClass("xq-score-num");
+        rightCol.Append(scoreLabel);
+
+        if (paper.ConfirmationState == PaperConfirmationState.DraftReady)
+        {
+            rightCol.Append(GtkUiHelpers.CreateStatusText("待核对", "xq-status-pending"));
+        }
+        else if (paper.ConfirmationState == PaperConfirmationState.AwaitingExtraction)
+        {
+            rightCol.Append(GtkUiHelpers.CreateStatusText("待解析", "xq-status-muted"));
+        }
+        else if (paper.ConfirmationState == PaperConfirmationState.ExtractionFailed)
+        {
+            rightCol.Append(GtkUiHelpers.CreateStatusText("解析失败", "xq-status-overdue"));
+        }
+
+        var capturedPaper = paper;
+        if (paper.ConfirmationState is PaperConfirmationState.AwaitingExtraction or PaperConfirmationState.ExtractionFailed)
+        {
+            var extractBtn = Gtk.Button.NewWithLabel("解析");
+            extractBtn.AddCssClass("suggested-action");
+            extractBtn.OnClicked += async (_, _) => await TriggerExtractionForPaperAsync(capturedPaper, extractBtn);
+            rightCol.Append(extractBtn);
+        }
+
+        var detailBtn = Gtk.Button.NewWithLabel(
+            paper.ConfirmationState == PaperConfirmationState.HumanConfirmed ? "阅卷" : "核对");
+        detailBtn.AddCssClass("flat");
+        detailBtn.OnClicked += async (_, _) => await ShowSideBySidePaperDialogAsync(capturedPaper);
+        rightCol.Append(detailBtn);
+
+        row.Append(dateCol);
+        row.Append(middleCol);
+        row.Append(rightCol);
+        return row;
     }
 
     private async Task TriggerExtractionForPaperAsync(PaperSubmissionSummary paper, Gtk.Button triggerButton)
@@ -502,23 +476,148 @@ internal sealed class PaperLongitudinalPanel
         }
     }
 
-    private async Task ShowPaperDetailDialogAsync(PaperSubmissionSummary paper)
+    /// <summary>
+    /// Immersive side-by-side desk-grading sheet:
+    /// Left pane displays the original exam pages with pagination;
+    /// Right pane lists mistakes (clicking jumps the left page!) and inline confirmation controls.
+    /// </summary>
+    private async Task ShowSideBySidePaperDialogAsync(PaperSubmissionSummary paper)
     {
         var dialog = Adw.Dialog.New();
         dialog.SetTitle(paper.Title ?? $"{paper.PaperDate:yyyy-MM-dd} {paper.KindLabel}");
-        dialog.SetContentWidth(640);
-        dialog.SetContentHeight(600);
+        dialog.SetContentWidth(960);
+        dialog.SetContentHeight(640);
 
         var toolbar = Adw.ToolbarView.New();
         toolbar.AddTopBar(Adw.HeaderBar.New());
 
-        var content = Gtk.Box.New(Gtk.Orientation.Vertical, 18);
-        content.SetMarginStart(24);
-        content.SetMarginEnd(24);
-        content.SetMarginTop(16);
-        content.SetMarginBottom(24);
+        var split = Gtk.Box.New(Gtk.Orientation.Horizontal, 0);
+        split.SetHexpand(true);
+        split.SetVexpand(true);
 
-        // Concise metadata line
+        // === LEFT PANE: Original Paper Canvas ===
+        var leftPane = Gtk.Box.New(Gtk.Orientation.Vertical, 0);
+        leftPane.AddCssClass("xq-paper-canvas");
+        leftPane.SetHexpand(true);
+        leftPane.SetVexpand(true);
+        leftPane.SetSizeRequest(420, -1);
+
+        var canvasHost = Gtk.Box.New(Gtk.Orientation.Vertical, 0);
+        canvasHost.SetHexpand(true);
+        canvasHost.SetVexpand(true);
+        leftPane.Append(canvasHost);
+
+        var pagerBar = Gtk.Box.New(Gtk.Orientation.Horizontal, 10);
+        pagerBar.SetMarginStart(16);
+        pagerBar.SetMarginEnd(16);
+        pagerBar.SetMarginTop(10);
+        pagerBar.SetMarginBottom(12);
+
+        var prevBtn = Gtk.Button.NewWithLabel("上一页");
+        prevBtn.AddCssClass("flat");
+        var pageIndicator = Gtk.Label.New(string.Empty);
+        pageIndicator.SetHexpand(true);
+        pageIndicator.SetHalign(Gtk.Align.Center);
+        pageIndicator.AddCssClass("xq-date-col");
+        var nextBtn = Gtk.Button.NewWithLabel("下一页");
+        nextBtn.AddCssClass("flat");
+
+        pagerBar.Append(prevBtn);
+        pagerBar.Append(pageIndicator);
+        pagerBar.Append(nextBtn);
+        leftPane.Append(pagerBar);
+
+        var orderedPages = paper.Pages.OrderBy(p => p.PageIndex).ToArray();
+        var currentPageIdx = 0;
+        var textureCache = new Dictionary<int, Gdk.Texture>();
+
+        async Task RenderLeftPageAsync(int index)
+        {
+            GtkUiHelpers.ClearBoxChildren(canvasHost);
+
+            if (orderedPages.Length == 0)
+            {
+                var noPage = Gtk.Label.New("暂无原卷照片");
+                noPage.SetVexpand(true);
+                noPage.SetValign(Gtk.Align.Center);
+                noPage.SetHalign(Gtk.Align.Center);
+                noPage.AddCssClass("xq-empty-note");
+                canvasHost.Append(noPage);
+                pageIndicator.SetText("0 / 0");
+                prevBtn.SetSensitive(false);
+                nextBtn.SetSensitive(false);
+                return;
+            }
+
+            currentPageIdx = Math.Clamp(index, 0, orderedPages.Length - 1);
+            var page = orderedPages[currentPageIdx];
+            prevBtn.SetSensitive(currentPageIdx > 0);
+            nextBtn.SetSensitive(currentPageIdx < orderedPages.Length - 1);
+
+            var redactHint = page.HeaderRedacted ? " · 已遮挡姓名" : string.Empty;
+            pageIndicator.SetText($"第 {page.PageIndex} / {orderedPages.Length} 页{redactHint}");
+
+            if (_attachmentDownloader is null)
+            {
+                var pageMistakes = paper.Mistakes.Where(m => m.PageIndex == page.PageIndex).ToArray();
+                canvasHost.Append(PaperTrendSparkline.CreateSimulatedPaperCanvas(paper, page, pageMistakes));
+                return;
+            }
+
+            if (textureCache.TryGetValue(page.PageIndex, out var cachedTexture))
+            {
+                var pic = Gtk.Picture.NewForPaintable(cachedTexture);
+                pic.SetCanShrink(true);
+                pic.SetVexpand(true);
+                pic.SetHexpand(true);
+                canvasHost.Append(pic);
+                return;
+            }
+
+            var loading = Gtk.Label.New("正在加载原卷…");
+            loading.SetVexpand(true);
+            loading.SetValign(Gtk.Align.Center);
+            loading.SetHalign(Gtk.Align.Center);
+            loading.AddCssClass("xq-empty-note");
+            canvasHost.Append(loading);
+
+            var download = await _attachmentDownloader.DownloadImageAsync(page.BucketId, page.ObjectName);
+            if (currentPageIdx != index)
+            {
+                return;
+            }
+
+            GtkUiHelpers.ClearBoxChildren(canvasHost);
+            if (!download.IsSuccess || download.Image is null)
+            {
+                var err = Gtk.Label.New("暂时无法加载原卷图片");
+                err.SetVexpand(true);
+                err.SetValign(Gtk.Align.Center);
+                err.SetHalign(Gtk.Align.Center);
+                err.AddCssClass("xq-empty-note");
+                canvasHost.Append(err);
+                return;
+            }
+
+            var texture = Gdk.Texture.NewFromBytes(GLib.Bytes.New(download.Image.Bytes));
+            textureCache[page.PageIndex] = texture;
+            var picture = Gtk.Picture.NewForPaintable(texture);
+            picture.SetCanShrink(true);
+            picture.SetVexpand(true);
+            picture.SetHexpand(true);
+            canvasHost.Append(picture);
+        }
+
+        prevBtn.OnClicked += async (_, _) => await RenderLeftPageAsync(currentPageIdx - 1);
+        nextBtn.OnClicked += async (_, _) => await RenderLeftPageAsync(currentPageIdx + 1);
+
+        // === RIGHT PANE: Mistakes & Inline Quick Confirm ===
+        var rightContent = Gtk.Box.New(Gtk.Orientation.Vertical, 16);
+        rightContent.SetMarginStart(24);
+        rightContent.SetMarginEnd(24);
+        rightContent.SetMarginTop(18);
+        rightContent.SetMarginBottom(24);
+
         var metaParts = new List<string>
         {
             paper.PaperDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
@@ -530,97 +629,15 @@ internal sealed class PaperLongitudinalPanel
         }
 
         metaParts.Add(paper.ConfirmationState == PaperConfirmationState.HumanConfirmed ? "已确认" : "待核对");
-        content.Append(GtkUiHelpers.CreateDimLabel(string.Join("  ·  ", metaParts), caption: true));
+        rightContent.Append(GtkUiHelpers.CreateDimLabel(string.Join("  ·  ", metaParts), caption: true));
 
-        if (!string.IsNullOrWhiteSpace(paper.ExtractionSummary))
-        {
-            var summaryBox = GtkUiHelpers.CreateSurfaceBox(spacing: 4);
-            summaryBox.Append(GtkUiHelpers.CreateBodyLabel(paper.ExtractionSummary));
-            content.Append(summaryBox);
-        }
-
-        // Mistakes (hairline list)
-        var mistakesSection = Gtk.Box.New(Gtk.Orientation.Vertical, 4);
-        mistakesSection.Append(GtkUiHelpers.CreateSectionKicker($"错题（{paper.Mistakes.Count}）"));
-        if (paper.Mistakes.Count == 0)
-        {
-            mistakesSection.Append(GtkUiHelpers.CreateDimLabel("暂无错题记录", caption: true));
-        }
-        else
-        {
-            foreach (var m in paper.Mistakes)
-            {
-                var row = Gtk.Box.New(Gtk.Orientation.Vertical, 4);
-                row.AddCssClass("xq-list-row");
-
-                var top = Gtk.Box.New(Gtk.Orientation.Horizontal, 10);
-                var pts = m.PointsLost is { } lost ? $"  -{lost:0.##}" : string.Empty;
-                var mTitle = GtkUiHelpers.CreateHeading($"第{m.PageIndex}页 · {m.QuestionLabel}{pts}", "heading");
-                mTitle.SetHexpand(true);
-                top.Append(mTitle);
-                top.Append(GtkUiHelpers.CreateStatusText(
-                    PaperEvidenceWireNames.ToChineseLabel(m.ErrorRootCause),
-                    "xq-status-muted"));
-                row.Append(top);
-
-                row.Append(GtkUiHelpers.CreateBodyLabel(m.Summary));
-
-                var details = new List<string> { PaperEvidenceWireNames.ToChineseLabel(m.PaperSectionPosition) };
-                if (m.CorrectedOnPaper is { } corr)
-                {
-                    details.Add(corr ? "已订正" : "未订正");
-                }
-
-                if (m.TopicTags.Count > 0)
-                {
-                    details.Add(string.Join(" / ", m.TopicTags));
-                }
-
-                row.Append(GtkUiHelpers.CreateDimLabel(string.Join(" · ", details), caption: true));
-                mistakesSection.Append(row);
-            }
-        }
-
-        content.Append(mistakesSection);
-
-        // Original pages
-        if (paper.Pages.Count > 0)
-        {
-            var pagesSection = Gtk.Box.New(Gtk.Orientation.Vertical, 6);
-            pagesSection.Append(GtkUiHelpers.CreateSectionKicker($"原卷（{paper.Pages.Count} 页）"));
-            foreach (var pg in paper.Pages)
-            {
-                var pageRow = Gtk.Box.New(Gtk.Orientation.Horizontal, 10);
-                var pageMeta = pg.HeaderRedacted
-                    ? $"第 {pg.PageIndex} 页 · 已遮挡姓名区"
-                    : $"第 {pg.PageIndex} 页";
-                var pageLabel = GtkUiHelpers.CreateBodyLabel(pageMeta);
-                pageLabel.SetHexpand(true);
-                pageRow.Append(pageLabel);
-
-                if (_attachmentDownloader is not null)
-                {
-                    var previewBtn = Gtk.Button.NewWithLabel("查看图片");
-                    previewBtn.AddCssClass("flat");
-                    var capturedPage = pg;
-                    previewBtn.OnClicked += async (_, _) =>
-                        await PreviewPrivateAttachmentAsync(dialog, capturedPage);
-                    pageRow.Append(previewBtn);
-                }
-
-                pagesSection.Append(pageRow);
-            }
-
-            content.Append(pagesSection);
-        }
-
-        // Clean human confirmation form for unconfirmed papers
+        // Inline confirmation controls at top for unconfirmed papers
         if (paper.ConfirmationState != PaperConfirmationState.HumanConfirmed)
         {
             var confirmBox = GtkUiHelpers.CreateSurfaceBox(spacing: 10);
             confirmBox.Append(GtkUiHelpers.CreateSectionKicker("核对分数与小结"));
 
-            var fieldsRow = Gtk.Box.New(Gtk.Orientation.Horizontal, 8);
+            var fieldsRow = Gtk.Box.New(Gtk.Orientation.Horizontal, 10);
             fieldsRow.SetHomogeneous(true);
 
             var earnedEntry = Gtk.Entry.New();
@@ -638,12 +655,12 @@ internal sealed class PaperLongitudinalPanel
             }
 
             var mistakesEntry = Gtk.Entry.New();
-            mistakesEntry.SetPlaceholderText("错题数");
+            mistakesEntry.SetPlaceholderText("错题");
             mistakesEntry.SetText((paper.MistakeCount ?? paper.Mistakes.Count).ToString(CultureInfo.InvariantCulture));
 
-            fieldsRow.Append(earnedEntry);
-            fieldsRow.Append(totalEntry);
-            fieldsRow.Append(mistakesEntry);
+            fieldsRow.Append(WrapLabeledEntry("得分", earnedEntry));
+            fieldsRow.Append(WrapLabeledEntry("满分", totalEntry));
+            fieldsRow.Append(WrapLabeledEntry("错题", mistakesEntry));
             confirmBox.Append(fieldsRow);
 
             var summaryEntry = Gtk.Entry.New();
@@ -732,47 +749,83 @@ internal sealed class PaperLongitudinalPanel
                 }
             };
             confirmBox.Append(confirmBtn);
-            content.Append(confirmBox);
+            rightContent.Append(confirmBox);
+        }
+        else if (!string.IsNullOrWhiteSpace(paper.ExtractionSummary))
+        {
+            rightContent.Append(GtkUiHelpers.CreateBodyLabel(paper.ExtractionSummary));
         }
 
-        toolbar.SetContent(GtkUiHelpers.WrapInScroll(content));
+        // Mistakes list (clicking page button jumps left canvas to that page!)
+        var mistakesSection = Gtk.Box.New(Gtk.Orientation.Vertical, 4);
+        mistakesSection.Append(GtkUiHelpers.CreateSectionKicker($"错题（{paper.Mistakes.Count}）"));
+        if (paper.Mistakes.Count == 0)
+        {
+            mistakesSection.Append(GtkUiHelpers.CreateDimLabel("暂无错题记录", caption: true));
+        }
+        else
+        {
+            foreach (var m in paper.Mistakes)
+            {
+                var row = Gtk.Box.New(Gtk.Orientation.Vertical, 4);
+                row.AddCssClass("xq-list-row");
+
+                var top = Gtk.Box.New(Gtk.Orientation.Horizontal, 8);
+                var pts = m.PointsLost is { } lost ? $"  -{lost:0.##}" : string.Empty;
+                var mTitle = GtkUiHelpers.CreateHeading($"{m.QuestionLabel}{pts}", "heading");
+                mTitle.SetHexpand(true);
+                top.Append(mTitle);
+
+                top.Append(GtkUiHelpers.CreateStatusText(
+                    PaperEvidenceWireNames.ToChineseLabel(m.ErrorRootCause),
+                    "xq-status-muted"));
+
+                var targetPageIndex = Array.FindIndex(orderedPages, p => p.PageIndex == m.PageIndex);
+                if (targetPageIndex >= 0 && orderedPages.Length > 1)
+                {
+                    var jumpBtn = Gtk.Button.NewWithLabel($"第{m.PageIndex}页");
+                    jumpBtn.AddCssClass("flat");
+                    var capturedIdx = targetPageIndex;
+                    jumpBtn.OnClicked += async (_, _) => await RenderLeftPageAsync(capturedIdx);
+                    top.Append(jumpBtn);
+                }
+
+                row.Append(top);
+                row.Append(GtkUiHelpers.CreateBodyLabel(m.Summary));
+
+                var details = new List<string> { PaperEvidenceWireNames.ToChineseLabel(m.PaperSectionPosition) };
+                if (m.CorrectedOnPaper is { } corr)
+                {
+                    details.Add(corr ? "已订正" : "未订正");
+                }
+
+                if (m.TopicTags.Count > 0)
+                {
+                    details.Add(string.Join(" / ", m.TopicTags));
+                }
+
+                row.Append(GtkUiHelpers.CreateDimLabel(string.Join(" · ", details), caption: true));
+                mistakesSection.Append(row);
+            }
+        }
+
+        rightContent.Append(mistakesSection);
+
+        var rightScroll = GtkUiHelpers.WrapInScroll(rightContent);
+        rightScroll.SetHexpand(true);
+        rightScroll.SetSizeRequest(380, -1);
+
+        split.Append(leftPane);
+        split.Append(rightScroll);
+        toolbar.SetContent(split);
         dialog.SetChild(toolbar);
 
         var tcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         dialog.OnClosed += (_, _) => tcs.TrySetResult();
         dialog.Present(_dialogParent);
+
+        _ = RenderLeftPageAsync(0);
         await tcs.Task;
-    }
-
-    private async Task PreviewPrivateAttachmentAsync(Gtk.Widget parent, PaperPageSummary page)
-    {
-        if (_attachmentDownloader is null)
-        {
-            return;
-        }
-
-        var download = await _attachmentDownloader.DownloadImageAsync(page.BucketId, page.ObjectName);
-        if (!download.IsSuccess || download.Image is null)
-        {
-            await GtkUiHelpers.ShowMessageDialogAsync(parent, "无法加载图片", "请检查网络连接后重试。");
-            return;
-        }
-
-        var bytes = GLib.Bytes.New(download.Image.Bytes);
-        var texture = Gdk.Texture.NewFromBytes(bytes);
-        var picture = Gtk.Picture.NewForPaintable(texture);
-        picture.SetCanShrink(true);
-
-        var imgDialog = Adw.Dialog.New();
-        imgDialog.SetTitle($"第 {page.PageIndex} 页");
-        imgDialog.SetContentWidth(780);
-        imgDialog.SetContentHeight(640);
-
-        var tb = Adw.ToolbarView.New();
-        tb.AddTopBar(Adw.HeaderBar.New());
-        tb.SetContent(GtkUiHelpers.WrapInScroll(picture));
-        imgDialog.SetChild(tb);
-        imgDialog.Present(parent);
     }
 
     private async Task ShowStudyPlanDraftDialogAsync(StudyPlanDraftSummary draft)
@@ -895,6 +948,14 @@ internal sealed class PaperLongitudinalPanel
         {
             await _reloadCurrentAsync();
         }
+    }
+
+    private static Gtk.Box WrapLabeledEntry(string labelText, Gtk.Entry entry)
+    {
+        var box = Gtk.Box.New(Gtk.Orientation.Vertical, 3);
+        box.Append(GtkUiHelpers.CreateDimLabel(labelText, caption: true));
+        box.Append(entry);
+        return box;
     }
 
     private SqliteObservationDraftStore GetOrCreatePrototypePlanStore()
