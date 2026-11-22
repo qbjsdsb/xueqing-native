@@ -230,7 +230,10 @@ public static class PaperEvidenceJsonParser
             TotalMistakesConfirmed: RequireInt(el, "total_mistakes_confirmed"),
             TotalMistakesAll: RequireInt(el, "total_mistakes_all"),
             TeacherMarkedAvgScoreRatio: OptionalDecimal(el, "teacher_marked_avg_score_ratio"),
-            LateSectionMistakeRatio: OptionalDecimal(el, "late_section_mistake_ratio"));
+            LateSectionMistakeRatio: OptionalDecimal(el, "late_section_mistake_ratio"),
+            DraftAvgScoreRatio: OptionalDecimal(el, "draft_avg_score_ratio"),
+            ConfirmedLateSectionMistakeRatio: OptionalDecimal(el, "confirmed_late_section_mistake_ratio"),
+            PriorWindowDays: OptionalInt(el, "prior_window_days"));
 
     private static IReadOnlyList<PaperWeeklyCadencePoint> ParseWeeklyCadence(JsonElement array)
     {

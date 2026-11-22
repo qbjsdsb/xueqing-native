@@ -33,17 +33,31 @@ Student
 - organization owner: may also be a teacher, but organization supervision and personal teaching remain separate projections;
 - organization admin: manages organization teaching operations without automatically owning teaching responsibility.
 
+## Phase 2 Longitudinal Paper Evidence Loop
+
+Exam papers and homework sheets feed into the core loop as structured longitudinal evidence without bypassing human teaching authority:
+
+```text
+Multi-page Paper Photo (Android, optional header redaction)
+→ Paper Submission + Private Attachments
+→ AI Structured Mistake Draft (single-paper extraction, store=false)
+→ Human Review & Confirmation (locks confirmed facts)
+→ Deterministic Longitudinal Metrics (cadence, volume, root-cause shifts, recurring topics)
+→ AI Stage Brief & Study Plan Draft (never mutates Cases silently)
+→ Teacher Explicit Adoption into Learning Case / Next Action
+```
+
 ## Platform responsibility
 
-Android = Capture: Today, quick capture, photos, students, current focus, next action.
-
-Windows = Organize + Think: list/detail workspaces, timeline, search/filter, bulk-safe administration, responsibility overview and organization management.
+- **Android = Capture**: Today, quick capture, multi-page exam/homework photos with on-device header redaction, students, current focus, next action.
+- **Desktop (Windows & Linux native) = Organize + Think**: list/detail workspaces, timeline, longitudinal paper trends and confirmation, study plan draft adoption, search/filter, bulk-safe administration, responsibility overview, and organization management.
+- **Local AI Agent Surface (`Xueqing.Mcp`) = Read + Draft Assistant**: read-only authorized teaching/longitudinal projections, encrypted local observation drafts, server-side study plan drafts (`status = 'draft'`), and `xueqing://` handoff links back to the native desktop client for teacher review and explicit action.
 
 ## Non-goals for the initial product
 
 Do not expand the core into tuition/billing, enrollment CRM, full timetable scheduling, finance, large question bank, parent/student standalone apps, generalized document workspace or autonomous AI diagnosis.
 
-AI may later assist drafting/summarization, but may not silently create formal diagnoses, change Case status, finalize records or bypass teacher responsibility.
+AI assists with single-paper extraction drafts, deterministic-metric longitudinal summarization, and candidate study plan drafts, but may never silently create formal diagnoses, mutate Learning Cases or Next Actions, overwrite human-confirmed records, or bypass teacher responsibility.
 
 ## Product quality gates
 

@@ -8,7 +8,7 @@ Turns multi-page photographed student exam papers and homework sheets into an au
 
 - **Original pages** live in the existing private `teaching-attachments-v1` bucket via `public.observation_attachments` (zero change to Attachment v1 upload/commit safety).
 - **Single-paper structured extraction** (from teacher marks or AI vision) is stored as an explicit draft (`ai_draft`) until a teacher/guardian confirms it (`human_confirmed`). AI extraction **never** overwrites an already-confirmed paper.
-- **Unmarked paper grading boundary**: `grading_source = 'ai_tentative_unmarked'` is strictly excluded from authoritative score averages (`teacher_marked_avg_score_ratio`) until human-verified (`human_verified`).
+- **Unmarked & unconfirmed grading boundary**: `teacher_marked_avg_score_ratio` strictly averages `human_confirmed` papers with `grading_source in ('teacher_marked', 'human_verified')`, so neither `ai_tentative_unmarked` nor unconfirmed `draft_ready` AI OCR reads pollute authoritative averages. `draft_avg_score_ratio` and `confirmed_late_section_mistake_ratio` expose transparent draft vs. confirmed calibration alongside `prior_window_days`.
 - **Deterministic longitudinal metrics** (weekly cadence, volume, late-section fatigue ratio, root-cause evolution across recent 30d vs prior window, and recurring topic leaderboard) are computed directly in PostgreSQL so AI assistants never hallucinate counts or trends.
 - **Study plan drafts** (`public.study_plan_drafts`) store AI-generated longitudinal briefs and candidate next actions with paper evidence references. They never silently create or mutate `learning_cases` or `learning_case_actions`.
 
@@ -23,9 +23,10 @@ Turns multi-page photographed student exam papers and homework sheets into an au
 
 1. `public.create_paper_submission_v1(...)`: Idempotent creation of a paper submission + ordered pages under live Teaching Fact Gate (`FOR SHARE`).
 2. `public.save_paper_extraction_v1(...)`: Optimistic-locked (`expected_version`) save of either `'ai_draft'` (blocked if already `'human_confirmed'`) or `'human_confirm'` structured counts, score, summary, and mistake items.
-3. `public.get_student_paper_longitudinal_v1(org_id, student_id, subject_profile_id, window_days, limit)`: Deterministic longitudinal projection returning `summary`, `weekly_cadence`, `root_cause_breakdown`, `recurring_topics`, `papers` (with pages + mistakes), and `recent_study_plan_drafts`.
-4. `public.save_study_plan_draft_v1(...)`: Idempotent persistence of an AI stage brief + candidate action draft (strictly `status = 'draft'`).
-5. `public.update_study_plan_draft_status_v1(...)`: Optimistic-locked transition of a study plan draft to `'partially_adopted' | 'fully_adopted' | 'dismissed'`.
+3. `public.get_paper_submission_v1(paper_submission_id, check_operation_id)`: Exact single-paper authorized lookup (independent of longitudinal window/limit) with optional `operation_receipts` pre-check so `extract-paper-v1` can short-circuit idempotent retries before invoking Gemini.
+4. `public.get_student_paper_longitudinal_v1(org_id, student_id, subject_profile_id, window_days, limit)`: Deterministic longitudinal projection returning `summary`, `weekly_cadence`, `root_cause_breakdown`, `recurring_topics`, `papers` (with pages + mistakes), and `recent_study_plan_drafts`.
+5. `public.save_study_plan_draft_v1(...)`: Idempotent persistence of an AI stage brief + candidate action draft (strictly `status = 'draft'`).
+6. `public.update_study_plan_draft_status_v1(...)`: Optimistic-locked transition of a study plan draft to `'partially_adopted' | 'fully_adopted' | 'dismissed'`.
 
 ## Error Codes
 

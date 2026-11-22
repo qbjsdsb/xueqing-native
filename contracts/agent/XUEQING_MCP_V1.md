@@ -9,9 +9,10 @@ Expose a narrow, auditable Model Context Protocol (`stdio`) interface so AI agen
 ## Authority & Safety Invariants
 
 1. **Same auth boundary as native clients**: Production mode loads the installed `deployment_profile.json`, restores the user's encrypted Refresh Token from the OS keyring (`WindowsDpapiRefreshTokenVault` or `LinuxSecretServiceRefreshTokenVault`), and executes all remote reads through `Postgrest*` adapters with RLS and `IdentityLink`.
-2. **Read + Encrypted Local Draft only in V1**:
-   - Allowed: bounded projection reads, encrypted local observation draft read/write (with `expected_epoch` optimistic protection), and canonical `xueqing://` deep-link generation.
-   - Forbidden: direct SQL access, `service_role` keys, or silent server-side consequential writes (`create_observation`, `create_learning_case`, action progression, case lifecycle, organization invitations).
+2. **Draft-Only Write Policy (`read_local_observation_draft_and_server_study_plan_draft_only`)**:
+   - Allowed: bounded projection reads, encrypted local observation draft read/write (with `expected_epoch` optimistic protection), server-side study plan draft creation (`save_study_plan_draft_v1`, strictly `status = 'draft'`), and canonical `xueqing://` deep-link generation.
+   - Forbidden: direct SQL access, `service_role` keys, or silent server-side consequential writes (`create_observation`, `create_learning_case`, action progression, case lifecycle, organization invitations, or overwriting `human_confirmed` papers).
+   - Multi-subject disambiguation: when a teacher has multiple authorized `TeachingContexts` for the same student and omits `subjectProfileId`, production tools fail closed with `XQ_SUBJECT_DISAMBIGUATION_REQUIRED` and return candidate contexts instead of guessing.
 3. **Human handoff**: After drafting an observation with `xueqing_save_observation_draft`, the agent returns the canonical deep link from `xueqing_build_deep_link` so the teacher inspects and explicitly submits it in the native Windows/Linux client.
 4. **Prototype mode (`--prototype`)**: Uses deterministic synthetic fixtures (`MainWindowViewModel` prototype mode) plus an isolated encrypted local draft database so CI and local MCP clients can verify the full protocol without production credentials or real student data.
 

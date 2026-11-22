@@ -119,7 +119,10 @@ public sealed record PaperLongitudinalSummary(
     int TotalMistakesConfirmed,
     int TotalMistakesAll,
     decimal? TeacherMarkedAvgScoreRatio,
-    decimal? LateSectionMistakeRatio);
+    decimal? LateSectionMistakeRatio,
+    decimal? DraftAvgScoreRatio = null,
+    decimal? ConfirmedLateSectionMistakeRatio = null,
+    int? PriorWindowDays = null);
 
 public sealed record PaperWeeklyCadencePoint(
     DateOnly WeekStart,
