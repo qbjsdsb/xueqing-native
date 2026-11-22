@@ -372,7 +372,7 @@ private fun attachmentMessage(state: QuickCaptureUiState): String? = when (state
     AttachmentDraftStatus.Protecting -> "正在保护照片…"
     AttachmentDraftStatus.SafeOnDevice -> when {
         state.attachmentCount <= 1 && state.redactedAttachmentCount == 0 ->
-            "已添加 1 张照片"
+            "照片已安全保存在本机"
         state.redactedAttachmentCount > 0 ->
             "已安全保存 ${state.attachmentCount} 页照片（${state.redactedAttachmentCount} 页已遮挡卷头姓名区）"
         else ->
