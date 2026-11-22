@@ -324,34 +324,71 @@ async function handle(request: Request): Promise<Response> {
     global: { headers: { Authorization: `Bearer ${accessToken}` } },
   });
 
-  const { data: longitudinalData, error: longitudinalError } = await userClient.rpc(
-    "get_student_paper_longitudinal_v1",
+  const { data: paperData, error: paperError } = await userClient.rpc(
+    "get_paper_submission_v1",
     {
-      p_organization_id: organizationId,
-      p_student_id: studentId,
-      p_subject_profile_id: subjectProfileId,
-      p_window_days: 365,
-      p_limit: 50,
+      p_paper_submission_id: paperSubmissionId,
+      p_check_operation_id: operationId,
     },
   );
-  if (longitudinalError) throw publicRpcError(longitudinalError);
+  if (paperError) throw publicRpcError(paperError);
 
-  const longitudinal = asObject(
-    longitudinalData,
+  const targetPaper = asObject(
+    paperData,
     "XQ_PAPER_EXTRACTION_PROVIDER_BOUNDARY_FAILED",
     502,
   );
-  const subjectKey = stringValue(longitudinal.subject_key) ?? "general";
-  const papers = Array.isArray(longitudinal.papers) ? longitudinal.papers : [];
-
-  const targetPaperRaw = papers.find((item) => {
-    if (!item || typeof item !== "object" || Array.isArray(item)) return false;
-    return (item as JsonObject).paper_submission_id === paperSubmissionId;
-  });
-  if (!targetPaperRaw || typeof targetPaperRaw !== "object" || Array.isArray(targetPaperRaw)) {
+  if (
+    stringValue(targetPaper.contract) !== "paper_submission_v1" ||
+    stringValue(targetPaper.paper_submission_id) !== paperSubmissionId
+  ) {
+    throw new ExtractionError("XQ_PAPER_EXTRACTION_PROVIDER_BOUNDARY_FAILED", 502);
+  }
+  if (
+    stringValue(targetPaper.organization_id) !== organizationId ||
+    stringValue(targetPaper.student_id) !== studentId ||
+    stringValue(targetPaper.subject_profile_id) !== subjectProfileId
+  ) {
     throw new ExtractionError("XQ_PAPER_NOT_FOUND", 404);
   }
-  const targetPaper = targetPaperRaw as JsonObject;
+
+  const subjectKey = stringValue(targetPaper.subject_key) ?? "general";
+  const rawPages = Array.isArray(targetPaper.pages) ? targetPaper.pages : [];
+
+  // Short-circuit idempotent retries BEFORE downloading images or invoking Gemini again.
+  const existingReceiptRaw = targetPaper.existing_extraction_receipt;
+  if (
+    existingReceiptRaw &&
+    typeof existingReceiptRaw === "object" &&
+    !Array.isArray(existingReceiptRaw)
+  ) {
+    const existingReceipt = existingReceiptRaw as JsonObject;
+    if (
+      stringValue(existingReceipt.operation_id) === operationId &&
+      stringValue(existingReceipt.paper_submission_id) === paperSubmissionId
+    ) {
+      return response({
+        ok: true,
+        contract: "extract_paper_v1",
+        operation_id: operationId,
+        paper_submission_id: paperSubmissionId,
+        model: geminiModel,
+        pages_analyzed: rawPages.length,
+        confirmation_state:
+          stringValue(existingReceipt.confirmation_state) ??
+          stringValue(targetPaper.confirmation_state) ??
+          "draft_ready",
+        grading_source:
+          stringValue(existingReceipt.grading_source) ??
+          stringValue(targetPaper.grading_source) ??
+          "teacher_marked",
+        version: existingReceipt.version ?? targetPaper.version ?? 1,
+        mistake_items_saved: existingReceipt.mistake_items_saved ?? 0,
+        server_committed_at: existingReceipt.server_committed_at ?? null,
+        idempotent_replay: true,
+      });
+    }
+  }
 
   const confirmationState = stringValue(targetPaper.confirmation_state);
   if (confirmationState === "human_confirmed") {
@@ -368,7 +405,6 @@ async function handle(request: Request): Promise<Response> {
     throw new ExtractionError("XQ_VERSION_CONFLICT", 409);
   }
 
-  const rawPages = Array.isArray(targetPaper.pages) ? targetPaper.pages : [];
   if (rawPages.length === 0) {
     throw new ExtractionError("XQ_PAPER_PAGES_EMPTY", 422);
   }

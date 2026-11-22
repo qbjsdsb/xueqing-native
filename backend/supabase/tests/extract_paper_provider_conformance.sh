@@ -501,6 +501,28 @@ for forbidden in ("虚构学生甲", "虚构机构甲", "虚构教师甲"):
     assert forbidden not in prompt, f"PII leaked into Gemini prompt: {forbidden}"
 PY
 
+# 3b. Idempotent replay with the same operation_id returns committed receipt WITHOUT calling Gemini again
+invoke_extract "$token_a" "{\"operation_id\":\"$paper1_extract_op\",\"organization_id\":\"$organization_id\",\"student_id\":\"$student_id\",\"subject_profile_id\":\"$profile_id\",\"paper_submission_id\":\"$paper1_id\",\"expected_version\":1}"
+if [[ "$extract_status" != '200' ]]; then
+  cat "$function_log" >&2
+  echo "Expected 200 for idempotent replay of paper extraction, got $extract_status: $extract_body" >&2
+  exit 1
+fi
+printf '%s' "$extract_body" | PAPER_ID="$paper1_id" python3 -c '
+import json, os, sys
+body = json.load(sys.stdin)
+assert body.get("ok") is True, body
+assert body.get("paper_submission_id") == os.environ["PAPER_ID"], body
+assert body.get("idempotent_replay") is True, body
+assert body.get("version") == 2, body
+assert body.get("mistake_items_saved") == 2, body
+'
+calls_after_replay="$(wc -l < "$mock_requests" | tr -d ' ')"
+if [[ "$calls_after_replay" != '1' ]]; then
+  echo "Idempotent replay unexpectedly invoked Gemini upstream again (calls=$calls_after_replay)" >&2
+  exit 1
+fi
+
 # 4. Malformed Gemini response fails closed (502) and leaves paper2 untouched at version 1
 invoke_extract "$token_a" "{\"operation_id\":\"$paper2_extract_op\",\"organization_id\":\"$organization_id\",\"student_id\":\"$student_id\",\"subject_profile_id\":\"$profile_id\",\"paper_submission_id\":\"$paper2_id\"}"
 if [[ "$extract_status" != '502' ]]; then

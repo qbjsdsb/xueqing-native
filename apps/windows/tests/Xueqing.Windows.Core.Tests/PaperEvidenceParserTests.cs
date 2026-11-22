@@ -46,7 +46,10 @@ public sealed class PaperEvidenceParserTests
             "total_mistakes_confirmed": 3,
             "total_mistakes_all": 4,
             "teacher_marked_avg_score_ratio": 0.8500,
-            "late_section_mistake_ratio": 0.7500
+            "draft_avg_score_ratio": 0.8000,
+            "late_section_mistake_ratio": 0.7500,
+            "confirmed_late_section_mistake_ratio": 0.6667,
+            "prior_window_days": 60
           },
           "weekly_cadence": [
             {
@@ -145,7 +148,10 @@ public sealed class PaperEvidenceParserTests
         var snapshot = PaperEvidenceJsonParser.ParseLongitudinal(json, scope, actorId);
         Assert.AreEqual(3, snapshot.Summary.TotalPapers);
         Assert.AreEqual(0.8500m, snapshot.Summary.TeacherMarkedAvgScoreRatio);
+        Assert.AreEqual(0.8000m, snapshot.Summary.DraftAvgScoreRatio);
         Assert.AreEqual(0.7500m, snapshot.Summary.LateSectionMistakeRatio);
+        Assert.AreEqual(0.6667m, snapshot.Summary.ConfirmedLateSectionMistakeRatio);
+        Assert.AreEqual(60, snapshot.Summary.PriorWindowDays);
         Assert.AreEqual(1, snapshot.WeeklyCadence.Count);
         Assert.AreEqual(PaperErrorRootCause.TimePressure, snapshot.RootCauseBreakdown[0].ErrorRootCause);
         Assert.AreEqual("因果关系", snapshot.RecurringTopics[0].TopicTag);

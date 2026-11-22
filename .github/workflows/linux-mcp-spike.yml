@@ -125,6 +125,7 @@ jobs:
 
               status = json.loads(call_raw(3, "xueqing_status", {})["result"]["content"][0]["text"])
               assert status["mode"] == "prototype" and status["totalStudents"] == 1000
+              assert status["writePolicy"] == "read_local_observation_draft_and_server_study_plan_draft_only", status
 
               students = json.loads(call_raw(4, "xueqing_list_students", {"page": 1, "pageSize": 3})["result"]["content"][0]["text"])
               assert len(students["students"]) == 3

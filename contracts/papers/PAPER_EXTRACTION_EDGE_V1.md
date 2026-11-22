@@ -8,14 +8,15 @@ Runs single-paper multimodal extraction once per photographed exam/homework pape
 
 ## Security & Authority Invariants
 
-1. **Zero `service_role` bypass**: The Edge Function never instantiates a service-role Supabase client. Every read (`get_student_paper_longitudinal_v1`), private Storage image fetch (`/storage/v1/object/authenticated/teaching-attachments-v1/...`), and write (`save_paper_extraction_v1`) runs strictly under the caller's `Authorization: Bearer <user_jwt>`.
-2. **Hosted Region Guard**: Every hosted non-preflight request verifies `SB_REGION === XUEQING_REQUIRED_EDGE_REGION` (default `ap-southeast-1`) before auth, body, DB, Storage, or Gemini processing, failing closed with HTTP `503 XQ_PAPER_EXTRACTION_REGION_UNAVAILABLE` on drift. Only explicit `XUEQING_LOCAL_REFERENCE_MODE=1` disables this for local CI/dev.
-3. **Human-Confirmed Immutability**: If the target paper is already `confirmation_state = 'human_confirmed'`, the function fails closed with HTTP `409 XQ_PAPER_ALREADY_CONFIRMED` **before** calling Gemini, and `save_paper_extraction_v1` enforces the same guard in PostgreSQL.
-4. **Minors Privacy & Zero Server Retention**:
+1. **Zero `service_role` bypass**: The Edge Function never instantiates a service-role Supabase client. Every read (`get_paper_submission_v1`), private Storage image fetch (`/storage/v1/object/authenticated/teaching-attachments-v1/...`), and write (`save_paper_extraction_v1`) runs strictly under the caller's `Authorization: Bearer <user_jwt>`.
+2. **Idempotent Retry Short-Circuit**: `get_paper_submission_v1` checks `public.operation_receipts` for `(operation_id, actor_app_user_id, 'save_paper_extraction_v1')` before downloading images or invoking Gemini. Retrying a previously committed `operation_id` returns HTTP `200` with `"idempotent_replay": true` and zero duplicate Gemini calls.
+3. **Hosted Region Guard**: Every hosted non-preflight request verifies `SB_REGION === XUEQING_REQUIRED_EDGE_REGION` (default `ap-southeast-1`) before auth, body, DB, Storage, or Gemini processing, failing closed with HTTP `503 XQ_PAPER_EXTRACTION_REGION_UNAVAILABLE` on drift. Only explicit `XUEQING_LOCAL_REFERENCE_MODE=1` disables this for local CI/dev.
+4. **Human-Confirmed Immutability**: If the target paper is already `confirmation_state = 'human_confirmed'`, the function fails closed with HTTP `409 XQ_PAPER_ALREADY_CONFIRMED` **before** calling Gemini, and `save_paper_extraction_v1` enforces the same guard in PostgreSQL.
+5. **Minors Privacy & Zero Server Retention**:
    - Prompts carry only anonymous context (`subject_key`, `paper_kind`, `paper_date`, `page_count`, `redacted_page_indices`, optional anonymous title) — never `student_display_name` or `organization_name`.
    - Gemini Interactions API calls always send `"store": false` so exam images and extraction text are not stored for server-side conversation history.
-5. **Unmarked Grading Boundary**: Output validation strictly allows `grading_source` in `{'teacher_marked', 'ai_tentative_unmarked'}` — never `'human_verified'`.
-6. **Zero Side Effects on `learning_cases`**: Failures (upstream timeout, HTTP error, malformed JSON) fail closed without modifying the paper, original images, observations, or learning cases.
+6. **Unmarked Grading Boundary**: Output validation strictly allows `grading_source` in `{'teacher_marked', 'ai_tentative_unmarked'}` — never `'human_verified'`.
+7. **Zero Side Effects on `learning_cases`**: Failures (upstream timeout, HTTP error, malformed JSON) fail closed without modifying the paper, original images, observations, or learning cases.
 
 ## Request (`POST /functions/v1/extract-paper-v1`)
 

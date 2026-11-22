@@ -142,7 +142,7 @@ internal sealed class PrototypeXueqingMcpBackend : IXueqingMcpBackend
             platform = XueqingMcpHostHelpers.PlatformName,
             architecture = RuntimeInformation.ProcessArchitecture.ToString().ToLowerInvariant(),
             sessionState = "prototype_synthetic",
-            writePolicy = "read_and_encrypted_local_draft_only",
+            writePolicy = "read_local_observation_draft_and_server_study_plan_draft_only",
             totalStudents = _viewModel.Students.Count,
             todayActionCount = _viewModel.TodayActions.Count,
             encryptedDraftStoreReady = true,
@@ -759,7 +759,7 @@ internal sealed class ProductionXueqingMcpBackend : IXueqingMcpBackend
             environmentId = _profile.EnvironmentId,
             profileId = _profile.ProfileId,
             sessionState = outcome.ToString(),
-            writePolicy = "read_and_encrypted_local_draft_only",
+            writePolicy = "read_local_observation_draft_and_server_study_plan_draft_only",
         };
     }
 
@@ -924,14 +924,20 @@ internal sealed class ProductionXueqingMcpBackend : IXueqingMcpBackend
             return error!;
         }
 
-        var context = bootstrap.TeachingContexts.FirstOrDefault(c =>
+        var matches = bootstrap.TeachingContexts.Where(c =>
             c.StudentId == studentGuid &&
             (string.IsNullOrWhiteSpace(subjectProfileId) ||
-             string.Equals(c.SubjectProfileId.ToString("D"), subjectProfileId.Trim(), StringComparison.OrdinalIgnoreCase)));
-        if (context is null)
+             string.Equals(c.SubjectProfileId.ToString("D"), subjectProfileId.Trim(), StringComparison.OrdinalIgnoreCase))).ToArray();
+        if (matches.Length == 0)
         {
             return new { found = false, error = "XQ_TEACHING_CONTEXT_NOT_FOUND" };
         }
+        if (matches.Length > 1)
+        {
+            return BuildDisambiguationError(matches);
+        }
+
+        var context = matches[0];
 
         var result = await _casesReader.ReadAsync(
             new StudentLearningScope(context.OrganizationId, context.StudentId, context.SubjectProfileId),
@@ -1274,19 +1280,40 @@ internal sealed class ProductionXueqingMcpBackend : IXueqingMcpBackend
             return (null, null, error);
         }
 
-        var context = bootstrap.TeachingContexts.FirstOrDefault(c =>
+        var matches = bootstrap.TeachingContexts.Where(c =>
             c.StudentId == studentGuid &&
             (string.IsNullOrWhiteSpace(organizationId) || string.Equals(c.OrganizationId.ToString("D"), organizationId.Trim(), StringComparison.OrdinalIgnoreCase)) &&
             (string.IsNullOrWhiteSpace(subjectProfileId) || string.Equals(c.SubjectProfileId.ToString("D"), subjectProfileId.Trim(), StringComparison.OrdinalIgnoreCase)) &&
-            (string.IsNullOrWhiteSpace(assignmentId) || string.Equals(c.AssignmentId.ToString("D"), assignmentId.Trim(), StringComparison.OrdinalIgnoreCase)));
+            (string.IsNullOrWhiteSpace(assignmentId) || string.Equals(c.AssignmentId.ToString("D"), assignmentId.Trim(), StringComparison.OrdinalIgnoreCase))).ToArray();
 
-        if (context is null)
+        if (matches.Length == 0)
         {
             return (null, null, new { ok = false, error = "XQ_TEACHING_CONTEXT_NOT_AUTHORIZED" });
         }
 
+        if (matches.Length > 1)
+        {
+            return (null, null, BuildDisambiguationError(matches));
+        }
+
+        var context = matches[0];
         return (bootstrap, new ObservationDraftScope(context.OrganizationId, context.StudentId, context.SubjectProfileId, context.AssignmentId), null);
     }
+
+    private static object BuildDisambiguationError(IReadOnlyList<PersonalTeachingContext> candidates) => new
+    {
+        ok = false,
+        found = false,
+        error = "XQ_SUBJECT_DISAMBIGUATION_REQUIRED",
+        message = "Multiple authorized teaching contexts match this student. Pass subjectProfileId (and organizationId when needed) explicitly.",
+        candidates = candidates.Select(c => new
+        {
+            organizationId = c.OrganizationId.ToString("D"),
+            subjectProfileId = c.SubjectProfileId.ToString("D"),
+            subjectKey = c.SubjectKey,
+            assignmentId = c.AssignmentId.ToString("D"),
+        }).ToArray(),
+    };
 
     private SqliteObservationDraftStore OpenScopedDraftStore(Guid actorAppUserId, Guid organizationId)
     {
